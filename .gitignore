@@ -36,9 +36,10 @@ out/
 ### VS Code ###
 .vscode/
 
-### Deploy keys / secrets (never commit) ###
+### Deploy keys / secrets / env (never commit) ###
 gha_deploy
 gha_deploy.pub
 *.pem
+.env
 id_ed25519*
 id_rsa*

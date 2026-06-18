@@ -33,6 +33,8 @@ services:
       - 'SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/mydatabase'
       - 'SPRING_DATASOURCE_USERNAME=myuser'
       - 'SPRING_DATASOURCE_PASSWORD=secret'
+      # 비어 있으면 default 프로파일(=로컬 CORS). 운영 배포는 .env로 prod 주입(=Vercel CORS).
+      - 'SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-}'
     ports:
       - '8080:8080'
 

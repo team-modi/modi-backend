@@ -46,6 +46,8 @@ jobs:
             git fetch origin main
             git checkout -B main origin/main
             git reset --hard origin/main
+            # 운영은 prod 프로파일로 기동 (CORS: https://modi.vercel.app 만 허용)
+            echo "SPRING_PROFILES_ACTIVE=prod" > .env
             sudo docker compose --profile app up -d --build
 
             # 배포 후 헬스체크 검증: UP 될 때까지 최대 150초 폴링, 실패 시 로그 출력하고 배포 실패 처리
