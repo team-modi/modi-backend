@@ -1,0 +1,67 @@
+name: Deploy to EC2
+
+# main에 push/merge되면 테스트를 먼저 돌리고(test), 통과한 경우에만 EC2에 배포한다.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-ec2
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Run tests
+        run: |
+          chmod +x gradlew
+          ./gradlew test --no-daemon
+
+  deploy:
+    needs: test          # 테스트가 통과해야만 배포
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 20m
+          script: |
+            set -e
+            cd ~/modi-backend
+            git fetch origin main
+            git checkout -B main origin/main
+            git reset --hard origin/main
+            # 운영은 prod 프로파일로 기동 (CORS: https://modi.vercel.app 만 허용)
+            echo "SPRING_PROFILES_ACTIVE=prod" > .env
+            sudo docker compose --profile app up -d --build
+
+            # 배포 후 헬스체크 검증: UP 될 때까지 최대 150초 폴링, 실패 시 로그 출력하고 배포 실패 처리
+            echo "Waiting for app to become healthy..."
+            for i in $(seq 1 30); do
+              if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+                echo "✅ Health check passed"
+                sudo docker compose --profile app ps
+                exit 0
+              fi
+              echo "  ...not ready yet ($i/30)"
+              sleep 5
+            done
+            echo "❌ Health check FAILED after timeout"
+            sudo docker compose --profile app ps
+            sudo docker compose --profile app logs --tail=80 app
+            exit 1
