@@ -43,3 +43,4 @@ gha_deploy.pub
 .env
 id_ed25519*
 id_rsa*
+.gstack/
