@@ -35,6 +35,11 @@ services:
       - 'SPRING_DATASOURCE_PASSWORD=secret'
       # 비어 있으면 default 프로파일(=로컬 CORS). 운영 배포는 .env로 prod 주입(=Vercel CORS).
       - 'SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-}'
+      # OAuth/JWT 시크릿: .env로 주입(배포 시 GitHub Actions secrets → deploy.yml이 .env에 기록).
+      # client-id·redirect-uri·CORS는 application.yaml prod 기본값(공개 정보)이라 여기서 안 넣는다.
+      - 'KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET:-}'
+      - 'GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}'
+      - 'JWT_SECRET=${JWT_SECRET:-}'
     ports:
       - '8080:8080'
 
