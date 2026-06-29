@@ -24,7 +24,7 @@ public class GlobalExceptionHandler {
 
 	/** 도메인/애플리케이션이 의도적으로 던진 예외. errorCode가 HTTP·코드·메시지를 결정한다. */
 	@ExceptionHandler(CoreException.class)
-	public ResponseEntity<ApiResponse<Void>> handleCore(CoreException e) {
+	public ResponseEntity<ApiResponse<Object>> handleCore(CoreException e) {
 		ErrorCode ec = e.errorCode();
 		if (ec.getStatus().is5xxServerError()) {
 			log.error("[{}] {}", ec.code(), e.getMessage(), e);
@@ -37,7 +37,7 @@ public class GlobalExceptionHandler {
 
 	/** @Valid 바디 검증 실패. 필드별 사유를 fieldErrors로 내려준다. */
 	@ExceptionHandler(MethodArgumentNotValidException.class)
-	public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e) {
+	public ResponseEntity<ApiResponse<List<ApiResponse.FieldError>>> handleValidation(MethodArgumentNotValidException e) {
 		List<ApiResponse.FieldError> fieldErrors = e.getBindingResult().getFieldErrors().stream()
 				.map(GlobalExceptionHandler::toFieldError)
 				.toList();
@@ -47,20 +47,20 @@ public class GlobalExceptionHandler {
 	}
 
 	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-	public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
+	public ResponseEntity<ApiResponse<Object>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
 		return ResponseEntity.status(ErrorType.METHOD_NOT_ALLOWED.getStatus())
 				.body(ApiResponse.fail(ErrorType.METHOD_NOT_ALLOWED.code(), ErrorType.METHOD_NOT_ALLOWED.message()));
 	}
 
 	/** 미처리 예외는 내부 오류로 덮고 상세는 로그로만. (스택/원인 노출 방지) */
 	@ExceptionHandler(Exception.class)
-	public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception e) {
+	public ResponseEntity<ApiResponse<Object>> handleUnexpected(Exception e) {
 		log.error("[{}] unhandled", ErrorType.INTERNAL_ERROR.code(), e);
 		return ResponseEntity.status(ErrorType.INTERNAL_ERROR.getStatus())
 				.body(ApiResponse.fail(ErrorType.INTERNAL_ERROR.code(), ErrorType.INTERNAL_ERROR.message()));
 	}
 
 	private static ApiResponse.FieldError toFieldError(FieldError fe) {
-		return new ApiResponse.FieldError(fe.getField(), fe.getDefaultMessage());
+		return new ApiResponse.FieldError(fe.getField(), fe.getRejectedValue(), fe.getDefaultMessage());
 	}
 }

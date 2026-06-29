@@ -63,7 +63,7 @@ class AuthFlowIntegrationTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"code\":\"auth-code\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.meta.result").value("SUCCESS"))
 				.andExpect(jsonPath("$.data.accessToken").isNotEmpty())
 				.andExpect(jsonPath("$.data.user.provider").value("kakao"))
 				.andExpect(jsonPath("$.data.user.email").value("user@kakao.com"))
@@ -125,8 +125,8 @@ class AuthFlowIntegrationTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"code\":\"x\",\"redirectUri\":\"https://evil.example.com\"}"))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.success").value(false))
-				.andExpect(jsonPath("$.code").value("INVALID_REDIRECT_URI"));
+				.andExpect(jsonPath("$.meta.result").value("FAIL"))
+				.andExpect(jsonPath("$.meta.errorCode").value("INVALID_REDIRECT_URI"));
 	}
 
 	/** "refresh_token=<jwt>; Max-Age=...; ..." 에서 토큰 값만 추출. */

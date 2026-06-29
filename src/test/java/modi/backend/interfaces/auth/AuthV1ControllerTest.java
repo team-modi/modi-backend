@@ -46,8 +46,8 @@ class AuthV1ControllerTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"code\":\"abc\",\"redirectUri\":\"https://evil.com\"}"))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.success").value(false))
-				.andExpect(jsonPath("$.code").value("INVALID_REDIRECT_URI"));
+				.andExpect(jsonPath("$.meta.result").value("FAIL"))
+				.andExpect(jsonPath("$.meta.errorCode").value("INVALID_REDIRECT_URI"));
 	}
 
 	@Test
@@ -57,8 +57,8 @@ class AuthV1ControllerTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"code\":\"\",\"redirectUri\":\"\"}"))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.code").value("INVALID_INPUT"))
-				.andExpect(jsonPath("$.fieldErrors").isArray());
+				.andExpect(jsonPath("$.meta.errorCode").value("INVALID_INPUT"))
+				.andExpect(jsonPath("$.data").isArray());
 	}
 
 	@Test
@@ -66,7 +66,7 @@ class AuthV1ControllerTest {
 	void refresh_쿠키없음() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/refresh"))
 				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.code").value("NO_REFRESH_TOKEN"));
+				.andExpect(jsonPath("$.meta.errorCode").value("NO_REFRESH_TOKEN"));
 	}
 
 	@Test
@@ -74,6 +74,6 @@ class AuthV1ControllerTest {
 	void me_Bearer없음() throws Exception {
 		mockMvc.perform(get("/api/v1/auth/me"))
 				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.code").value("NO_ACCESS_TOKEN"));
+				.andExpect(jsonPath("$.meta.errorCode").value("NO_ACCESS_TOKEN"));
 	}
 }
