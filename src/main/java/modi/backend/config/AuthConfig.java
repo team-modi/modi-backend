@@ -1,22 +1,12 @@
 package modi.backend.config;
 
-import java.util.List;
-
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.method.support.HandlerMethodArgumentResolver;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import lombok.RequiredArgsConstructor;
-import modi.backend.interfaces.auth.AuthenticationArgumentResolver;
-
+/**
+ * auth 모듈 설정 프로퍼티 등록.
+ */
 @Configuration
-@RequiredArgsConstructor
-public class AuthConfig implements WebMvcConfigurer {
-
-	private final AuthenticationArgumentResolver authenticationArgumentResolver;
-
-	@Override
-	public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-		resolvers.add(authenticationArgumentResolver);
-	}
+@EnableConfigurationProperties({OAuthProperties.class, JwtProperties.class, CookieProperties.class})
+public class AuthConfig {
 }

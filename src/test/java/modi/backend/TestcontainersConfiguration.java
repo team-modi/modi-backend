@@ -11,7 +11,7 @@ public class TestcontainersConfiguration {
 
 	@Bean
 	@ServiceConnection
-	MySQLContainer mysqlContainer() {
+	public MySQLContainer mysqlContainer() {
 		return new MySQLContainer(DockerImageName.parse("mysql:latest"));
 	}
 

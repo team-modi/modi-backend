@@ -1,6 +1,9 @@
 spring:
   application:
     name: backend
+  # webflux 의존(WebClient) 추가했지만 웹 스택은 서블릿(MVC) 유지.
+  main:
+    web-application-type: servlet
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/mydatabase}
     username: ${SPRING_DATASOURCE_USERNAME:myuser}
@@ -34,8 +37,43 @@ server:
 app:
   cors:
     allowed-origin-patterns:
-      - http://localhost:3000   # 로컬 프론트(CRA 등)
-      - http://localhost:5173   # 로컬 프론트(Vite 등)
+      - http://localhost:3000   # 여운 프론트 로컬
+      - http://localhost:3005   # 여운 프론트 로컬(대체 포트)
+      - http://localhost:8080   # 백엔드 내장 HTML 테스트 페이지
+
+  # OAuth 설정. client-id는 공개성 값이라 기본값을 둔다. client-secret은 시크릿 → 환경변수로만 주입.
+  # redirect-uri는 콘솔에 등록된 값과 정확히 일치해야 한다(현재 테스트는 백엔드 내장 페이지 = :8080/login).
+  oauth:
+    redirect-uri: ${OAUTH_REDIRECT_URI:http://localhost:8080/login}
+    # FE 주도 로그인에서 허용하는 redirectUri 화이트리스트 (로컬 프론트/테스트)
+    allowed-redirect-uris:
+      - http://localhost:3000/login
+      - http://localhost:3005/login
+      - http://localhost:8080/login
+    kakao:
+      # 테스트앱 "여운-TEST"(앱ID 1500036)의 REST 키. 동의항목(이메일·연령대·출생연도)이 설정된 앱.
+      # 운영 비즈앱 검수 완료 시 KAKAO_CLIENT_ID env로 교체. client-secret은 시크릿 → env로만 주입.
+      client-id: ${KAKAO_CLIENT_ID:bba3e1d954ec548062bc3c13fd9f72bc}
+      client-secret: ${KAKAO_CLIENT_SECRET:}
+      # 동의항목 요청: 이메일 + 연령대 + 출생연도.
+      # ⚠️ 카카오 콘솔 [동의항목]에서 각 항목 ON 필수(테스트앱은 팀원만 검수 없이 동작).
+      #    미승인 항목을 scope에 넣으면 authorize 시 KOE006 → 로그인 깨짐. 콘솔 준비 전이면 KAKAO_SCOPE 로 줄여 둘 것.
+      scope: ${KAKAO_SCOPE:account_email,age_range,birthyear}
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:238940430553-ikggojb7ssr0knf6u3ga8f00npsuv0s3.apps.googleusercontent.com}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+
+  # 자체 JWT 설정. secret은 시크릿 → 환경변수 주입 권장(기본값은 로컬 테스트 전용).
+  jwt:
+    secret: ${JWT_SECRET:local-dev-only-jwt-secret-please-change-min-32-bytes}
+    access-ttl-seconds: 900        # access token 15분
+    refresh-ttl-seconds: 1209600   # refresh token 14일
+
+  # refresh 쿠키 속성. 로컬(http)은 secure off.
+  auth:
+    cookie:
+      secure: false
+      same-site: Lax
 
 ---
 # 운영(EC2) 프로파일: 배포 시 SPRING_PROFILES_ACTIVE=prod 로 활성화된다.
@@ -46,4 +84,14 @@ spring:
 app:
   cors:
     allowed-origin-patterns:
-      - https://mmodi.vercel.app # Vercel 운영 도메인 (이것만 허용)
+      - https://yeowun.vercel.app # 여운 Vercel 운영 도메인 (이것만 허용)
+  oauth:
+    # 운영 redirect_uri = 여운 프론트 운영 콜백 (콘솔 등록값과 일치). 필요 시 env로 override.
+    redirect-uri: ${OAUTH_REDIRECT_URI:https://yeowun.vercel.app/login}
+    allowed-redirect-uris:
+      - https://yeowun.vercel.app/login
+  # 운영: HTTPS(yeowun.vercel.app, Vercel 프록시로 same-origin)라 Secure 켜고 SameSite=Lax.
+  auth:
+    cookie:
+      secure: true
+      same-site: Lax

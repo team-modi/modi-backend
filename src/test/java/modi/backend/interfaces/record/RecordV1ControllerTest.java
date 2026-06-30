@@ -18,6 +18,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import modi.backend.TestcontainersConfiguration;
+import modi.backend.domain.auth.TokenProvider;
+import modi.backend.domain.user.User;
+import modi.backend.domain.user.UserRepository;
 import modi.backend.infra.record.RecordJpaRepository;
 
 @Import(TestcontainersConfiguration.class)
@@ -25,23 +28,36 @@ import modi.backend.infra.record.RecordJpaRepository;
 @AutoConfigureMockMvc
 class RecordV1ControllerTest {
 
-	private static final String USER_ID = "1";
-
 	@Autowired
 	MockMvc mockMvc;
 
 	@Autowired
 	RecordJpaRepository recordRepository;
 
+	@Autowired
+	UserRepository userRepository;
+
+	@Autowired
+	TokenProvider tokenProvider;
+
+	// 기록 API는 @Authentication 으로 실제 로그인 사용자를 받는다(X-User-Id 스텁 폐기).
+	// 테스트는 유저를 저장한 뒤 그 유저의 access 토큰을 Bearer 로 보내 인증한다.
+	private String bearerUser1;
+	private String bearerUser2;
+
 	@BeforeEach
 	void setUp() {
 		recordRepository.deleteAll();
+		User u1 = userRepository.save(User.createFromSocial("user1"));
+		User u2 = userRepository.save(User.createFromSocial("user2"));
+		bearerUser1 = "Bearer " + tokenProvider.issue(u1, "kakao").accessToken();
+		bearerUser2 = "Bearer " + tokenProvider.issue(u2, "kakao").accessToken();
 	}
 
 	@Test
 	void create_record_and_get_detail() throws Exception {
 		String response = mockMvc.perform(post("/api/v1/records")
-						.header("X-User-Id", USER_ID)
+						.header("Authorization", bearerUser1)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{
@@ -76,7 +92,7 @@ class RecordV1ControllerTest {
 		String recordId = response.replaceAll("(?s).*\"recordId\":(\\d+).*", "$1");
 
 		mockMvc.perform(get("/api/v1/records/{recordId}", recordId)
-						.header("X-User-Id", USER_ID))
+						.header("Authorization", bearerUser1))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.exhibitionId").value(51))
 				.andExpect(jsonPath("$.data.content").value("색이 따뜻해서 한참 서 있었다."))
@@ -87,12 +103,12 @@ class RecordV1ControllerTest {
 
 	@Test
 	void search_records_with_keyword_and_emotion() throws Exception {
-		createRecord("1", "모네 전시의 색감이 좋았다.", "MOVED");
-		createRecord("1", "조용한 조각 전시였다.", "CALM");
-		createRecord("2", "모네를 다른 사용자가 기록했다.", "MOVED");
+		createRecord(bearerUser1, "모네 전시의 색감이 좋았다.", "MOVED");
+		createRecord(bearerUser1, "조용한 조각 전시였다.", "CALM");
+		createRecord(bearerUser2, "모네를 다른 사용자가 기록했다.", "MOVED");
 
 		mockMvc.perform(get("/api/v1/records")
-						.header("X-User-Id", USER_ID)
+						.header("Authorization", bearerUser1)
 						.param("keyword", "모네")
 						.param("emotion", "MOVED"))
 				.andExpect(status().isOk())
@@ -102,10 +118,10 @@ class RecordV1ControllerTest {
 
 	@Test
 	void update_and_delete_record() throws Exception {
-		String recordId = createRecord("1", "처음 감상", "MOVED");
+		String recordId = createRecord(bearerUser1, "처음 감상", "MOVED");
 
 		mockMvc.perform(put("/api/v1/records/{recordId}", recordId)
-						.header("X-User-Id", USER_ID)
+						.header("Authorization", bearerUser1)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{
@@ -125,12 +141,12 @@ class RecordV1ControllerTest {
 				.andExpect(jsonPath("$.data.emotionCodes[0]").value("CALM"));
 
 		mockMvc.perform(delete("/api/v1/records/{recordId}", recordId)
-						.header("X-User-Id", USER_ID))
+						.header("Authorization", bearerUser1))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.meta.result").value("SUCCESS"));
 
 		mockMvc.perform(get("/api/v1/records/{recordId}", recordId)
-						.header("X-User-Id", USER_ID))
+						.header("Authorization", bearerUser1))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.meta.errorCode").value("NOT_FOUND"));
 	}
@@ -138,7 +154,7 @@ class RecordV1ControllerTest {
 	@Test
 	void reject_future_viewed_at() throws Exception {
 		mockMvc.perform(post("/api/v1/records")
-						.header("X-User-Id", USER_ID)
+						.header("Authorization", bearerUser1)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{
@@ -157,7 +173,7 @@ class RecordV1ControllerTest {
 	@Test
 	void reject_video_over_100mb() throws Exception {
 		mockMvc.perform(post("/api/v1/records")
-						.header("X-User-Id", USER_ID)
+						.header("Authorization", bearerUser1)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{
@@ -181,15 +197,15 @@ class RecordV1ControllerTest {
 	}
 
 	@Test
-	void reject_request_without_user_header() throws Exception {
+	void reject_request_without_access_token() throws Exception {
 		mockMvc.perform(get("/api/v1/records"))
 				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.meta.errorCode").value("UNAUTHORIZED"));
+				.andExpect(jsonPath("$.meta.errorCode").value("NO_ACCESS_TOKEN"));
 	}
 
-	private String createRecord(String userId, String content, String emotion) throws Exception {
+	private String createRecord(String bearer, String content, String emotion) throws Exception {
 		String response = mockMvc.perform(post("/api/v1/records")
-						.header("X-User-Id", userId)
+						.header("Authorization", bearer)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{

@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 운영(prod) 프로파일의 CORS 정책 검증.
- * prod에서는 {@code https://mmodi.vercel.app} 만 허용하고, 로컬/프리뷰/기타 오리진은 차단해야 한다.
+ * prod에서는 {@code https://yeowun.vercel.app} 만 허용하고, 로컬/프리뷰/기타 오리진은 차단해야 한다.
  * (실제 비즈니스 컨트롤러가 없어 테스트 전용 컨트롤러 /__cors-test 로 프리플라이트를 확인)
  */
 @Import({ TestcontainersConfiguration.class, CorsConfigTest.CorsTestController.class })
@@ -31,15 +31,15 @@ class CorsConfigTest {
 	@Test
 	void preflight_allows_vercel_production_origin() throws Exception {
 		mockMvc.perform(options("/__cors-test")
-				.header("Origin", "https://mmodi.vercel.app")
+				.header("Origin", "https://yeowun.vercel.app")
 				.header("Access-Control-Request-Method", "GET"))
 				.andExpect(status().isOk())
-				.andExpect(header().string("Access-Control-Allow-Origin", "https://mmodi.vercel.app"));
+				.andExpect(header().string("Access-Control-Allow-Origin", "https://yeowun.vercel.app"));
 	}
 
 	@Test
 	void preflight_blocks_vercel_preview_origin() throws Exception {
-		// prod는 mmodi.vercel.app 만 허용 — 프리뷰 URL은 차단
+		// prod는 yeowun.vercel.app 만 허용 — 프리뷰 URL은 차단
 		mockMvc.perform(options("/__cors-test")
 				.header("Origin", "https://modi-git-feature-team.vercel.app")
 				.header("Access-Control-Request-Method", "GET"))
