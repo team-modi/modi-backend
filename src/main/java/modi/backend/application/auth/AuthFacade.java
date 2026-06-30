@@ -137,6 +137,16 @@ public class AuthFacade {
 		return AuthResult.Link.from(social);
 	}
 
+	/** 로그아웃: refresh가 유효하면 저장소에서 폐기(쿠키 만료는 인터페이스 책임). 무효/없음은 무시(멱등). */
+	public void logout(String refreshToken) {
+		if (refreshToken == null) {
+			return;
+		}
+		tokenProvider.parse(refreshToken)
+				.filter(TokenClaims::isRefresh)
+				.ifPresent(claims -> refreshTokenStore.remove(claims.userId()));
+	}
+
 	/** access 토큰 검증 → 클레임. 무효 시 {@link AuthErrorCode#INVALID_ACCESS_TOKEN}. */
 	public TokenClaims requireAccess(String accessToken) {
 		return tokenProvider.parse(accessToken)
