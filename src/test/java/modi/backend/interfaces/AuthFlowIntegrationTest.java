@@ -58,7 +58,7 @@ class AuthFlowIntegrationTest {
 						"email", "user@kakao.com",
 						"profile", Map.of("nickname", "카카오유저"))));
 
-		// 1) 로그인: code → 자체 JWT 발급. access는 본문, refresh는 HttpOnly 쿠키.
+		// 1) 로그인: code → 자체 JWT 발급. access·refresh 모두 HttpOnly 쿠키(access는 본문에도 호환용).
 		MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login/kakao")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"code\":\"auth-code\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
@@ -74,19 +74,27 @@ class AuthFlowIntegrationTest {
 		String accessToken = JsonPath.read(body, "$.data.accessToken");
 		Integer userId = JsonPath.read(body, "$.data.user.userId");
 
-		// refresh는 HttpOnly 쿠키로 내려간다(Set-Cookie 헤더 직접 검증)
-		String setCookie = loginResult.getResponse().getHeader("Set-Cookie");
-		assertThat(setCookie).isNotNull().contains("HttpOnly").startsWith("refresh_token=");
-		String refreshToken = extractRefreshToken(setCookie);
-		assertThat(accessToken).isNotBlank();
+		// access·refresh 둘 다 HttpOnly 쿠키로 내려간다(Set-Cookie 헤더 직접 검증)
+		String accessCookie = setCookie(loginResult, "access_token");
+		String refreshCookie = setCookie(loginResult, "refresh_token");
+		assertThat(accessCookie).isNotNull().contains("HttpOnly");
+		assertThat(refreshCookie).isNotNull().contains("HttpOnly");
+		String cookieAccessToken = cookieValue(accessCookie);
+		String refreshToken = cookieValue(refreshCookie);
+		assertThat(cookieAccessToken).isEqualTo(accessToken);
 		assertThat(refreshToken).isNotBlank();
 
-		// 2) /me: Bearer access → @Authentication 주입으로 내 정보
-		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + accessToken))
+		// 2) /me: access_token 쿠키 → @Authentication 주입으로 내 정보 (쿠키 인증 경로)
+		mockMvc.perform(get("/api/v1/auth/me").cookie(new Cookie("access_token", cookieAccessToken)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.userId").value(userId))
 				.andExpect(jsonPath("$.data.provider").value("kakao"))
 				.andExpect(jsonPath("$.data.nickname").value("카카오유저"));
+
+		// 2-1) /me: Bearer 헤더 폴백도 여전히 동작
+		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + accessToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.userId").value(userId));
 
 		// 3) /refresh: refresh 쿠키 → 새 access/refresh 회전 발급
 		MvcResult refreshResult = mockMvc.perform(post("/api/v1/auth/refresh")
@@ -94,7 +102,8 @@ class AuthFlowIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.accessToken").isNotEmpty())
 				.andReturn();
-		assertThat(refreshResult.getResponse().getHeader("Set-Cookie")).contains("refresh_token=");
+		assertThat(setCookie(refreshResult, "access_token")).isNotNull().contains("HttpOnly");
+		assertThat(setCookie(refreshResult, "refresh_token")).isNotNull().contains("HttpOnly");
 		String rotatedAccess = JsonPath.read(refreshResult.getResponse().getContentAsString(), "$.data.accessToken");
 		assertThat(rotatedAccess).isNotBlank();
 
@@ -129,10 +138,16 @@ class AuthFlowIntegrationTest {
 				.andExpect(jsonPath("$.meta.errorCode").value("INVALID_REDIRECT_URI"));
 	}
 
-	/** "refresh_token=<jwt>; Max-Age=...; ..." 에서 토큰 값만 추출. */
-	private static String extractRefreshToken(String setCookie) {
-		String prefix = "refresh_token=";
-		int start = prefix.length();
+	/** 여러 Set-Cookie 헤더 중 주어진 이름으로 시작하는 것을 찾는다(없으면 null). */
+	private static String setCookie(MvcResult result, String name) {
+		return result.getResponse().getHeaders("Set-Cookie").stream()
+				.filter(c -> c.startsWith(name + "="))
+				.findFirst().orElse(null);
+	}
+
+	/** "name=<value>; Max-Age=...; ..." 에서 value만 추출. */
+	private static String cookieValue(String setCookie) {
+		int start = setCookie.indexOf('=') + 1;
 		int end = setCookie.indexOf(';');
 		return end < 0 ? setCookie.substring(start) : setCookie.substring(start, end);
 	}

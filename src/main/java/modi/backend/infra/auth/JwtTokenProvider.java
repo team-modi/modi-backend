@@ -75,6 +75,11 @@ public class JwtTokenProvider implements TokenProvider {
 	}
 
 	@Override
+	public long accessTtlSeconds() {
+		return accessTtlSeconds;
+	}
+
+	@Override
 	public long refreshTtlSeconds() {
 		return refreshTtlSeconds;
 	}

@@ -48,7 +48,10 @@ public class OAuthTestController {
 		}
 		try {
 			AuthResult.Login result = authFacade.completeLogin(state, code, oauthProperties.redirectUri());
-			response.addHeader("Set-Cookie", RefreshCookie.build(
+			response.addHeader("Set-Cookie", AuthCookie.build(AuthCookie.ACCESS,
+					result.accessToken(), authFacade.accessTtlSeconds(),
+					cookieProperties.secure(), cookieProperties.sameSite()));
+			response.addHeader("Set-Cookie", AuthCookie.build(AuthCookie.REFRESH,
 					result.refreshToken(), authFacade.refreshTtlSeconds(),
 					cookieProperties.secure(), cookieProperties.sameSite()));
 			return page(null, result);
@@ -73,15 +76,14 @@ public class OAuthTestController {
 					.append("<br>nickname: ").append(escape(result.nickname() == null ? "(없음)" : result.nickname()))
 					.append("<br>profile_completed: ").append(result.profileCompleted())
 					.append("</div>")
-					.append("<div class=\"box\"><b>access token</b> (15분)<pre id=\"at\">").append(escape(result.accessToken())).append("</pre>")
-					.append("<small>refresh token은 HttpOnly 쿠키로 저장됨</small></div>")
-					.append("<div class=\"box\"><button onclick=\"callMe()\">/api/v1/auth/me</button> ")
+					.append("<div class=\"box\"><b>access token</b> (15분, HttpOnly 쿠키로도 저장됨)<pre id=\"at\">").append(escape(result.accessToken())).append("</pre>")
+					.append("<small>access·refresh 모두 HttpOnly 쿠키 — 아래 호출은 credentials:'include'로 쿠키 인증을 검증한다</small></div>")
+					.append("<div class=\"box\"><button onclick=\"callMe()\">/api/v1/auth/me (쿠키)</button> ")
 					.append("<button onclick=\"doRefresh()\">/api/v1/auth/refresh</button><pre id=\"out\"></pre></div>")
 					.append("<p><a href=\"/\">← 처음으로</a></p>")
-					.append("<script>let at=document.getElementById('at').textContent.trim();")
-					.append("function show(t){document.getElementById('out').textContent=t;}")
-					.append("async function callMe(){const r=await fetch('/api/v1/auth/me',{headers:{Authorization:'Bearer '+at}});show('/me '+r.status+'\\n'+await r.text());}")
-					.append("async function doRefresh(){const r=await fetch('/api/v1/auth/refresh',{method:'POST',credentials:'include'});const t=await r.text();show('/refresh '+r.status+'\\n'+t);try{const j=JSON.parse(t);if(j.data&&j.data.accessToken){at=j.data.accessToken;document.getElementById('at').textContent=at;}}catch(e){}}")
+					.append("<script>function show(t){document.getElementById('out').textContent=t;}")
+					.append("async function callMe(){const r=await fetch('/api/v1/auth/me',{credentials:'include'});show('/me '+r.status+'\\n'+await r.text());}")
+					.append("async function doRefresh(){const r=await fetch('/api/v1/auth/refresh',{method:'POST',credentials:'include'});const t=await r.text();show('/refresh '+r.status+'\\n'+t);try{const j=JSON.parse(t);if(j.data&&j.data.accessToken){document.getElementById('at').textContent=j.data.accessToken;}}catch(e){}}")
 					.append("</script>");
 		}
 		return sb.append("</body></html>").toString();

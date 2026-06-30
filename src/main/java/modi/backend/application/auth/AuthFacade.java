@@ -144,6 +144,10 @@ public class AuthFacade {
 				.orElseThrow(() -> new CoreException(AuthErrorCode.INVALID_ACCESS_TOKEN));
 	}
 
+	public long accessTtlSeconds() {
+		return tokenProvider.accessTtlSeconds();
+	}
+
 	public long refreshTtlSeconds() {
 		return tokenProvider.refreshTtlSeconds();
 	}

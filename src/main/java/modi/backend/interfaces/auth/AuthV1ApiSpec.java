@@ -17,18 +17,18 @@ import modi.backend.support.response.ApiResponse;
 @Tag(name = "Auth", description = "소셜 로그인 · JWT 발급/재발급 · 내 정보 · 계정 연동")
 public interface AuthV1ApiSpec {
 
-	@Operation(summary = "소셜 로그인", description = "FE가 provider 콜백에서 받은 code로 로그인. access는 본문, refresh는 HttpOnly 쿠키.")
+	@Operation(summary = "소셜 로그인", description = "FE가 provider 콜백에서 받은 code로 로그인. access·refresh를 HttpOnly 쿠키로 발급(access는 본문에도 호환용으로 반환).")
 	ResponseEntity<ApiResponse<AuthDto.TokenResponse>> login(
 			@Parameter(in = ParameterIn.PATH, description = "kakao | google") String provider,
 			AuthDto.LoginRequest request,
 			@Parameter(hidden = true) HttpServletResponse response);
 
-	@Operation(summary = "토큰 재발급", description = "refresh 쿠키로 access/refresh 회전 발급.")
+	@Operation(summary = "토큰 재발급", description = "refresh 쿠키로 access/refresh 회전 발급(둘 다 HttpOnly 쿠키로 재설정).")
 	ResponseEntity<ApiResponse<AuthDto.TokenResponse>> refresh(
 			@Parameter(hidden = true) String refreshToken,
 			@Parameter(hidden = true) HttpServletResponse response);
 
-	@Operation(summary = "내 정보", description = "access 토큰 기반 사용자 정보.")
+	@Operation(summary = "내 정보", description = "access 토큰 기반 사용자 정보. access_token 쿠키 우선, Bearer 헤더 폴백.")
 	@SecurityRequirement(name = "bearerAuth")
 	ResponseEntity<ApiResponse<AuthDto.MeResponse>> me(
 			@Parameter(hidden = true) LoginUser user);

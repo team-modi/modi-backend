@@ -49,11 +49,14 @@ app:
       - http://localhost:3005/login
       - http://localhost:8080/login
     kakao:
-      client-id: ${KAKAO_CLIENT_ID:bd5949f0127dd8ae068263f6ec1b5edc}
+      # 테스트앱 "여운-TEST"(앱ID 1500036)의 REST 키. 동의항목(이메일·연령대·출생연도)이 설정된 앱.
+      # 운영 비즈앱 검수 완료 시 KAKAO_CLIENT_ID env로 교체. client-secret은 시크릿 → env로만 주입.
+      client-id: ${KAKAO_CLIENT_ID:bba3e1d954ec548062bc3c13fd9f72bc}
       client-secret: ${KAKAO_CLIENT_SECRET:}
-      # 이메일 동의항목 요청. ⚠️ 카카오 콘솔 [동의항목]에서 '카카오계정(이메일)'을 ON 해야 동작(아니면 KOE006).
-      # 콘솔 준비 전이면 KAKAO_SCOPE="" 로 비워 끌 수 있음.
-      scope: ${KAKAO_SCOPE:account_email}
+      # 동의항목 요청: 이메일 + 연령대 + 출생연도.
+      # ⚠️ 카카오 콘솔 [동의항목]에서 각 항목 ON 필수(테스트앱은 팀원만 검수 없이 동작).
+      #    미승인 항목을 scope에 넣으면 authorize 시 KOE006 → 로그인 깨짐. 콘솔 준비 전이면 KAKAO_SCOPE 로 줄여 둘 것.
+      scope: ${KAKAO_SCOPE:account_email,age_range,birthyear}
     google:
       client-id: ${GOOGLE_CLIENT_ID:238940430553-ikggojb7ssr0knf6u3ga8f00npsuv0s3.apps.googleusercontent.com}
       client-secret: ${GOOGLE_CLIENT_SECRET:}

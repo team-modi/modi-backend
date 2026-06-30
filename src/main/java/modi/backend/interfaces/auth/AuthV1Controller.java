@@ -23,8 +23,9 @@ import modi.backend.support.error.CoreException;
 import modi.backend.support.response.ApiResponse;
 
 /**
- * FE 주도 소셜 로그인 API. (성공 전부 200, refresh는 HttpOnly 쿠키)
+ * FE 주도 소셜 로그인 API. (성공 전부 200, access·refresh 모두 HttpOnly 쿠키)
  * FE가 provider 콜백에서 받은 code를 보내면 자체 JWT를 발급한다.
+ * access 토큰은 쿠키로 내려가고 인증도 쿠키로 검증한다(본문 accessToken은 비쿠키 클라이언트 호환용으로 함께 반환).
  */
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -46,7 +47,7 @@ public class AuthV1Controller implements AuthV1ApiSpec {
 			throw new CoreException(AuthErrorCode.INVALID_REDIRECT_URI, "허용 외 redirectUri: " + request.redirectUri());
 		}
 		AuthResult.Login result = authFacade.login(new AuthCriteria.Login(provider, request.code(), request.redirectUri()));
-		setRefreshCookie(response, result.refreshToken());
+		setAuthCookies(response, result);
 		return ResponseEntity.ok(ApiResponse.success(AuthDto.TokenResponse.from(result)));
 	}
 
@@ -59,7 +60,7 @@ public class AuthV1Controller implements AuthV1ApiSpec {
 			throw new CoreException(AuthErrorCode.NO_REFRESH_TOKEN);
 		}
 		AuthResult.Login result = authFacade.reissue(refreshToken);
-		setRefreshCookie(response, result.refreshToken());
+		setAuthCookies(response, result);
 		return ResponseEntity.ok(ApiResponse.success(AuthDto.TokenResponse.from(result)));
 	}
 
@@ -84,9 +85,13 @@ public class AuthV1Controller implements AuthV1ApiSpec {
 		return ResponseEntity.ok(ApiResponse.success(AuthDto.LinkResponse.from(result)));
 	}
 
-	private void setRefreshCookie(HttpServletResponse response, String refreshToken) {
-		response.addHeader("Set-Cookie", RefreshCookie.build(
-				refreshToken, authFacade.refreshTtlSeconds(),
+	/** access·refresh를 각각 HttpOnly 쿠키로 내려준다(Max-Age는 토큰 TTL과 일치). */
+	private void setAuthCookies(HttpServletResponse response, AuthResult.Login result) {
+		response.addHeader("Set-Cookie", AuthCookie.build(AuthCookie.ACCESS,
+				result.accessToken(), authFacade.accessTtlSeconds(),
+				cookieProperties.secure(), cookieProperties.sameSite()));
+		response.addHeader("Set-Cookie", AuthCookie.build(AuthCookie.REFRESH,
+				result.refreshToken(), authFacade.refreshTtlSeconds(),
 				cookieProperties.secure(), cookieProperties.sameSite()));
 	}
 }

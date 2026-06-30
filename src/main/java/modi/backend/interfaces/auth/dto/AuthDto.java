@@ -16,7 +16,7 @@ public final class AuthDto {
 	public record LoginRequest(@NotBlank String code, @NotBlank String redirectUri) {
 	}
 
-	/** 로그인/재발급 응답. access는 본문(FE 메모리), refresh는 HttpOnly 쿠키. */
+	/** 로그인/재발급 응답. access·refresh는 HttpOnly 쿠키로 내려가고, accessToken은 비쿠키 클라이언트 호환용으로 본문에도 둔다. */
 	public record TokenResponse(String accessToken, User user) {
 
 		public record User(Long userId, String nickname, boolean profileCompleted, String provider, String email) {

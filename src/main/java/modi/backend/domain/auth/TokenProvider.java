@@ -15,5 +15,7 @@ public interface TokenProvider {
 	/** 서명·만료 검증 통과 시 클레임, 아니면 empty. */
 	Optional<TokenClaims> parse(String token);
 
+	long accessTtlSeconds();
+
 	long refreshTtlSeconds();
 }

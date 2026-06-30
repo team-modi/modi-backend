@@ -13,17 +13,19 @@ import modi.backend.config.OAuthProperties;
 class KakaoOAuthClientTest {
 
 	@Test
-	@DisplayName("scope 설정 시 authorize URL에 이메일 동의(scope=account_email)가 실린다")
+	@DisplayName("설정한 동의항목(이메일·연령대·출생연도)이 authorize URL scope에 모두 실린다")
 	void buildAuthorizeUrl_scope포함() {
 		OAuthProperties props = new OAuthProperties(
 				"http://localhost:8080/login", List.of(),
-				new OAuthProperties.Provider("client-id", "secret", "account_email"),
+				new OAuthProperties.Provider("client-id", "secret", "account_email,age_range,birthyear"),
 				new OAuthProperties.Provider("g", "gs", null));
 		KakaoOAuthClient client = new KakaoOAuthClient(props, mock(KakaoApi.class));
 
 		String url = client.buildAuthorizeUrl("kakao:state", "http://localhost:3000/login");
 
-		assertThat(url).contains("scope=account_email")
+		assertThat(url).contains("account_email")
+				.contains("age_range")
+				.contains("birthyear")
 				.contains("client_id=client-id")
 				.contains("response_type=code");
 	}
