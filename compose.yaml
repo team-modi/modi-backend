@@ -37,9 +37,11 @@ services:
       - 'SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-}'
       # OAuth/JWT 시크릿: .env로 주입(배포 시 GitHub Actions secrets → deploy.yml이 .env에 기록).
       # client-id·redirect-uri·CORS는 application.yaml prod 기본값(공개 정보)이라 여기서 안 넣는다.
+      # ⚠️ 빈 문자열을 넘기면 application.yaml의 `${VAR:기본값}`이 "변수 존재"로 보고 빈값을 써버린다.
+      #    특히 JWT_SECRET이 빈값이면 0바이트 키로 부팅 크래시(WeakKeyException) → .env 없이도 뜨도록 로컬 기본값 폴백.
       - 'KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET:-}'
       - 'GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}'
-      - 'JWT_SECRET=${JWT_SECRET:-}'
+      - 'JWT_SECRET=${JWT_SECRET:-local-dev-only-jwt-secret-please-change-min-32-bytes}'
     ports:
       - '8080:8080'
 
