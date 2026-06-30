@@ -28,6 +28,11 @@ public interface AuthV1ApiSpec {
 			@Parameter(hidden = true) String refreshToken,
 			@Parameter(hidden = true) HttpServletResponse response);
 
+	@Operation(summary = "로그아웃", description = "access·refresh 쿠키를 만료시키고 서버의 refresh 토큰을 폐기(멱등).")
+	ResponseEntity<ApiResponse<Object>> logout(
+			@Parameter(hidden = true) String refreshToken,
+			@Parameter(hidden = true) HttpServletResponse response);
+
 	@Operation(summary = "내 정보", description = "access 토큰 기반 사용자 정보. access_token 쿠키 우선, Bearer 헤더 폴백.")
 	@SecurityRequirement(name = "bearerAuth")
 	ResponseEntity<ApiResponse<AuthDto.MeResponse>> me(

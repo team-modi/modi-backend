@@ -65,6 +65,16 @@ public class AuthV1Controller implements AuthV1ApiSpec {
 	}
 
 	@Override
+	@PostMapping("/logout")
+	public ResponseEntity<ApiResponse<Object>> logout(
+			@CookieValue(name = "refresh_token", required = false) String refreshToken,
+			HttpServletResponse response) {
+		authFacade.logout(refreshToken);
+		expireAuthCookies(response);
+		return ResponseEntity.ok(ApiResponse.success());
+	}
+
+	@Override
 	@GetMapping("/me")
 	public ResponseEntity<ApiResponse<AuthDto.MeResponse>> me(@Authentication LoginUser user) {
 		return ResponseEntity.ok(ApiResponse.success(AuthDto.MeResponse.from(user)));
@@ -83,6 +93,14 @@ public class AuthV1Controller implements AuthV1ApiSpec {
 		AuthResult.Link result = authFacade.link(
 				new AuthCriteria.Link(user.userId(), provider, request.code(), request.redirectUri()));
 		return ResponseEntity.ok(ApiResponse.success(AuthDto.LinkResponse.from(result)));
+	}
+
+	/** access·refresh 쿠키를 즉시 만료시킨다(로그아웃). */
+	private void expireAuthCookies(HttpServletResponse response) {
+		response.addHeader("Set-Cookie", AuthCookie.expire(
+				AuthCookie.ACCESS, cookieProperties.secure(), cookieProperties.sameSite()));
+		response.addHeader("Set-Cookie", AuthCookie.expire(
+				AuthCookie.REFRESH, cookieProperties.secure(), cookieProperties.sameSite()));
 	}
 
 	/** access·refresh를 각각 HttpOnly 쿠키로 내려준다(Max-Age는 토큰 TTL과 일치). */

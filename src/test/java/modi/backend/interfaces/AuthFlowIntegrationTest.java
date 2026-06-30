@@ -128,6 +128,34 @@ class AuthFlowIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("로그아웃 → access·refresh 쿠키 만료(Max-Age=0) + refresh 폐기로 재발급 불가")
+	void 로그아웃_쿠키만료_refresh폐기() throws Exception {
+		given(kakaoApi.getToken(any())).willReturn(Map.of("access_token", "kakao-access-token"));
+		given(kakaoApi.getUserInfo(anyString())).willReturn(Map.of(
+				"id", 7654321,
+				"kakao_account", Map.of("profile", Map.of("nickname", "로그아웃유저"))));
+
+		MvcResult login = mockMvc.perform(post("/api/v1/auth/login/kakao")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"code\":\"c\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
+				.andExpect(status().isOk())
+				.andReturn();
+		String refresh = cookieValue(setCookie(login, "refresh_token"));
+
+		// 로그아웃: 두 쿠키 모두 Max-Age=0 으로 만료
+		MvcResult logout = mockMvc.perform(post("/api/v1/auth/logout")
+						.cookie(new Cookie("refresh_token", refresh)))
+				.andExpect(status().isOk())
+				.andReturn();
+		assertThat(setCookie(logout, "access_token")).contains("Max-Age=0");
+		assertThat(setCookie(logout, "refresh_token")).contains("Max-Age=0");
+
+		// 서버에서 refresh 폐기됨 → 같은 refresh 쿠키로 재발급 불가
+		mockMvc.perform(post("/api/v1/auth/refresh").cookie(new Cookie("refresh_token", refresh)))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
 	@DisplayName("허용되지 않은 redirectUri는 400 INVALID_REDIRECT_URI로 일관 응답")
 	void 비정상_redirectUri_에러응답() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/login/kakao")

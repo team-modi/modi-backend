@@ -27,4 +27,9 @@ final class AuthCookie {
 		}
 		return sb.toString();
 	}
+
+	/** 즉시 만료(Max-Age=0, 빈 값)시키는 쿠키 — 로그아웃에 사용. set 때와 같은 Path/속성이어야 삭제된다. */
+	static String expire(String name, boolean secure, String sameSite) {
+		return build(name, "", 0, secure, sameSite);
+	}
 }
