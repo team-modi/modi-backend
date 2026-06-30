@@ -3,6 +3,7 @@
 ## Docker 실행 (스프링 + MySQL 한 번에)
 
 ```bash
+git pull origin main
 docker compose --profile app up -d --build   # 띄우기
 docker compose --profile app down            # 끄기
 ```
