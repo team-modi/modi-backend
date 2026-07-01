@@ -2,7 +2,6 @@ package modi.backend.interfaces.auth;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -67,13 +66,5 @@ class AuthV1ControllerTest {
 		mockMvc.perform(post("/api/v1/auth/refresh"))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.meta.errorCode").value("NO_REFRESH_TOKEN"));
-	}
-
-	@Test
-	@DisplayName("Bearer 없음 → 401 NO_ACCESS_TOKEN")
-	void me_Bearer없음() throws Exception {
-		mockMvc.perform(get("/api/v1/auth/me"))
-				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.meta.errorCode").value("NO_ACCESS_TOKEN"));
 	}
 }

@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Optional;
+import java.util.UUID;
 
 import javax.crypto.SecretKey;
 
@@ -21,6 +22,7 @@ import modi.backend.domain.user.User;
 /**
  * {@link TokenProvider} 구현(infra). HMAC-SHA256 서명 JWT.
  * access = userId+provider+nickname+profileCompleted, refresh = userId+provider.
+ * 모든 토큰에 고유 jti를 실어 같은 초에 발급돼도 토큰이 겹치지 않게 한다(refresh 회전이 실제로 회전되도록).
  */
 @Component
 public class JwtTokenProvider implements TokenProvider {
@@ -39,6 +41,7 @@ public class JwtTokenProvider implements TokenProvider {
 	public AuthTokens issue(User user, String provider) {
 		Instant now = Instant.now();
 		String access = Jwts.builder()
+				.id(UUID.randomUUID().toString())
 				.subject(String.valueOf(user.getId()))
 				.claim("type", "access")
 				.claim("provider", provider)
@@ -49,6 +52,7 @@ public class JwtTokenProvider implements TokenProvider {
 				.signWith(key)
 				.compact();
 		String refresh = Jwts.builder()
+				.id(UUID.randomUUID().toString())
 				.subject(String.valueOf(user.getId()))
 				.claim("type", "refresh")
 				.claim("provider", provider)

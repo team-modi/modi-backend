@@ -9,9 +9,6 @@ public interface OAuthClient {
 	/** 이 클라이언트가 담당하는 provider (KAKAO | GOOGLE). */
 	Provider provider();
 
-	/** provider 로그인 페이지로 보낼 authorize URL 생성. */
-	String buildAuthorizeUrl(String state, String redirectUri);
-
 	/** code → (provider 토큰 교환 → userinfo 조회) → 공통 사용자 정보. */
 	OAuthUserInfo fetchUserInfo(String code, String redirectUri);
 }

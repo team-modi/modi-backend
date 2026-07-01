@@ -1,7 +1,6 @@
 package modi.backend.application.auth;
 
 import java.util.List;
-import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +12,6 @@ import modi.backend.domain.auth.OAuthClient;
 import modi.backend.domain.auth.OAuthUserInfo;
 import modi.backend.domain.auth.Provider;
 import modi.backend.domain.auth.RefreshTokenStore;
-import modi.backend.domain.auth.StateStore;
 import modi.backend.domain.auth.TokenClaims;
 import modi.backend.domain.auth.TokenProvider;
 import modi.backend.domain.user.SocialAccount;
@@ -37,26 +35,7 @@ public class AuthFacade {
 	private final UserRepository userRepository;
 	private final SocialAccountRepository socialAccountRepository;
 	private final TokenProvider tokenProvider;
-	private final StateStore stateStore;
 	private final RefreshTokenStore refreshTokenStore;
-
-	/** provider 로그인 시작용 authorize URL (state는 provider prefix로 콜백에서 구분). */
-	public String authorizeUrl(String provider, String redirectUri) {
-		Provider target = Provider.from(provider);
-		String state = target.code() + ":" + UUID.randomUUID();
-		stateStore.save(state);
-		return client(target).buildAuthorizeUrl(state, redirectUri);
-	}
-
-	/** state 검증(소비) → code 로그인 완료. provider는 state prefix에서 도출. */
-	@Transactional
-	public AuthResult.Login completeLogin(String state, String code, String redirectUri) {
-		if (state == null || !state.contains(":") || !stateStore.consume(state)) {
-			throw new CoreException(AuthErrorCode.INVALID_STATE, "유효하지 않은 state: " + state);
-		}
-		String provider = state.substring(0, state.indexOf(':'));
-		return login(new AuthCriteria.Login(provider, code, redirectUri));
-	}
 
 	/** FE 주도 플로우용: provider·code로 로그인(state 검증은 FE 책임). */
 	@Transactional
@@ -80,7 +59,9 @@ public class AuthFacade {
 					.orElseThrow(() -> new CoreException(AuthErrorCode.SOCIAL_ACCOUNT_LINK_BROKEN,
 							"연결된 사용자 없음: " + userId));
 		} else {
-			user = userRepository.save(User.createFromSocial(info.nickname()));
+			// 신규 가입: 소셜 동의항목의 연령대·출생연도까지 반영(재로그인 시엔 사용자 편집을 덮지 않도록 미반영).
+			user = userRepository.save(
+					User.createFromSocial(info.nickname(), info.ageGroup(), info.birthYear()));
 			social = socialAccountRepository.save(
 					SocialAccount.create(user.getId(), target.code(), info.sub(), info.email()));
 		}
@@ -107,34 +88,6 @@ public class AuthFacade {
 		AuthTokens tokens = tokenProvider.issue(user, provider);
 		refreshTokenStore.save(user.getId(), tokens.refreshToken()); // 회전
 		return AuthResult.Login.of(user, provider, email, tokens);
-	}
-
-	/**
-	 * 로그인 유저에 다른 provider 소셜 계정을 추가 연결한다.
-	 * (provider, sub)가 이미 다른 유저 소유면 {@link AuthErrorCode#SOCIAL_ACCOUNT_ALREADY_LINKED},
-	 * 본인 소유면 멱등(이메일만 최신화).
-	 */
-	@Transactional
-	public AuthResult.Link link(AuthCriteria.Link criteria) {
-		Long userId = criteria.userId();
-		Provider target = Provider.from(criteria.provider());
-		userRepository.findById(userId)
-				.orElseThrow(() -> new CoreException(UserErrorCode.USER_NOT_FOUND));
-		OAuthUserInfo info = client(target).fetchUserInfo(criteria.code(), criteria.redirectUri());
-
-		SocialAccount social = socialAccountRepository
-				.findByProviderAndProviderUserId(target.code(), info.sub())
-				.map(existing -> {
-					if (!existing.getUserId().equals(userId)) {
-						throw new CoreException(AuthErrorCode.SOCIAL_ACCOUNT_ALREADY_LINKED,
-								"이미 user=" + existing.getUserId() + "에 연결됨");
-					}
-					existing.updateEmail(info.email());
-					return socialAccountRepository.save(existing);
-				})
-				.orElseGet(() -> socialAccountRepository.save(
-						SocialAccount.create(userId, target.code(), info.sub(), info.email())));
-		return AuthResult.Link.from(social);
 	}
 
 	/** 로그아웃: refresh가 유효하면 저장소에서 폐기(쿠키 만료는 인터페이스 책임). 무효/없음은 무시(멱등). */

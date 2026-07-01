@@ -2,7 +2,6 @@ package modi.backend.interfaces.auth.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import modi.backend.application.auth.AuthResult;
-import modi.backend.interfaces.auth.LoginUser;
 
 /**
  * 인증 API의 요청/응답 DTO 모음. (파일 수 절감을 위해 중첩 record로 묶음)
@@ -27,22 +26,6 @@ public final class AuthDto {
 					result.accessToken(),
 					new User(result.userId(), result.nickname(), result.profileCompleted(),
 							result.provider(), result.email()));
-		}
-	}
-
-	/** 내 정보 응답 (인증된 사용자 기반). */
-	public record MeResponse(Long userId, String provider, String nickname, Boolean profileCompleted) {
-
-		public static MeResponse from(LoginUser user) {
-			return new MeResponse(user.userId(), user.provider(), user.nickname(), user.profileCompleted());
-		}
-	}
-
-	/** 소셜 계정 연동 응답. */
-	public record LinkResponse(Long userId, String provider, String email) {
-
-		public static LinkResponse from(AuthResult.Link result) {
-			return new LinkResponse(result.userId(), result.provider(), result.email());
 		}
 	}
 }

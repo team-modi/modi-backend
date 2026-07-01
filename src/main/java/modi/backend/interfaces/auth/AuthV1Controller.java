@@ -2,7 +2,6 @@ package modi.backend.interfaces.auth;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -72,27 +71,6 @@ public class AuthV1Controller implements AuthV1ApiSpec {
 		authFacade.logout(refreshToken);
 		expireAuthCookies(response);
 		return ResponseEntity.ok(ApiResponse.success());
-	}
-
-	@Override
-	@GetMapping("/me")
-	public ResponseEntity<ApiResponse<AuthDto.MeResponse>> me(@Authentication LoginUser user) {
-		return ResponseEntity.ok(ApiResponse.success(AuthDto.MeResponse.from(user)));
-	}
-
-	/** 로그인 유저에 다른 provider 소셜 계정을 추가 연동(access 토큰 필요). */
-	@Override
-	@PostMapping("/link/{provider}")
-	public ResponseEntity<ApiResponse<AuthDto.LinkResponse>> link(
-			@PathVariable String provider,
-			@Authentication LoginUser user,
-			@Valid @RequestBody AuthDto.LoginRequest request) {
-		if (!oauthProperties.isAllowedRedirectUri(request.redirectUri())) {
-			throw new CoreException(AuthErrorCode.INVALID_REDIRECT_URI, "허용 외 redirectUri: " + request.redirectUri());
-		}
-		AuthResult.Link result = authFacade.link(
-				new AuthCriteria.Link(user.userId(), provider, request.code(), request.redirectUri()));
-		return ResponseEntity.ok(ApiResponse.success(AuthDto.LinkResponse.from(result)));
 	}
 
 	/** access·refresh 쿠키를 즉시 만료시킨다(로그아웃). */
