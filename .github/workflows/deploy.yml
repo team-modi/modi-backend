@@ -4,7 +4,12 @@ name: Deploy to EC2
 on:
   push:
     branches: [main]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      reset_db:
+        description: '⚠️ true면 EC2 mysql 볼륨을 삭제한 뒤 재배포(DB 초기화). Flyway 최초 도입/스키마 리셋 전용 — 평소 배포는 반드시 false!'
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-ec2
@@ -61,6 +66,12 @@ jobs:
             GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
             JWT_SECRET=${JWT_SECRET}
             EOF
+            # ⚠️ 수동 dispatch에서 reset_db=true일 때만 mysql 볼륨 삭제(DB 초기화).
+            #    Flyway 최초 도입/스키마 리셋 전용. push 배포에선 inputs가 비어 항상 스킵된다.
+            if [ "${{ inputs.reset_db }}" = "true" ]; then
+              echo "⚠️ reset_db=true → mysql-data 볼륨 삭제(DB 완전 초기화)"
+              sudo docker compose --profile app down -v
+            fi
             sudo docker compose --profile app up -d --build
 
             # 배포 후 헬스체크 검증: UP 될 때까지 최대 150초 폴링, 실패 시 로그 출력하고 배포 실패 처리
