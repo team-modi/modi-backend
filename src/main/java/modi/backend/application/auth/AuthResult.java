@@ -1,7 +1,6 @@
 package modi.backend.application.auth;
 
 import modi.backend.domain.auth.AuthTokens;
-import modi.backend.domain.user.SocialAccount;
 import modi.backend.domain.user.User;
 
 /**
@@ -21,14 +20,6 @@ public final class AuthResult {
 		public static Login of(User user, String provider, String email, AuthTokens tokens) {
 			return new Login(user.getId(), user.getNickname(), user.isProfileCompleted(), provider, email,
 					tokens.accessToken(), tokens.refreshToken());
-		}
-	}
-
-	/** 소셜 계정 연동 출력. 로그인 유저에 provider를 추가 연결한 결과. */
-	public record Link(Long userId, String provider, String email) {
-
-		public static Link from(SocialAccount social) {
-			return new Link(social.getUserId(), social.getProvider(), social.getEmail());
 		}
 	}
 }

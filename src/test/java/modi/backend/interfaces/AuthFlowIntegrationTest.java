@@ -1,6 +1,7 @@
 package modi.backend.interfaces;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -27,6 +28,7 @@ import com.jayway.jsonpath.JsonPath;
 
 import jakarta.servlet.http.Cookie;
 import modi.backend.TestcontainersConfiguration;
+import modi.backend.infra.auth.GoogleApi;
 import modi.backend.infra.auth.KakaoApi;
 
 /**
@@ -47,8 +49,11 @@ class AuthFlowIntegrationTest {
 	@MockitoBean
 	KakaoApi kakaoApi;
 
+	@MockitoBean
+	GoogleApi googleApi;
+
 	@Test
-	@DisplayName("로그인 → /me → /refresh → 온보딩 → 연동까지 정상 응답")
+	@DisplayName("로그인 → /me → /refresh → 온보딩까지 정상 응답")
 	void 전체_플로우_정상응답() throws Exception {
 		// 카카오 토큰 교환 + userinfo 응답을 고정(중첩 구조)
 		given(kakaoApi.getToken(any())).willReturn(Map.of("access_token", "kakao-access-token"));
@@ -84,15 +89,15 @@ class AuthFlowIntegrationTest {
 		assertThat(cookieAccessToken).isEqualTo(accessToken);
 		assertThat(refreshToken).isNotBlank();
 
-		// 2) /me: access_token 쿠키 → @Authentication 주입으로 내 정보 (쿠키 인증 경로)
-		mockMvc.perform(get("/api/v1/auth/me").cookie(new Cookie("access_token", cookieAccessToken)))
+		// 2) /users/me: access_token 쿠키 → @Authentication 주입으로 내 프로필 (쿠키 인증 경로)
+		mockMvc.perform(get("/api/v1/users/me").cookie(new Cookie("access_token", cookieAccessToken)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.userId").value(userId))
 				.andExpect(jsonPath("$.data.provider").value("kakao"))
 				.andExpect(jsonPath("$.data.nickname").value("카카오유저"));
 
-		// 2-1) /me: Bearer 헤더 폴백도 여전히 동작
-		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + accessToken))
+		// 2-1) /users/me: Bearer 헤더 폴백도 여전히 동작
+		mockMvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + accessToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.userId").value(userId));
 
@@ -116,15 +121,6 @@ class AuthFlowIntegrationTest {
 				.andExpect(jsonPath("$.data.userId").value(userId))
 				.andExpect(jsonPath("$.data.nickname").value("온보딩닉"))
 				.andExpect(jsonPath("$.data.profileCompleted").value(true));
-
-		// 5) 연동: 같은 카카오 재연동 → 본인 소유라 멱등(같은 userId)
-		mockMvc.perform(post("/api/v1/auth/link/kakao")
-						.header("Authorization", "Bearer " + accessToken)
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"code\":\"auth-code-2\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.userId").value(userId))
-				.andExpect(jsonPath("$.data.provider").value("kakao"));
 	}
 
 	@Test
@@ -150,9 +146,10 @@ class AuthFlowIntegrationTest {
 		assertThat(setCookie(logout, "access_token")).contains("Max-Age=0");
 		assertThat(setCookie(logout, "refresh_token")).contains("Max-Age=0");
 
-		// 서버에서 refresh 폐기됨 → 같은 refresh 쿠키로 재발급 불가
+		// 서버에서 refresh 폐기됨 → 같은 refresh 쿠키로 재발급 불가 (L3)
 		mockMvc.perform(post("/api/v1/auth/refresh").cookie(new Cookie("refresh_token", refresh)))
-				.andExpect(status().isUnauthorized());
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.meta.errorCode").value("INVALID_REFRESH_TOKEN"));
 	}
 
 	@Test
@@ -164,6 +161,152 @@ class AuthFlowIntegrationTest {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.meta.result").value("FAIL"))
 				.andExpect(jsonPath("$.meta.errorCode").value("INVALID_REDIRECT_URI"));
+	}
+
+	@Test
+	@DisplayName("A2 기존 유저: 동일 (provider, providerUserId) 재로그인 → 같은 userId 재사용 + email 갱신")
+	void A2_기존유저_재로그인() throws Exception {
+		given(kakaoApi.getToken(any())).willReturn(Map.of("access_token", "kakao-access-token"));
+		given(kakaoApi.getUserInfo(anyString())).willReturn(Map.of(
+				"id", 8888001,
+				"kakao_account", Map.of("email", "old@kakao.com", "profile", Map.of("nickname", "재로그인유저"))));
+		MvcResult first = mockMvc.perform(post("/api/v1/auth/login/kakao")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"code\":\"c1\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
+				.andExpect(status().isOk())
+				.andReturn();
+		Integer firstUserId = JsonPath.read(first.getResponse().getContentAsString(), "$.data.user.userId");
+
+		// 같은 소셜 계정, email만 변경해 재로그인
+		given(kakaoApi.getUserInfo(anyString())).willReturn(Map.of(
+				"id", 8888001,
+				"kakao_account", Map.of("email", "new@kakao.com", "profile", Map.of("nickname", "재로그인유저"))));
+		mockMvc.perform(post("/api/v1/auth/login/kakao")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"code\":\"c2\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.user.userId").value(firstUserId)) // 신규 가입 없이 동일 유저
+				.andExpect(jsonPath("$.data.user.email").value("new@kakao.com")); // email 최신화
+	}
+
+	@Test
+	@DisplayName("A3 이메일 미동의(email 없음)로 로그인 → 200, user.email=null")
+	void A3_이메일미동의_로그인() throws Exception {
+		given(kakaoApi.getToken(any())).willReturn(Map.of("access_token", "kakao-access-token"));
+		given(kakaoApi.getUserInfo(anyString())).willReturn(Map.of(
+				"id", 8888002,
+				"kakao_account", Map.of("profile", Map.of("nickname", "무이메일유저"))));
+		mockMvc.perform(post("/api/v1/auth/login/kakao")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"code\":\"c\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.user.email").value(nullValue()));
+	}
+
+	@Test
+	@DisplayName("A4 지원하지 않는 provider(naver) → 400 UNSUPPORTED_PROVIDER")
+	void A4_미지원_provider() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/login/naver")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"code\":\"c\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.meta.errorCode").value("UNSUPPORTED_PROVIDER"));
+	}
+
+	@Test
+	@DisplayName("A6 소셜 토큰 교환 실패(access_token 없음) → 502 OAUTH_COMMUNICATION_FAILED")
+	void A6_소셜통신실패() throws Exception {
+		given(kakaoApi.getToken(any())).willReturn(Map.of()); // access_token 누락 → 교환 실패
+		mockMvc.perform(post("/api/v1/auth/login/kakao")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"code\":\"c\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
+				.andExpect(status().isBadGateway())
+				.andExpect(jsonPath("$.meta.errorCode").value("OAUTH_COMMUNICATION_FAILED"));
+	}
+
+	@Test
+	@DisplayName("A8 구글 provider 로그인(플랫 응답 구조) → 200 + provider=google")
+	void A8_구글_로그인() throws Exception {
+		given(googleApi.getToken(any())).willReturn(Map.of("access_token", "google-access-token"));
+		given(googleApi.getUserInfo(anyString())).willReturn(Map.of(
+				"id", "google-sub-1", "email", "user@gmail.com", "name", "구글유저"));
+		mockMvc.perform(post("/api/v1/auth/login/google")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"code\":\"gcode\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.user.provider").value("google"))
+				.andExpect(jsonPath("$.data.user.email").value("user@gmail.com"))
+				.andExpect(jsonPath("$.data.accessToken").isNotEmpty());
+	}
+
+	@Test
+	@DisplayName("R3 위조/무효 refresh 쿠키 → 401 INVALID_REFRESH_TOKEN")
+	void R3_위조_refresh() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/refresh")
+						.cookie(new Cookie("refresh_token", "garbage.token.value")))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.meta.errorCode").value("INVALID_REFRESH_TOKEN"));
+	}
+
+	@Test
+	@DisplayName("L2 refresh 쿠키 없이 로그아웃 → 200 (멱등)")
+	void L2_refresh없이_로그아웃() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/logout"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.meta.result").value("SUCCESS"));
+	}
+
+	@Test
+	@DisplayName("카카오 동의항목(연령대·출생연도) 신규 가입 시 반영 → /users/me에 ageGroup·birthYear")
+	void 카카오_연령대_출생연도_반영() throws Exception {
+		given(kakaoApi.getToken(any())).willReturn(Map.of("access_token", "kakao-access-token"));
+		given(kakaoApi.getUserInfo(anyString())).willReturn(Map.of(
+				"id", 8888007,
+				"kakao_account", Map.of(
+						"email", "age@kakao.com",
+						"age_range", "20~29",
+						"birthyear", "1998",
+						"profile", Map.of("nickname", "연령대유저"))));
+		MvcResult login = mockMvc.perform(post("/api/v1/auth/login/kakao")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"code\":\"c\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
+				.andExpect(status().isOk())
+				.andReturn();
+		String accessToken = JsonPath.read(login.getResponse().getContentAsString(), "$.data.accessToken");
+
+		// 소셜 동의항목이 도메인까지 반영됐는지 프로필 조회로 확인
+		mockMvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + accessToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.ageGroup").value("TWENTIES")) // age_range "20~29" → TWENTIES
+				.andExpect(jsonPath("$.data.birthYear").value(1998));      // birthyear "1998" → 1998
+	}
+
+	@Test
+	@DisplayName("R4 회전 후 옛 refresh 재사용 → 401 INVALID_REFRESH_TOKEN")
+	void R4_회전후_옛refresh_무효() throws Exception {
+		given(kakaoApi.getToken(any())).willReturn(Map.of("access_token", "kakao-access-token"));
+		given(kakaoApi.getUserInfo(anyString())).willReturn(Map.of(
+				"id", 8888006, "kakao_account", Map.of("profile", Map.of("nickname", "회전유저"))));
+		MvcResult login = mockMvc.perform(post("/api/v1/auth/login/kakao")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"code\":\"c\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
+				.andExpect(status().isOk())
+				.andReturn();
+		String oldRefresh = cookieValue(setCookie(login, "refresh_token"));
+
+		// 회전: 새 refresh 발급 (jti 덕분에 옛것과 반드시 다르다)
+		MvcResult rotated = mockMvc.perform(post("/api/v1/auth/refresh")
+						.cookie(new Cookie("refresh_token", oldRefresh)))
+				.andExpect(status().isOk())
+				.andReturn();
+		String newRefresh = cookieValue(setCookie(rotated, "refresh_token"));
+		assertThat(newRefresh).isNotEqualTo(oldRefresh);
+
+		// 옛 refresh 재사용 → 저장소의 현재 값과 불일치로 무효
+		mockMvc.perform(post("/api/v1/auth/refresh")
+						.cookie(new Cookie("refresh_token", oldRefresh)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.meta.errorCode").value("INVALID_REFRESH_TOKEN"));
 	}
 
 	/** 여러 Set-Cookie 헤더 중 주어진 이름으로 시작하는 것을 찾는다(없으면 null). */

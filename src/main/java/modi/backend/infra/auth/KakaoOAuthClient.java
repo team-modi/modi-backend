@@ -3,11 +3,11 @@ package modi.backend.infra.auth;
 import java.util.Map;
 
 import org.springframework.stereotype.Component;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import modi.backend.config.OAuthProperties;
 import modi.backend.domain.auth.OAuthUserInfo;
 import modi.backend.domain.auth.Provider;
+import modi.backend.domain.user.AgeGroup;
 
 /**
  * 카카오 OAuth 클라이언트. HTTP 호출은 {@link KakaoApi}(HTTP Interface) 위임.
@@ -15,8 +15,6 @@ import modi.backend.domain.auth.Provider;
  */
 @Component
 public class KakaoOAuthClient extends AbstractOAuthClient {
-
-	private static final String AUTHORIZE_URL = "https://kauth.kakao.com/oauth/authorize";
 
 	private final OAuthProperties.Provider props;
 	private final KakaoApi kakaoApi;
@@ -29,20 +27,6 @@ public class KakaoOAuthClient extends AbstractOAuthClient {
 	@Override
 	public Provider provider() {
 		return Provider.KAKAO;
-	}
-
-	@Override
-	public String buildAuthorizeUrl(String state, String redirectUri) {
-		UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(AUTHORIZE_URL)
-				.queryParam("client_id", props.clientId())
-				.queryParam("redirect_uri", redirectUri)
-				.queryParam("response_type", "code")
-				.queryParam("state", state);
-		// 이메일 등 동의항목 요청(콘솔에 활성화돼 있어야 함). 예: account_email
-		if (props.scope() != null && !props.scope().isBlank()) {
-			builder.queryParam("scope", props.scope());
-		}
-		return builder.build().encode().toUriString();
 	}
 
 	@Override
@@ -61,6 +45,21 @@ public class KakaoOAuthClient extends AbstractOAuthClient {
 			Map<String, Object> properties = (Map<String, Object>) body.getOrDefault("properties", Map.of());
 			nickname = (String) properties.get("nickname");
 		}
-		return new OAuthUserInfo(sub, email, nickname);
+		// 동의항목: 연령대(age_range "20~29") + 출생연도(birthyear "1993"). 미동의 시 각각 null.
+		AgeGroup ageGroup = AgeGroup.fromKakaoAgeRange((String) account.get("age_range"));
+		Integer birthYear = parseBirthYear((String) account.get("birthyear"));
+		return new OAuthUserInfo(sub, email, nickname, ageGroup, birthYear);
+	}
+
+	/** 카카오 birthyear("1993") → Integer. 미동의/파싱 불가 시 null. */
+	private static Integer parseBirthYear(String birthyear) {
+		if (birthyear == null || birthyear.isBlank()) {
+			return null;
+		}
+		try {
+			return Integer.valueOf(birthyear.trim());
+		} catch (NumberFormatException e) {
+			return null;
+		}
 	}
 }

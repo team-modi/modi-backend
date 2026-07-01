@@ -3,11 +3,11 @@ package modi.backend.infra.auth;
 import java.util.Map;
 
 import org.springframework.stereotype.Component;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import modi.backend.config.OAuthProperties;
 import modi.backend.domain.auth.OAuthUserInfo;
 import modi.backend.domain.auth.Provider;
+import modi.backend.domain.user.AgeGroup;
 
 /**
  * 구글 OAuth 클라이언트. HTTP 호출은 {@link GoogleApi}(HTTP Interface) 위임.
@@ -15,8 +15,6 @@ import modi.backend.domain.auth.Provider;
  */
 @Component
 public class GoogleOAuthClient extends AbstractOAuthClient {
-
-	private static final String AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
 	private final OAuthProperties.Provider props;
 	private final GoogleApi googleApi;
@@ -32,26 +30,16 @@ public class GoogleOAuthClient extends AbstractOAuthClient {
 	}
 
 	@Override
-	public String buildAuthorizeUrl(String state, String redirectUri) {
-		return UriComponentsBuilder.fromUriString(AUTHORIZE_URL)
-				.queryParam("client_id", props.clientId())
-				.queryParam("redirect_uri", redirectUri)
-				.queryParam("response_type", "code")
-				.queryParam("scope", "openid email profile")
-				.queryParam("state", state)
-				.queryParam("access_type", "offline")
-				.queryParam("prompt", "consent")
-				.build().encode().toUriString();
-	}
-
-	@Override
 	public OAuthUserInfo fetchUserInfo(String code, String redirectUri) {
 		Map<String, Object> token = googleApi.getToken(
 				tokenForm(props.clientId(), props.clientSecret(), redirectUri, code));
 		Map<String, Object> body = googleApi.getUserInfo("Bearer " + extractAccessToken(token));
+		// 구글 기본 프로필엔 연령대·출생연도가 없다 → UNSPECIFIED·null.
 		return new OAuthUserInfo(
 				String.valueOf(body.get("id")),
 				(String) body.get("email"),
-				(String) body.get("name"));
+				(String) body.get("name"),
+				AgeGroup.UNSPECIFIED,
+				null);
 	}
 }

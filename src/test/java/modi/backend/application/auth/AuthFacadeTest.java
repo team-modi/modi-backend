@@ -22,8 +22,8 @@ import modi.backend.domain.auth.OAuthClient;
 import modi.backend.domain.auth.OAuthUserInfo;
 import modi.backend.domain.auth.Provider;
 import modi.backend.domain.auth.RefreshTokenStore;
-import modi.backend.domain.auth.StateStore;
 import modi.backend.domain.auth.TokenProvider;
+import modi.backend.domain.user.AgeGroup;
 import modi.backend.domain.user.SocialAccount;
 import modi.backend.domain.user.SocialAccountRepository;
 import modi.backend.domain.user.User;
@@ -49,20 +49,19 @@ class AuthFacadeTest {
 		userRepository = mock(UserRepository.class);
 		socialAccountRepository = mock(SocialAccountRepository.class);
 		tokenProvider = mock(TokenProvider.class);
-		StateStore stateStore = mock(StateStore.class);
 		RefreshTokenStore refreshTokenStore = mock(RefreshTokenStore.class);
 
 		given(tokenProvider.issue(any(), anyString())).willReturn(new AuthTokens("access", "refresh"));
 
 		authFacade = new AuthFacade(List.of(kakaoClient), userRepository, socialAccountRepository,
-				tokenProvider, stateStore, refreshTokenStore);
+				tokenProvider, refreshTokenStore);
 	}
 
 	@Test
 	@DisplayName("login: 기존 연결 없으면 User+SocialAccount 신규 생성")
 	void login_신규가입() {
 		given(kakaoClient.fetchUserInfo(anyString(), anyString()))
-				.willReturn(new OAuthUserInfo("sub-1", "a@b.com", "진"));
+				.willReturn(new OAuthUserInfo("sub-1", "a@b.com", "진", AgeGroup.TWENTIES, 1993));
 		given(socialAccountRepository.findByProviderAndProviderUserId("kakao", "sub-1"))
 				.willReturn(Optional.empty());
 		given(userRepository.save(any(User.class))).willAnswer(inv -> inv.getArgument(0));
@@ -81,7 +80,7 @@ class AuthFacadeTest {
 	@DisplayName("login: 기존 연결 있으면 그 User로 로그인, 신규 가입 없음")
 	void login_기존연결() {
 		given(kakaoClient.fetchUserInfo(anyString(), anyString()))
-				.willReturn(new OAuthUserInfo("sub-1", "new@b.com", "진"));
+				.willReturn(new OAuthUserInfo("sub-1", "new@b.com", "진", AgeGroup.UNSPECIFIED, null));
 		SocialAccount existing = SocialAccount.create(5L, "kakao", "sub-1", "old@b.com");
 		given(socialAccountRepository.findByProviderAndProviderUserId("kakao", "sub-1"))
 				.willReturn(Optional.of(existing));
@@ -93,40 +92,6 @@ class AuthFacadeTest {
 		assertThat(result.provider()).isEqualTo("kakao");
 		assertThat(existing.getEmail()).isEqualTo("new@b.com"); // 이메일 최신화
 		verify(userRepository, never()).save(any(User.class));
-	}
-
-	@Test
-	@DisplayName("link: (provider,sub)가 다른 유저 소유면 SOCIAL_ACCOUNT_ALREADY_LINKED")
-	void link_다른유저소유_충돌() {
-		given(userRepository.findById(1L)).willReturn(Optional.of(User.createFromSocial("나")));
-		given(kakaoClient.fetchUserInfo(anyString(), anyString()))
-				.willReturn(new OAuthUserInfo("sub-9", "x@b.com", "남"));
-		given(socialAccountRepository.findByProviderAndProviderUserId("kakao", "sub-9"))
-				.willReturn(Optional.of(SocialAccount.create(2L, "kakao", "sub-9", "x@b.com")));
-
-		assertThatThrownBy(() -> authFacade.link(new AuthCriteria.Link(1L, "kakao", "code", "https://app/cb")))
-				.isInstanceOf(CoreException.class)
-				.extracting(e -> ((CoreException) e).errorCode())
-				.isEqualTo(AuthErrorCode.SOCIAL_ACCOUNT_ALREADY_LINKED);
-
-		verify(socialAccountRepository, never()).save(any(SocialAccount.class));
-	}
-
-	@Test
-	@DisplayName("link: 미연결이면 로그인 유저에 신규 연결")
-	void link_신규연결() {
-		given(userRepository.findById(1L)).willReturn(Optional.of(User.createFromSocial("나")));
-		given(kakaoClient.fetchUserInfo(anyString(), anyString()))
-				.willReturn(new OAuthUserInfo("sub-9", "x@b.com", "남"));
-		given(socialAccountRepository.findByProviderAndProviderUserId("kakao", "sub-9"))
-				.willReturn(Optional.empty());
-		given(socialAccountRepository.save(any(SocialAccount.class))).willAnswer(inv -> inv.getArgument(0));
-
-		AuthResult.Link result = authFacade.link(new AuthCriteria.Link(1L, "kakao", "code", "https://app/cb"));
-
-		assertThat(result.userId()).isEqualTo(1L);
-		assertThat(result.provider()).isEqualTo("kakao");
-		verify(socialAccountRepository).save(any(SocialAccount.class));
 	}
 
 	@Test
