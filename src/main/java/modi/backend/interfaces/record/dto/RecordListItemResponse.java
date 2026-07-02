@@ -14,5 +14,13 @@ public record RecordListItemResponse(
 		boolean bookmarked,
 		WriteMode writeMode,
 		LocalDate viewedAt,
-		ZonedDateTime createdAt) {
+		ZonedDateTime createdAt,
+		String exhibitionTitle,
+		String exhibitionType,
+		String exhibitionPosterUrl,
+		String exhibitionPlace,
+		String exhibitionRegion,
+		String exhibitionCategory,
+		LocalDate exhibitionStartDate,
+		LocalDate exhibitionEndDate) {
 }

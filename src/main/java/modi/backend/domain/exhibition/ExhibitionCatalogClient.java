@@ -1,6 +1,7 @@
 package modi.backend.domain.exhibition;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 외부 전시 API 수집 포트(도메인 소유). 구현은 infra(DIP) — 외부 HTTP·응답 포맷을 도메인에서 감춘다.
@@ -15,4 +16,12 @@ public interface ExhibitionCatalogClient {
 	 * @return 정규화·검증된 수집 데이터(결과 없으면 빈 목록)
 	 */
 	List<CatalogExhibitionData> fetchAll();
+
+	/**
+	 * 단건 상세(detail2)를 지연 조회한다. 인증키 미설정/결과 없음은 빈 Optional.
+	 *
+	 * @param externalId 원천 seq
+	 * @return 상세 확장 필드(없으면 빈 Optional)
+	 */
+	Optional<CatalogDetailData> fetchDetail(String externalId);
 }

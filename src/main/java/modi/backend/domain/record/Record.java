@@ -28,6 +28,30 @@ public class Record extends BaseEntity {
 	@Column(name = "exhibition_id", nullable = false)
 	private Long exhibitionId;
 
+	@Column(name = "exhibition_title", nullable = false, length = 100)
+	private String exhibitionTitle;
+
+	@Column(name = "exhibition_type", nullable = false, length = 20)
+	private String exhibitionType;
+
+	@Column(name = "exhibition_poster_url", length = 2048)
+	private String exhibitionPosterUrl;
+
+	@Column(name = "exhibition_place", length = 200)
+	private String exhibitionPlace;
+
+	@Column(name = "exhibition_region", length = 20)
+	private String exhibitionRegion;
+
+	@Column(name = "exhibition_category", length = 20)
+	private String exhibitionCategory;
+
+	@Column(name = "exhibition_start_date")
+	private LocalDate exhibitionStartDate;
+
+	@Column(name = "exhibition_end_date")
+	private LocalDate exhibitionEndDate;
+
 	@Enumerated(EnumType.STRING)
 	@Column(name = "write_mode", nullable = false, length = 20)
 	private WriteMode writeMode;
@@ -63,10 +87,19 @@ public class Record extends BaseEntity {
 	@OneToMany(mappedBy = "record", cascade = CascadeType.ALL, orphanRemoval = true)
 	private final List<RecordMedia> media = new ArrayList<>();
 
-	private Record(Long userId, Long exhibitionId, WriteMode writeMode, LocalDate viewedAt, String content,
-			String aiSummary, String representativeEmotion, String cardPhrase, AiStatus aiStatus) {
+	private Record(Long userId, Long exhibitionId, ExhibitionSnapshot snapshot, WriteMode writeMode,
+			LocalDate viewedAt, String content, String aiSummary, String representativeEmotion, String cardPhrase,
+			AiStatus aiStatus) {
 		this.userId = userId;
 		this.exhibitionId = exhibitionId;
+		this.exhibitionTitle = snapshot.title();
+		this.exhibitionType = snapshot.type();
+		this.exhibitionPosterUrl = snapshot.posterUrl();
+		this.exhibitionPlace = snapshot.place();
+		this.exhibitionRegion = snapshot.region();
+		this.exhibitionCategory = snapshot.category();
+		this.exhibitionStartDate = snapshot.startDate();
+		this.exhibitionEndDate = snapshot.endDate();
 		this.writeMode = writeMode;
 		this.viewedAt = viewedAt;
 		this.content = content;
@@ -76,10 +109,11 @@ public class Record extends BaseEntity {
 		this.aiStatus = aiStatus;
 	}
 
-	public static Record create(Long userId, Long exhibitionId, WriteMode writeMode, LocalDate viewedAt, String content,
-			String aiSummary, String representativeEmotion, String cardPhrase, AiStatus aiStatus) {
-		return new Record(userId, exhibitionId, writeMode, viewedAt, content, aiSummary, representativeEmotion,
-				cardPhrase, aiStatus);
+	public static Record create(Long userId, Long exhibitionId, ExhibitionSnapshot snapshot, WriteMode writeMode,
+			LocalDate viewedAt, String content, String aiSummary, String representativeEmotion, String cardPhrase,
+			AiStatus aiStatus) {
+		return new Record(userId, exhibitionId, snapshot, writeMode, viewedAt, content, aiSummary,
+				representativeEmotion, cardPhrase, aiStatus);
 	}
 
 	public void replaceContent(LocalDate viewedAt, String content, String aiSummary, String representativeEmotion,

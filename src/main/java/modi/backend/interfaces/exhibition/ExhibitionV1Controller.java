@@ -5,7 +5,6 @@ import java.time.format.DateTimeParseException;
 import java.util.Optional;
 
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.ResponseEntity;
@@ -42,7 +41,7 @@ public class ExhibitionV1Controller implements ExhibitionV1ApiSpec {
 
 	private final ExhibitionFacade exhibitionFacade;
 
-	/** 목록/탐색. keyword·date·region·category 필터 + 페이지네이션(기본 sort startDate,DESC). */
+	/** 목록/탐색. keyword·date·region·category 필터 + sort(latest|ending|popular, 기본 latest) + 페이지네이션. */
 	@Override
 	@GetMapping
 	public ResponseEntity<ApiResponse<PageResponse<ExhibitionDto.ListItemResponse>>> list(
@@ -50,10 +49,11 @@ public class ExhibitionV1Controller implements ExhibitionV1ApiSpec {
 			@RequestParam(required = false) String date,
 			@RequestParam(required = false) String region,
 			@RequestParam(required = false) String category,
-			@ParameterObject @PageableDefault(size = 20, sort = "startDate", direction = Sort.Direction.DESC) Pageable pageable,
+			@RequestParam(defaultValue = "latest") String sort,
+			@ParameterObject @PageableDefault(size = 20) Pageable pageable,
 			@OptionalAuthentication Optional<LoginUser> loginUser) {
 		ExhibitionCriteria.Search criteria = new ExhibitionCriteria.Search(
-				keyword, parseDate(date), region, category, requesterId(loginUser));
+				keyword, parseDate(date), region, category, sort, requesterId(loginUser));
 		PageResponse<ExhibitionDto.ListItemResponse> data = PageResponse.from(
 				exhibitionFacade.search(criteria, pageable).map(ExhibitionDto.ListItemResponse::from));
 		return ResponseEntity.ok(ApiResponse.success(data));

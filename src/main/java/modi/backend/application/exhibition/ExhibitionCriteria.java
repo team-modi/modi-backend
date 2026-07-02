@@ -12,8 +12,13 @@ public final class ExhibitionCriteria {
 	private ExhibitionCriteria() {
 	}
 
-	/** 목록/탐색 조회 입력. 페이지네이션은 별도 Pageable로 전달한다. */
-	public record Search(String keyword, LocalDate date, String region, String category, Long requesterId) {
+	/**
+	 * 목록/탐색 조회 입력. 페이지네이션은 별도 Pageable로 전달한다.
+	 *
+	 * @param sort 정렬 코드(latest|ending|popular). null·미정의 값이면 latest로 취급한다.
+	 */
+	public record Search(String keyword, LocalDate date, String region, String category, String sort,
+			Long requesterId) {
 	}
 
 	/** 전시 상세 조회 입력. requesterId는 CUSTOM 접근 권한 판단용. */

@@ -1,0 +1,52 @@
+package modi.backend.application.exhibition;
+
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.DefaultApplicationArguments;
+
+import modi.backend.domain.exhibition.ExhibitionErrorCode;
+import modi.backend.support.error.CoreException;
+
+/**
+ * ExhibitionCatalogBootSync 단위 검증. 데모 플래그와 무관하게 항상 부팅 시 1회 syncCatalog()를 호출하고,
+ * 실패해도(외부 API 불가·키 미설정 등) 예외를 삼켜 애플리케이션 기동을 막지 않아야 한다.
+ */
+class ExhibitionCatalogBootSyncTest {
+
+	private ExhibitionFacade exhibitionFacade;
+	private ExhibitionCatalogBootSync bootSync;
+
+	@BeforeEach
+	void setUp() {
+		exhibitionFacade = mock(ExhibitionFacade.class);
+		bootSync = new ExhibitionCatalogBootSync(exhibitionFacade);
+	}
+
+	@Test
+	@DisplayName("run: facade.syncCatalog()를 1회 호출한다(cold start 방지)")
+	void run_facade호출() {
+		given(exhibitionFacade.syncCatalog()).willReturn(0);
+
+		bootSync.run(new DefaultApplicationArguments());
+
+		verify(exhibitionFacade, times(1)).syncCatalog();
+	}
+
+	@Test
+	@DisplayName("run: facade가 예외를 던져도 삼켜서 부팅을 막지 않는다")
+	void run_예외삼킴() {
+		given(exhibitionFacade.syncCatalog())
+				.willThrow(new CoreException(ExhibitionErrorCode.EXTERNAL_API_UNAVAILABLE, "외부 전시 API 호출 실패"));
+
+		assertThatCode(() -> bootSync.run(new DefaultApplicationArguments())).doesNotThrowAnyException();
+
+		verify(exhibitionFacade, times(1)).syncCatalog();
+	}
+}

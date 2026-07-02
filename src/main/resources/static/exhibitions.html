@@ -1,213 +1,495 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>모디 · 전시 탐색 (데모)</title>
-  <style>
-    :root { --bg:#0f1115; --card:#171a21; --line:#262b36; --fg:#e7e9ee; --muted:#9aa3b2; --accent:#7c9cff; --catalog:#2b7a4b; --custom:#8a5a2b; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--fg); }
-    header { padding:24px 20px 8px; }
-    header h1 { margin:0; font-size:22px; }
-    header p { margin:6px 0 0; color:var(--muted); font-size:13px; }
-    .filters { display:flex; flex-wrap:wrap; gap:8px; padding:16px 20px; position:sticky; top:0; background:rgba(15,17,21,.92); backdrop-filter:blur(6px); border-bottom:1px solid var(--line); z-index:5; }
-    .filters input, .filters select { background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:14px; }
-    .filters button { background:var(--accent); color:#0b0d12; border:0; border-radius:8px; padding:8px 14px; font-weight:600; cursor:pointer; }
-    .filters button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); font-weight:500; }
-    .status { padding:8px 20px; color:var(--muted); font-size:13px; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px; padding:16px 20px 40px; }
-    .card { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; cursor:pointer; transition:transform .08s ease, border-color .08s ease; }
-    .card:hover { transform:translateY(-2px); border-color:var(--accent); }
-    .poster { aspect-ratio:3/4; background:linear-gradient(135deg,#20242e,#2c3242); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:12px; }
-    .poster img { width:100%; height:100%; object-fit:cover; }
-    .card .body { padding:12px; }
-    .badge { display:inline-block; font-size:11px; padding:2px 7px; border-radius:999px; color:#fff; }
-    .badge.CATALOG { background:var(--catalog); }
-    .badge.CUSTOM { background:var(--custom); }
-    .card h3 { margin:8px 0 4px; font-size:15px; line-height:1.3; }
-    .card .meta { color:var(--muted); font-size:12px; margin:2px 0; }
-    .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; padding:20px; z-index:20; }
-    .modal { background:var(--card); border:1px solid var(--line); border-radius:14px; max-width:520px; width:100%; padding:22px; }
-    .modal h2 { margin:0 0 4px; font-size:19px; }
-    .modal .row { color:var(--muted); font-size:13px; margin:4px 0; }
-    .modal .desc { margin-top:12px; font-size:14px; line-height:1.5; }
-    .modal button { margin-top:18px; background:transparent; border:1px solid var(--line); color:var(--fg); border-radius:8px; padding:8px 14px; cursor:pointer; }
-    details.reg { margin:0 20px 24px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
-    details.reg summary { cursor:pointer; font-weight:600; }
-    details.reg .form { display:grid; gap:8px; margin-top:12px; grid-template-columns:1fr 1fr; }
-    details.reg input { grid-column:span 2; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
-    details.reg input.half { grid-column:span 1; }
-    details.reg button { grid-column:span 2; background:var(--accent); color:#0b0d12; border:0; border-radius:8px; padding:9px; font-weight:600; cursor:pointer; }
-    details.reg .hint { grid-column:span 2; color:var(--muted); font-size:12px; }
-    .tag-mock { color:#e0b15a; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>모디 · 전시 목록</title>
+<style>
+  :root {
+    --page-bg: #eef0f3;
+    --surface: #ffffff;
+    --border: #e6e8ec;
+    --text: #1b1e27;
+    --muted: #8b93a1;
+    --accent: #2f6bff;
+    --accent-soft: #eaf0ff;
+    --chip-bg: #f4f5f7;
+    --disabled: #c7cbd3;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--page-bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+  }
+  .app {
+    width: 100%;
+    max-width: 430px;
+    min-height: 100vh;
+    background: var(--page-bg);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Top bar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px 8px;
+  }
+  .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+  .icon-btn {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--text);
+  }
+
+  /* Search */
+  .search-wrap { padding: 10px 18px 4px; }
+  .search-wrap input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 14px;
+    color: var(--text);
+  }
+  .search-wrap input::placeholder { color: var(--muted); }
+
+  /* Controls row */
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px 6px;
+  }
+  select#sort {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .filter-btn .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    display: none;
+  }
+  .filter-btn.active .dot { display: inline-block; }
+
+  /* Status */
+  .status { padding: 4px 18px 8px; color: var(--muted); font-size: 12px; }
+
+  /* Card list */
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 6px 18px 96px;
+  }
+  .card {
+    display: flex;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 10px;
+    cursor: pointer;
+  }
+  .card:active { background: var(--accent-soft); }
+  .thumb {
+    width: 76px;
+    height: 96px;
+    flex: 0 0 auto;
+    border-radius: 10px;
+    background: var(--chip-bg);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card-body { flex: 1; min-width: 0; padding: 2px 0; }
+  .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .card-artist { font-size: 12.5px; color: var(--text); margin: 0 0 4px; }
+  .card-meta { font-size: 12px; color: var(--muted); margin: 2px 0; }
+
+  .empty-state { text-align: center; color: var(--muted); font-size: 13px; padding: 60px 20px; }
+
+  /* Bottom tab bar */
+  .tabbar {
+    position: sticky;
+    bottom: 0;
+    width: 100%;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    z-index: 10;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 10px 0 8px;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: default;
+  }
+  .tab .tab-icon { font-size: 18px; }
+  .tab.active { color: var(--accent); font-weight: 600; }
+
+  /* Filter bottom sheet */
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 17, 23, 0.45);
+    display: none;
+    z-index: 50;
+  }
+  .sheet-backdrop.open { display: block; }
+  .sheet {
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 430px;
+    max-height: 82vh;
+    background: var(--surface);
+    border-radius: 18px 18px 0 0;
+    padding: 18px 18px calc(16px + env(safe-area-inset-bottom, 0));
+    overflow-y: auto;
+    z-index: 51;
+  }
+  .sheet-handle {
+    width: 40px; height: 4px; border-radius: 2px; background: var(--border);
+    margin: 0 auto 14px;
+  }
+  .sheet-title { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+  .sheet-section { margin-top: 18px; }
+  .sheet-section h4 { font-size: 13px; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--chip-bg);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .chip.selected {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .chip.disabled {
+    color: var(--disabled);
+    cursor: not-allowed;
+    background: #f7f7f8;
+  }
+  .sheet-footer {
+    display: flex;
+    gap: 10px;
+    margin-top: 22px;
+  }
+  .btn-reset {
+    flex: 0 0 auto;
+    padding: 13px 18px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .btn-apply {
+    flex: 1;
+    padding: 13px 18px;
+    border-radius: 12px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+</style>
 </head>
 <body>
-  <header>
-    <h1>모디 · 전시 탐색 <span style="color:var(--muted);font-size:14px;">(데모)</span></h1>
-    <p>공공데이터(한눈에보는문화정보, data.go.kr 15138937) 동기화 데이터 + 표본/MOCK 전시. 실제 <code>/api/v1/exhibitions</code> 를 호출합니다.</p>
-  </header>
+<div class="app">
 
-  <div class="filters">
-    <input id="keyword" placeholder="전시명·전시장 검색" />
-    <input id="date" type="date" title="해당 날짜 진행 중" />
-    <select id="region">
-      <option value="">지역 전체</option>
-      <option value="SEOUL">서울</option><option value="GYEONGGI">경기</option>
-      <option value="BUSAN">부산</option><option value="DAEGU">대구</option><option value="ETC">기타</option>
+  <div class="topbar">
+    <div class="logo">Logo</div>
+    <button class="icon-btn" title="북마크" aria-label="북마크">&#9825;</button>
+  </div>
+
+  <div class="search-wrap">
+    <input id="keyword" type="text" placeholder="전시를 검색해보세요" />
+  </div>
+
+  <div class="controls">
+    <select id="sort">
+      <option value="latest">최신순</option>
+      <option value="ending">종료순</option>
+      <option value="popular">인기순</option>
     </select>
-    <select id="category">
-      <option value="">카테고리 전체</option>
-      <option value="PAINTING">회화</option><option value="PHOTO">사진</option>
-      <option value="MEDIA">미디어</option><option value="SCULPTURE">조각</option><option value="ETC">기타</option>
-    </select>
-    <button onclick="loadList()">검색</button>
-    <button class="ghost" onclick="resetFilters()">초기화</button>
+    <button class="filter-btn" id="filter-open-btn">
+      <span class="dot" id="filter-dot"></span>
+      필터
+    </button>
   </div>
 
   <div class="status" id="status">불러오는 중…</div>
-  <div class="grid" id="grid"></div>
+  <div class="list" id="list"></div>
 
-  <details class="reg">
-    <summary>개인 전시 등록 (로그인 필요 · access 토큰 붙여넣기)</summary>
-    <div class="form">
-      <input id="reg-token" placeholder="Bearer access 토큰 (로그인 후 발급)" />
-      <input id="reg-title" placeholder="전시명 (필수)" />
-      <input id="reg-place" class="half" placeholder="장소" />
-      <input id="reg-poster" class="half" placeholder="포스터 URL" />
-      <input id="reg-start" class="half" type="date" title="시작일" />
-      <input id="reg-end" class="half" type="date" title="종료일" />
-      <button onclick="registerCustom()">등록</button>
-      <div class="hint">등록 성공 시 목록을 새로고침합니다. 토큰이 있어야 내 CUSTOM 전시가 목록/상세에 보입니다.</div>
-    </div>
-  </details>
-
-  <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
-    <div class="modal" id="modal"></div>
+  <div class="tabbar">
+    <div class="tab active"><span class="tab-icon">&#8962;</span>홈</div>
+    <div class="tab"><span class="tab-icon">&#128197;</span>전시정보</div>
+    <div class="tab"><span class="tab-icon">&#128218;</span>아카이브</div>
+    <div class="tab"><span class="tab-icon">&#128100;</span>프로필</div>
   </div>
 
-  <script>
-    const REGION_KO = { SEOUL:'서울', GYEONGGI:'경기', BUSAN:'부산', DAEGU:'대구', ETC:'기타' };
-    const CATEGORY_KO = { PAINTING:'회화', PHOTO:'사진', MEDIA:'미디어', SCULPTURE:'조각', ETC:'기타' };
-    // API가 비어있거나 서버가 꺼져 있어도 화면이 비지 않도록 하는 클라이언트 MOCK 폴백.
-    const MOCK_FALLBACK = [
-      { exhibitionId:-1, type:'CATALOG', title:'[폴백] 모네: 빛의 정원', place:'예술의전당', startDate:'2026-06-01', endDate:'2026-09-30', region:'SEOUL', category:'PAINTING', posterUrl:null },
-      { exhibitionId:-2, type:'CATALOG', title:'[폴백] 서울 도시 사진 아카이브전', place:'서울시립미술관', startDate:'2026-06-10', endDate:'2026-07-20', region:'SEOUL', category:'PHOTO', posterUrl:null },
-      { exhibitionId:-3, type:'CATALOG', title:'[MOCK] 골목길 드로잉전', place:'성수동 갤러리', startDate:'2026-06-20', endDate:'2026-07-05', region:'SEOUL', category:'PAINTING', posterUrl:null },
-    ];
+  <div class="sheet-backdrop" id="sheet-backdrop"></div>
+  <div class="sheet" id="sheet" style="display:none;">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">필터</div>
 
-    function tokenHeader() {
-      const t = document.getElementById('reg-token').value.trim();
-      if (!t) return {};
-      return { 'Authorization': t.startsWith('Bearer ') ? t : 'Bearer ' + t };
-    }
+    <div class="sheet-section">
+      <h4>지역</h4>
+      <div class="chip-group" id="region-chips"></div>
+    </div>
 
-    function qs() {
-      const p = new URLSearchParams();
-      const kw = document.getElementById('keyword').value.trim();
-      const d = document.getElementById('date').value;
-      const r = document.getElementById('region').value;
-      const c = document.getElementById('category').value;
-      if (kw) p.set('keyword', kw);
-      if (d) p.set('date', d);
-      if (r) p.set('region', r);
-      if (c) p.set('category', c);
-      p.set('size', '40');
-      return p.toString();
-    }
+    <div class="sheet-section">
+      <h4>장르</h4>
+      <div class="chip-group" id="genre-chips"></div>
+    </div>
 
-    async function loadList() {
-      const status = document.getElementById('status');
-      status.textContent = '불러오는 중…';
-      try {
-        const res = await fetch('/api/v1/exhibitions?' + qs(), { headers: tokenHeader() });
-        const json = await res.json();
-        if (json.meta?.result !== 'SUCCESS') throw new Error(json.meta?.errorCode || 'FAIL');
-        const items = json.data?.content ?? [];
-        if (items.length === 0) {
-          status.textContent = '조건에 맞는 전시가 없습니다. (서버 응답 정상 · 결과 0건)';
-          render([]);
-        } else {
-          status.textContent = `총 ${json.data.totalElements}건 · ${items.length}건 표시`;
-          render(items);
-        }
-      } catch (e) {
-        status.innerHTML = `서버 응답을 받지 못해 <span class="tag-mock">MOCK 폴백</span>을 표시합니다. (${e.message})`;
-        render(MOCK_FALLBACK);
-      }
-    }
+    <div class="sheet-footer">
+      <button class="btn-reset" id="filter-reset-btn">초기화</button>
+      <button class="btn-apply" id="filter-apply-btn">전시 보기</button>
+    </div>
+  </div>
 
-    function render(items) {
-      const grid = document.getElementById('grid');
-      grid.innerHTML = items.map(cardHtml).join('');
-    }
+</div>
 
-    function cardHtml(x) {
-      const poster = x.posterUrl
-        ? `<img src="${x.posterUrl}" onerror="this.style.display='none';this.parentElement.textContent='이미지 없음'"/>`
-        : '이미지 없음';
-      const period = [x.startDate, x.endDate].filter(Boolean).join(' ~ ') || '기간 미정';
-      const region = REGION_KO[x.region] || x.region || '';
-      const category = CATEGORY_KO[x.category] || x.category || '';
-      const clickable = x.exhibitionId > 0 ? `onclick="openDetail(${x.exhibitionId})"` : '';
-      return `<div class="card" ${clickable}>
-        <div class="poster">${poster}</div>
-        <div class="body">
-          <span class="badge ${x.type}">${x.type}</span>
-          <h3>${escapeHtml(x.title)}</h3>
-          <div class="meta">${escapeHtml(x.place || '장소 미정')}</div>
-          <div class="meta">${period}</div>
-          <div class="meta">${[region, category].filter(Boolean).join(' · ')}</div>
-        </div></div>`;
-    }
+<script>
+  const REGIONS = [
+    { code: '', label: '전체' },
+    { code: 'SEOUL', label: '서울' },
+    { code: 'GYEONGGI', label: '경기' },
+    { code: 'INCHEON', label: '인천' },
+    { code: 'DAEGU', label: '대구' },
+    { code: 'GYEONGBUK', label: '경북' },
+    { code: 'BUSAN', label: '부산' },
+    { code: 'ULSAN', label: '울산' },
+    { code: 'GYEONGNAM', label: '경남' },
+    { code: 'SEJONG', label: '세종' },
+    { code: 'JEONNAM', label: '전남' },
+    { code: 'JEONBUK', label: '전북' },
+    { code: 'JEJU', label: '제주' },
+    { code: 'CHUNGNAM', label: '충남' },
+    { code: 'CHUNGBUK', label: '충북' },
+  ];
 
-    async function openDetail(id) {
-      try {
-        const res = await fetch('/api/v1/exhibitions/' + id, { headers: tokenHeader() });
-        const json = await res.json();
-        if (json.meta?.result !== 'SUCCESS') { alert('상세 조회 실패: ' + (json.meta?.errorCode)); return; }
-        const d = json.data;
-        const period = [d.startDate, d.endDate].filter(Boolean).join(' ~ ') || '기간 미정';
-        document.getElementById('modal').innerHTML = `
-          <span class="badge ${d.type}">${d.type}</span>
-          <h2>${escapeHtml(d.title)}</h2>
-          <div class="row">📍 ${escapeHtml(d.place || '장소 미정')}</div>
-          <div class="row">📅 ${period}</div>
-          <div class="row">🗂 ${[REGION_KO[d.region]||d.region, CATEGORY_KO[d.category]||d.category].filter(Boolean).join(' · ')}</div>
-          ${d.operatingHours ? `<div class="row">🕒 ${escapeHtml(d.operatingHours)}</div>`:''}
-          ${d.price ? `<div class="row">💳 ${escapeHtml(d.price)}</div>`:''}
-          ${d.serviceName ? `<div class="row">🏛 제공: ${escapeHtml(d.serviceName)}</div>`:''}
-          ${(d.gpsX!=null && d.gpsY!=null) ? `<div class="row">🧭 좌표: ${d.gpsY}, ${d.gpsX}</div>`:''}
-          ${d.detailUrl ? `<div class="row">🔗 <a href="${d.detailUrl}" target="_blank" rel="noopener" style="color:var(--accent)">원문 상세 페이지</a></div>`:''}
-          ${d.description ? `<div class="desc">${escapeHtml(d.description)}</div>`:'<div class="desc" style="color:var(--muted)">상세 설명 데이터 없음</div>'}
-          <button onclick="closeModal()">닫기</button>`;
-        document.getElementById('modal-bg').style.display = 'flex';
-      } catch (e) { alert('상세 조회 오류: ' + e.message); }
-    }
-    function closeModal(){ document.getElementById('modal-bg').style.display = 'none'; }
+  const GENRES = ['드로잉', '건축', '회화', '사진', '조각', '설치', '미디어아트', '디자인', '공예', '만화', '퍼포먼스', '영화'];
 
-    async function registerCustom() {
-      const body = {
-        title: document.getElementById('reg-title').value.trim(),
-        place: document.getElementById('reg-place').value.trim() || null,
-        posterUrl: document.getElementById('reg-poster').value.trim() || null,
-        startDate: document.getElementById('reg-start').value || null,
-        endDate: document.getElementById('reg-end').value || null,
-      };
-      if (!body.title) { alert('전시명은 필수입니다.'); return; }
-      const headers = Object.assign({ 'Content-Type':'application/json' }, tokenHeader());
-      if (!headers.Authorization) { alert('access 토큰을 입력하세요.'); return; }
-      const res = await fetch('/api/v1/exhibitions/custom', { method:'POST', headers, body: JSON.stringify(body) });
+  const REGION_KO = Object.fromEntries(REGIONS.filter(r => r.code).map(r => [r.code, r.label]));
+
+  // state actually applied to the list query
+  let appliedRegion = '';
+  // sheet-local selection (not yet applied until "전시 보기")
+  let sheetRegion = '';
+
+  let searchDebounce = null;
+  let countDebounce = null;
+
+  function qs(overrides) {
+    const p = new URLSearchParams();
+    const keyword = document.getElementById('keyword').value.trim();
+    if (keyword) p.set('keyword', keyword);
+    p.set('sort', document.getElementById('sort').value);
+    const region = overrides && 'region' in overrides ? overrides.region : appliedRegion;
+    if (region) p.set('region', region);
+    p.set('page', '0');
+    p.set('size', overrides && overrides.size ? String(overrides.size) : '20');
+    return p.toString();
+  }
+
+  async function loadList() {
+    const status = document.getElementById('status');
+    const list = document.getElementById('list');
+    status.textContent = '불러오는 중…';
+    try {
+      const res = await fetch('/api/v1/exhibitions?' + qs());
       const json = await res.json();
-      if (json.meta?.result === 'SUCCESS') { alert('등록 완료! id=' + json.data.exhibitionId); loadList(); }
-      else alert('등록 실패: ' + (json.meta?.errorCode) + ' — ' + (json.meta?.message||''));
+      if (json.meta?.result !== 'SUCCESS') throw new Error(json.meta?.errorCode || 'FAIL');
+      const items = json.data?.content ?? [];
+      if (items.length === 0) {
+        status.textContent = '조건에 맞는 전시가 없습니다.';
+        list.innerHTML = '<div class="empty-state">표시할 전시가 없습니다.</div>';
+      } else {
+        status.textContent = `총 ${json.data.totalElements}건`;
+        list.innerHTML = items.map(cardHtml).join('');
+      }
+    } catch (e) {
+      status.textContent = '전시 목록을 불러오지 못했습니다. (' + e.message + ')';
+      list.innerHTML = '<div class="empty-state">잠시 후 다시 시도해주세요.</div>';
     }
+  }
 
-    function resetFilters(){ ['keyword','date','region','category'].forEach(id=>document.getElementById(id).value=''); loadList(); }
-    function escapeHtml(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function formatDate(d) {
+    if (!d) return '';
+    return String(d).replaceAll('-', '.');
+  }
 
+  function periodText(x) {
+    const s = formatDate(x.startDate);
+    const e = formatDate(x.endDate);
+    if (s && e) return `${s} ~ ${e}`;
+    return s || e || '';
+  }
+
+  function placeRegionText(x) {
+    const region = REGION_KO[x.region] || '';
+    return [x.place, region].filter(Boolean).join(' / ');
+  }
+
+  function cardHtml(x) {
+    const thumb = x.posterUrl
+      ? `<img src="${x.posterUrl}" alt="" onerror="this.remove()" />`
+      : '';
+    // 작가 필드는 목록 API에 없으므로 생략
+    return `<div class="card" onclick="location.href='exhibition-detail.html?id=${x.exhibitionId}'">
+      <div class="thumb">${thumb}</div>
+      <div class="card-body">
+        <p class="card-title">${escapeHtml(x.title)}</p>
+        <p class="card-meta">${escapeHtml(placeRegionText(x))}</p>
+        <p class="card-meta">${escapeHtml(periodText(x))}</p>
+      </div>
+    </div>`;
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  }
+
+  /* ---- Filter bottom sheet ---- */
+
+  function renderRegionChips() {
+    const wrap = document.getElementById('region-chips');
+    wrap.innerHTML = REGIONS.map(r =>
+      `<button type="button" class="chip ${sheetRegion === r.code ? 'selected' : ''}" data-region="${r.code}">${r.label}</button>`
+    ).join('');
+    wrap.querySelectorAll('.chip').forEach(el => {
+      el.addEventListener('click', () => {
+        sheetRegion = el.dataset.region;
+        renderRegionChips();
+        scheduleCountPreview();
+      });
+    });
+  }
+
+  function renderGenreChips() {
+    const wrap = document.getElementById('genre-chips');
+    wrap.innerHTML = GENRES.map(g => `<button type="button" class="chip disabled" disabled>${g}</button>`).join('');
+  }
+
+  function openSheet() {
+    sheetRegion = appliedRegion;
+    renderRegionChips();
+    renderGenreChips();
+    document.getElementById('sheet').style.display = 'block';
+    document.getElementById('sheet-backdrop').classList.add('open');
+    scheduleCountPreview();
+  }
+
+  function closeSheet() {
+    document.getElementById('sheet').style.display = 'none';
+    document.getElementById('sheet-backdrop').classList.remove('open');
+  }
+
+  function scheduleCountPreview() {
+    clearTimeout(countDebounce);
+    countDebounce = setTimeout(updateCountPreview, 150);
+  }
+
+  async function updateCountPreview() {
+    const applyBtn = document.getElementById('filter-apply-btn');
+    applyBtn.textContent = '전시 보기';
+    try {
+      const res = await fetch('/api/v1/exhibitions?' + qs({ region: sheetRegion, size: 1 }));
+      const json = await res.json();
+      if (json.meta?.result === 'SUCCESS') {
+        const n = json.data?.totalElements ?? 0;
+        applyBtn.textContent = `${n}개 전시 보기`;
+      }
+    } catch (e) {
+      // count preview is best-effort; keep default label on failure
+    }
+  }
+
+  document.getElementById('filter-open-btn').addEventListener('click', openSheet);
+  document.getElementById('sheet-backdrop').addEventListener('click', closeSheet);
+  document.getElementById('filter-reset-btn').addEventListener('click', () => {
+    sheetRegion = '';
+    renderRegionChips();
+    scheduleCountPreview();
+  });
+  document.getElementById('filter-apply-btn').addEventListener('click', () => {
+    appliedRegion = sheetRegion;
+    const dot = document.getElementById('filter-dot');
+    const btn = document.getElementById('filter-open-btn');
+    if (appliedRegion) btn.classList.add('active'); else btn.classList.remove('active');
+    closeSheet();
     loadList();
-  </script>
+  });
+
+  document.getElementById('sort').addEventListener('change', loadList);
+  document.getElementById('keyword').addEventListener('input', () => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(loadList, 350);
+  });
+
+  loadList();
+</script>
 </body>
 </html>

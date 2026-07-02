@@ -23,5 +23,13 @@ public record RecordDetailResponse(
 		boolean bookmarked,
 		List<RecordMediaResponse> media,
 		ZonedDateTime createdAt,
-		ZonedDateTime updatedAt) {
+		ZonedDateTime updatedAt,
+		String exhibitionTitle,
+		String exhibitionType,
+		String exhibitionPosterUrl,
+		String exhibitionPlace,
+		String exhibitionRegion,
+		String exhibitionCategory,
+		LocalDate exhibitionStartDate,
+		LocalDate exhibitionEndDate) {
 }
