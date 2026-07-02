@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>모디 · 전시 상세</title>
+<style>
+  :root {
+    --page-bg: #eef0f3;
+    --surface: #ffffff;
+    --border: #e6e8ec;
+    --text: #1b1e27;
+    --muted: #8b93a1;
+    --accent: #2f6bff;
+    --chip-bg: #f4f5f7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--page-bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+  }
+  .app {
+    width: 100%;
+    max-width: 430px;
+    min-height: 100vh;
+    background: var(--page-bg);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 92px;
+  }
+
+  /* Top bar (overlays poster) */
+  .topbar {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    z-index: 10;
+  }
+  .icon-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.9);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--text);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  }
+
+  .poster-wrap {
+    margin-top: -52px;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    background: var(--chip-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 13px;
+    overflow: hidden;
+  }
+  .poster-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .content { background: var(--surface); border-radius: 18px 18px 0 0; margin-top: -18px; position: relative; padding: 20px 18px 8px; flex: 1; }
+
+  #status { color: var(--muted); font-size: 13px; padding: 12px 2px; }
+
+  .title { font-size: 19px; font-weight: 700; margin: 0 0 6px; line-height: 1.4; }
+  .artist { font-size: 13.5px; color: var(--text); margin: 0 0 10px; }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+  .tag-chip {
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--chip-bg);
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .info-list { margin-top: 10px; border-top: 1px solid var(--border); }
+  .info-row {
+    display: flex;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13.5px;
+  }
+  .info-label { width: 76px; flex: 0 0 auto; color: var(--muted); }
+  .info-value { flex: 1; color: var(--text); line-height: 1.5; white-space: pre-line; }
+
+  .desc-block { margin-top: 18px; }
+  .desc-block h4 { font-size: 14px; margin: 0 0 8px; }
+  .desc-block p { font-size: 13.5px; line-height: 1.6; color: var(--text); margin: 0; white-space: pre-line; }
+
+  .link-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+  .link-row a {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration: none;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: var(--chip-bg);
+  }
+
+  .bottom-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 430px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0));
+    z-index: 20;
+  }
+  .record-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <button class="icon-btn" onclick="goBack()" aria-label="뒤로가기">&#8592;</button>
+    <button class="icon-btn" aria-label="북마크">&#9825;</button>
+  </div>
+
+  <div class="poster-wrap" id="poster-wrap">이미지 없음</div>
+
+  <div class="content">
+    <div id="status">불러오는 중…</div>
+    <div id="detail" style="display:none;">
+      <p class="title" id="d-title"></p>
+      <p class="artist" id="d-artist" style="display:none;"></p>
+      <div class="tag-row" id="d-tags" style="display:none;"></div>
+
+      <div class="info-list" id="info-list"></div>
+
+      <div class="desc-block" id="desc-block" style="display:none;">
+        <h4>전시 소개</h4>
+        <p id="d-description"></p>
+      </div>
+
+      <div class="link-row" id="link-row" style="display:none;"></div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <button class="record-btn" onclick="onRecordClick()">기록하기</button>
+  </div>
+</div>
+
+<script>
+  function getId() {
+    return new URLSearchParams(location.search).get('id');
+  }
+
+  function goBack() {
+    if (document.referrer) { history.back(); } else { location.href = 'exhibitions.html'; }
+  }
+
+  function formatDate(d) {
+    if (!d) return '';
+    return String(d).replaceAll('-', '.');
+  }
+
+  function periodText(d) {
+    const s = formatDate(d.startDate);
+    const e = formatDate(d.endDate);
+    if (s && e) return `${s} ~ ${e}`;
+    return s || e || '';
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  }
+
+  // 원천 XML이 <, > 등을 이중 이스케이프해 내려오는 경우가 있어("이사라 &lt;A Girl...&gt;")
+  // 텍스트 필드는 표시 전에 HTML 엔티티를 디코드한다.
+  const entityDecoder = document.createElement('textarea');
+  function decodeEntities(s) {
+    if (s == null) return s;
+    entityDecoder.innerHTML = String(s);
+    return entityDecoder.value;
+  }
+
+  function infoRow(label, value) {
+    if (!value) return '';
+    return `<div class="info-row"><div class="info-label">${escapeHtml(label)}</div><div class="info-value">${escapeHtml(value)}</div></div>`;
+  }
+
+  async function loadDetail() {
+    const id = getId();
+    const status = document.getElementById('status');
+    if (!id) {
+      status.textContent = '잘못된 접근입니다. (id 없음)';
+      return;
+    }
+    try {
+      const res = await fetch('/api/v1/exhibitions/' + encodeURIComponent(id));
+      const json = await res.json();
+      if (json.meta?.result !== 'SUCCESS') throw new Error(json.meta?.errorCode || 'FAIL');
+      render(json.data);
+    } catch (e) {
+      status.textContent = '전시 정보를 불러오지 못했습니다. (' + e.message + ')';
+    }
+  }
+
+  const REGION_LABEL = {
+    SEOUL: '서울', GYEONGGI: '경기', INCHEON: '인천', DAEGU: '대구', GYEONGBUK: '경북',
+    BUSAN: '부산', ULSAN: '울산', GYEONGNAM: '경남', SEJONG: '세종', JEONNAM: '전남',
+    JEONBUK: '전북', JEJU: '제주', CHUNGNAM: '충남', CHUNGBUK: '충북', ETC: '기타',
+  };
+  const CATEGORY_LABEL = {
+    PAINTING: '미술/회화', PHOTO: '사진', MEDIA: '미디어/영상', SCULPTURE: '조각', ETC: '기타',
+  };
+
+  function render(d) {
+    document.getElementById('status').style.display = 'none';
+    document.getElementById('detail').style.display = 'block';
+
+    // 텍스트 필드는 HTML 엔티티가 섞여 내려올 수 있어 표시 전 디코드한다.
+    const title = decodeEntities(d.title);
+    const place = decodeEntities(d.place);
+    const address = decodeEntities(d.address);
+    const description = decodeEntities(d.description);
+    const operatingHours = decodeEntities(d.operatingHours);
+    const price = decodeEntities(d.price);
+
+    // Poster: imgUrl 우선, 없으면 posterUrl, 없으면 회색 박스
+    const posterUrl = d.imgUrl || d.posterUrl;
+    const posterWrap = document.getElementById('poster-wrap');
+    if (posterUrl) {
+      posterWrap.innerHTML = `<img src="${posterUrl}" alt="" onerror="this.parentElement.textContent='이미지 없음'" />`;
+    }
+
+    document.getElementById('d-title').textContent = title || '';
+
+    // 작가 정보는 상세 API에 없으므로 생략(있을 경우에만 표시할 자리 유지)
+    // 태그(keywords)는 있으면 표시
+    if (Array.isArray(d.keywords) && d.keywords.length > 0) {
+      const tagWrap = document.getElementById('d-tags');
+      tagWrap.style.display = 'flex';
+      tagWrap.innerHTML = d.keywords.map(k => `<span class="tag-chip">${escapeHtml(decodeEntities(k))}</span>`).join('');
+    }
+
+    if (Array.isArray(d.artists) && d.artists.length > 0) {
+      const artistEl = document.getElementById('d-artist');
+      artistEl.style.display = 'block';
+      artistEl.textContent = d.artists.map(decodeEntities).join(', ');
+    }
+
+    const regionLabel = REGION_LABEL[d.region] || d.region;
+    const sigungu = decodeEntities(d.sigungu);
+    const locationLine = [sigungu ? `${regionLabel ?? ''} ${sigungu}`.trim() : regionLabel, address]
+        .filter(Boolean).join(' · ');
+
+    const rows = [
+      infoRow('장르', CATEGORY_LABEL[d.category] || d.category),
+      infoRow('전시 기간', periodText(d)),
+      infoRow('장소', place),
+      infoRow('지역/주소', locationLine),
+      infoRow('운영 시간', operatingHours),
+      infoRow('관람료', price),
+      infoRow('문의', d.phone),
+      infoRow('조회수', typeof d.viewCount === 'number' ? `조회 ${d.viewCount}` : ''),
+    ].join('');
+    document.getElementById('info-list').innerHTML = rows;
+
+    if (description) {
+      document.getElementById('desc-block').style.display = 'block';
+      document.getElementById('d-description').textContent = description;
+    }
+
+    const links = [];
+    if (d.detailUrl) {
+      links.push(`<a href="${escapeHtml(d.detailUrl)}" target="_blank" rel="noopener noreferrer">자세히 보기</a>`);
+    }
+    if (d.placeUrl) {
+      links.push(`<a href="${escapeHtml(d.placeUrl)}" target="_blank" rel="noopener noreferrer">공연장 정보</a>`);
+    }
+    if (d.gpsX != null && d.gpsY != null) {
+      const mapUrl = `https://map.kakao.com/link/map/${encodeURIComponent(title || '전시장소')},${d.gpsY},${d.gpsX}`;
+      links.push(`<a href="${escapeHtml(mapUrl)}" target="_blank" rel="noopener noreferrer">지도에서 보기</a>`);
+    }
+    if (links.length > 0) {
+      const linkRow = document.getElementById('link-row');
+      linkRow.style.display = 'flex';
+      linkRow.innerHTML = links.join('');
+    }
+  }
+
+  function onRecordClick() {
+    alert('기록하기는 로그인이 필요한 기능입니다. (데모에서는 준비 중)');
+  }
+
+  loadDetail();
+</script>
+</body>
+</html>

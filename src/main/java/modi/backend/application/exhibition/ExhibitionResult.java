@@ -34,7 +34,8 @@ public final class ExhibitionResult {
 	public record Detail(Long exhibitionId, String type, String title, String posterUrl,
 			LocalDate startDate, LocalDate endDate, String place, String region, String category,
 			String description, String operatingHours, String price, List<String> artists, List<String> keywords,
-			String serviceName, String detailUrl, Double gpsX, Double gpsY) {
+			String serviceName, String detailUrl, Double gpsX, Double gpsY,
+			String address, String imgUrl, String phone, long viewCount, String sigungu, String placeUrl) {
 
 		public static Detail from(Exhibition exhibition) {
 			return new Detail(exhibition.getId(), exhibition.getType().name(), exhibition.getTitle(),
@@ -42,7 +43,9 @@ public final class ExhibitionResult {
 					exhibition.getPlace(), name(exhibition.getRegion()), name(exhibition.getCategory()),
 					exhibition.getDescription(), exhibition.getOperatingHours(), exhibition.getPrice(),
 					List.of(), List.of(), exhibition.getServiceName(), exhibition.getDetailUrl(),
-					exhibition.getGpsX(), exhibition.getGpsY());
+					exhibition.getGpsX(), exhibition.getGpsY(),
+					exhibition.getPlaceAddr(), exhibition.getImgUrl(), exhibition.getPhone(),
+					exhibition.getOurViewCount(), exhibition.getSigungu(), exhibition.getPlaceUrl());
 		}
 	}
 

@@ -1,6 +1,7 @@
 package modi.backend.domain.exhibition;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import jakarta.persistence.Column;
@@ -91,10 +92,45 @@ public class Exhibition extends BaseEntity {
 	@Column(name = "gps_y")
 	private Double gpsY;
 
+	/** realmName 원문(예 "전시"). API 응답 필드를 누락 없이 영속(저장 정책). */
+	@Column(name = "realm_name", length = 50)
+	private String realmName;
+
+	/** area 원문(region enum 파생 전 원본 보존). */
+	@Column(name = "area_text", length = 50)
+	private String areaText;
+
+	@Column(length = 50)
+	private String sigungu;
+
+	/** 상세 지연수집 필드(상세 진입 시 채운다) — 장소 상세 주소. */
+	@Column(name = "place_addr", length = 500)
+	private String placeAddr;
+
+	@Column(length = 100)
+	private String phone;
+
+	@Column(name = "place_url", length = 2048)
+	private String placeUrl;
+
+	@Column(name = "img_url", length = 2048)
+	private String imgUrl;
+
+	@Column(name = "place_seq", length = 100)
+	private String placeSeq;
+
+	/** 상세 필드가 마지막으로 동기화된 시각. null이면 아직 상세를 수집하지 않은 상태. */
+	@Column(name = "detail_synced_at")
+	private LocalDateTime detailSyncedAt;
+
+	/** 우리 앱 내 조회수(인기순 정렬용). 외부 API의 조회수와 별개. */
+	@Column(name = "our_view_count", nullable = false)
+	private long ourViewCount = 0;
+
 	private Exhibition(ExhibitionType type, String externalId, Long ownerId, String title, String place,
 			LocalDate startDate, LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category,
 			String posterUrl, String description, String operatingHours, String price, String detailUrl,
-			String serviceName, Double gpsX, Double gpsY) {
+			String serviceName, Double gpsX, Double gpsY, String sigungu, String realmName, String areaText) {
 		this.type = type;
 		this.externalId = externalId;
 		this.ownerId = ownerId;
@@ -112,6 +148,9 @@ public class Exhibition extends BaseEntity {
 		this.serviceName = serviceName;
 		this.gpsX = gpsX;
 		this.gpsY = gpsY;
+		this.sigungu = sigungu;
+		this.realmName = realmName;
+		this.areaText = areaText;
 		validatePeriod();
 	}
 
@@ -119,17 +158,17 @@ public class Exhibition extends BaseEntity {
 	public static Exhibition createCustom(Long ownerId, String title, String place, LocalDate startDate,
 			LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category, String posterUrl) {
 		return new Exhibition(ExhibitionType.CUSTOM, null, ownerId, title, place, startDate, endDate,
-				region, category, posterUrl, null, null, null, null, null, null, null);
+				region, category, posterUrl, null, null, null, null, null, null, null, null, null, null);
 	}
 
 	/** 외부 API 수집 전시(CATALOG) 생성. {@code externalId}는 동기화 upsert 기준키. */
 	public static Exhibition createCatalog(String externalId, String title, String place, LocalDate startDate,
 			LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category, String posterUrl,
 			String description, String operatingHours, String price, String detailUrl, String serviceName,
-			Double gpsX, Double gpsY) {
+			Double gpsX, Double gpsY, String sigungu, String realmName, String areaText) {
 		return new Exhibition(ExhibitionType.CATALOG, externalId, null, title, place, startDate, endDate,
 				region, category, posterUrl, description, operatingHours, price, detailUrl, serviceName,
-				gpsX, gpsY);
+				gpsX, gpsY, sigungu, realmName, areaText);
 	}
 
 	/**
@@ -138,7 +177,8 @@ public class Exhibition extends BaseEntity {
 	 */
 	public void refreshCatalog(String title, String place, LocalDate startDate, LocalDate endDate,
 			ExhibitionRegion region, ExhibitionCategory category, String posterUrl, String description,
-			String operatingHours, String price, String detailUrl, String serviceName, Double gpsX, Double gpsY) {
+			String operatingHours, String price, String detailUrl, String serviceName, Double gpsX, Double gpsY,
+			String sigungu, String realmName, String areaText) {
 		this.title = requireTitle(title);
 		this.place = place;
 		this.startDate = startDate;
@@ -153,7 +193,34 @@ public class Exhibition extends BaseEntity {
 		this.serviceName = serviceName;
 		this.gpsX = gpsX;
 		this.gpsY = gpsY;
+		this.sigungu = sigungu;
+		this.realmName = realmName;
+		this.areaText = areaText;
 		validatePeriod();
+	}
+
+	/** 상세 지연수집(상세 진입 시 1회) — 목록엔 없던 필드를 채우고 동기화 시각을 기록한다. detailUrl은 값이 있을 때만 덮어쓴다. */
+	public void applyDetail(CatalogDetailData d) {
+		this.price = d.price();
+		this.description = d.description();
+		if (d.detailUrl() != null) {
+			this.detailUrl = d.detailUrl();
+		}
+		this.phone = d.phone();
+		this.imgUrl = d.imgUrl();
+		this.placeUrl = d.placeUrl();
+		this.placeAddr = d.placeAddr();
+		this.placeSeq = d.placeSeq();
+		this.detailSyncedAt = LocalDateTime.now();
+	}
+
+	public boolean isDetailSynced() {
+		return detailSyncedAt != null;
+	}
+
+	/** 우리 앱 내 조회 1회 발생 시 호출(인기순 정렬용 카운터). */
+	public void increaseView() {
+		this.ourViewCount += 1;
 	}
 
 	public boolean isCatalog() {

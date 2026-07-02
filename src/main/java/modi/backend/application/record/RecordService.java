@@ -13,7 +13,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
+import modi.backend.application.exhibition.ExhibitionFacade;
+import modi.backend.application.exhibition.ExhibitionResult;
 import modi.backend.domain.record.AiStatus;
+import modi.backend.domain.record.ExhibitionSnapshot;
 import modi.backend.domain.record.KeywordSource;
 import modi.backend.domain.record.Record;
 import modi.backend.domain.record.RecordEmotion;
@@ -43,6 +46,7 @@ public class RecordService {
 	private static final long VIDEO_MAX_BYTES = 100L * 1024 * 1024;
 
 	private final RecordJpaRepository recordRepository;
+	private final ExhibitionFacade exhibitionFacade;
 	private final Clock clock = Clock.systemDefaultZone();
 
 	@Transactional
@@ -50,9 +54,13 @@ public class RecordService {
 		LocalDate viewedAt = resolveViewedAt(request.viewedAt());
 		validateContentRules(viewedAt, request.emotionCodes(), request.media());
 
+		ExhibitionResult.Detail detail = exhibitionFacade.getForSnapshot(request.exhibitionId(), userId);
+		ExhibitionSnapshot snapshot = new ExhibitionSnapshot(detail.title(), detail.type(), detail.posterUrl(),
+				detail.place(), detail.region(), detail.category(), detail.startDate(), detail.endDate());
+
 		AiStatus aiStatus = resolveAiStatus(request);
-		Record record = Record.create(userId, request.exhibitionId(), request.writeMode(), viewedAt, request.content(),
-				request.aiSummary(), request.representativeEmotion(), request.cardPhrase(), aiStatus);
+		Record record = Record.create(userId, request.exhibitionId(), snapshot, request.writeMode(), viewedAt,
+				request.content(), request.aiSummary(), request.representativeEmotion(), request.cardPhrase(), aiStatus);
 		record.replaceEmotions(toEmotions(request.emotionCodes()));
 		record.replaceKeywords(toKeywords(request.userKeywords(), request.aiKeywords()));
 		record.replaceMedia(toMedia(request.media()));
@@ -220,7 +228,9 @@ public class RecordService {
 				.orElse(null);
 		return new RecordListItemResponse(record.getId(), record.getExhibitionId(), thumbnailUrl, record.getAiSummary(),
 				record.getRepresentativeEmotion(), record.isBookmarked(), record.getWriteMode(), record.getViewedAt(),
-				record.getCreatedAt());
+				record.getCreatedAt(), record.getExhibitionTitle(), record.getExhibitionType(),
+				record.getExhibitionPosterUrl(), record.getExhibitionPlace(), record.getExhibitionRegion(),
+				record.getExhibitionCategory(), record.getExhibitionStartDate(), record.getExhibitionEndDate());
 	}
 
 	private RecordDetailResponse toDetail(Record record) {
@@ -243,7 +253,10 @@ public class RecordService {
 		return new RecordDetailResponse(record.getId(), record.getExhibitionId(), record.getWriteMode(),
 				record.getAiStatus(), record.getViewedAt(), record.getContent(), record.getAiSummary(), aiKeywords,
 				userKeywords, record.getRepresentativeEmotion(), record.getCardPhrase(), emotionCodes,
-				record.isBookmarked(), media, record.getCreatedAt(), record.getUpdatedAt());
+				record.isBookmarked(), media, record.getCreatedAt(), record.getUpdatedAt(), record.getExhibitionTitle(),
+				record.getExhibitionType(), record.getExhibitionPosterUrl(), record.getExhibitionPlace(),
+				record.getExhibitionRegion(), record.getExhibitionCategory(), record.getExhibitionStartDate(),
+				record.getExhibitionEndDate());
 	}
 
 	private static String blankToNull(String value) {

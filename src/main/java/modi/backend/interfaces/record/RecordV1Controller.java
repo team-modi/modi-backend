@@ -68,6 +68,22 @@ public class RecordV1Controller {
 				writeMode, fromViewedAt, toViewedAt, pageable));
 	}
 
+	@GetMapping("/exhibitions/visited")
+	@Operation(summary = "내가 다녀온 전시 목록", description = "본인이 기록을 남긴 전시 목록을 조회한다. 기존 기록 목록 조회와 동일한 파라미터/응답을 사용한다.")
+	public ApiResponse<PageResponse<RecordListItemResponse>> visitedExhibitions(
+			@Parameter(hidden = true) @Authentication LoginUser loginUser,
+			@RequestParam(required = false) String keyword,
+			@RequestParam(required = false) String emotion,
+			@RequestParam(required = false) Long exhibitionId,
+			@RequestParam(required = false) Boolean bookmarked,
+			@RequestParam(required = false) WriteMode writeMode,
+			@RequestParam(required = false) LocalDate fromViewedAt,
+			@RequestParam(required = false) LocalDate toViewedAt,
+			@ParameterObject @PageableDefault(size = 20) Pageable pageable) {
+		return ApiResponse.success(recordService.search(loginUser.userId(), keyword, emotion, exhibitionId, bookmarked,
+				writeMode, fromViewedAt, toViewedAt, pageable));
+	}
+
 	@GetMapping("/{recordId}")
 	@Operation(summary = "기록 상세 조회", description = "본인 기록 상세를 조회한다.")
 	public ApiResponse<RecordDetailResponse> get(

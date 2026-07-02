@@ -3,8 +3,12 @@ package modi.backend.application.exhibition;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,10 +33,15 @@ import modi.backend.support.error.ErrorType;
 @RequiredArgsConstructor
 public class ExhibitionFacade {
 
+	private static final Logger log = LoggerFactory.getLogger(ExhibitionFacade.class);
+
 	private final ExhibitionRepository exhibitionRepository;
 	private final ExhibitionCatalogClient catalogClient;
 
-	/** 목록/탐색(3.3.1). 필터 미지정 시 오늘 진행 중인 전시를 기본 노출한다. 비로그인은 CATALOG만. */
+	/**
+	 * 목록/탐색(3.3.1). 필터 미지정 시 오늘 진행 중인 전시를 기본 노출한다. 비로그인은 CATALOG만.
+	 * 정렬(latest|ending|popular)은 DB 쿼리에서 처리한다 — 요청 Pageable의 sort를 매핑한 Sort로 재구성해 전달한다.
+	 */
 	@Transactional(readOnly = true)
 	public Page<ExhibitionResult.ListItem> search(ExhibitionCriteria.Search criteria, Pageable pageable) {
 		ExhibitionRegion region = criteria.region() == null ? null : ExhibitionRegion.from(criteria.region());
@@ -42,18 +51,53 @@ public class ExhibitionFacade {
 
 		ExhibitionQuery query = new ExhibitionQuery(criteria.keyword(), ongoingOn, region, category,
 				criteria.requesterId());
-		return exhibitionRepository.search(query, pageable).map(ExhibitionResult.ListItem::from);
+		Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+				toSort(criteria.sort()));
+		return exhibitionRepository.search(query, sortedPageable).map(ExhibitionResult.ListItem::from);
 	}
 
-	/** 상세(3.3.2). 없으면 404, 타인의 CUSTOM이면 403. */
-	@Transactional(readOnly = true)
+	/** sort 코드 → DB 정렬. latest(기본)=시작일 최신순, ending=종료일 임박순, popular=조회수 많은순. 미정의 값은 latest로 취급. */
+	private Sort toSort(String sort) {
+		return switch (sort == null ? "latest" : sort) {
+			case "ending" -> Sort.by(Sort.Direction.ASC, "endDate");
+			case "popular" -> Sort.by(Sort.Direction.DESC, "ourViewCount");
+			default -> Sort.by(Sort.Direction.DESC, "startDate");
+		};
+	}
+
+	/**
+	 * 상세(3.3.2). 없으면 404, 타인의 CUSTOM이면 403.
+	 * CATALOG이고 아직 상세(detail2)를 수집하지 않았으면 최초 진입 시 1회 지연 수집해 캐시한다.
+	 * 외부 수집 실패는 요청을 막지 않는다 — 기본 필드만으로 응답하고, detailSyncedAt이 null로 남아 다음 조회 때 재시도한다.
+	 */
+	@Transactional
 	public ExhibitionResult.Detail getDetail(ExhibitionCriteria.Detail criteria) {
 		Exhibition exhibition = exhibitionRepository.findById(criteria.exhibitionId())
 				.orElseThrow(() -> new CoreException(ExhibitionErrorCode.EXHIBITION_NOT_FOUND));
 		if (!exhibition.isAccessibleBy(criteria.requesterId())) {
 			throw new CoreException(ErrorType.FORBIDDEN, "타인의 개인 전시 접근: " + criteria.exhibitionId());
 		}
+		if (exhibition.isCatalog() && !exhibition.isDetailSynced()) {
+			try {
+				catalogClient.fetchDetail(exhibition.getExternalId()).ifPresent(exhibition::applyDetail);
+			} catch (CoreException ex) {
+				// 외부 실패 시 base 필드만 반환 — detailSyncedAt이 null로 남아 다음 조회에서 재시도된다.
+			}
+		}
+		exhibition.increaseView();
+		exhibitionRepository.save(exhibition);
 		return ExhibitionResult.Detail.from(exhibition);
+	}
+
+	/** 스냅샷/조회용 — 조회수 증가·외부 상세수집 없이 DB에서만 전시를 읽어 반환한다(기록 생성 등 내부 사용). */
+	@Transactional(readOnly = true)
+	public ExhibitionResult.Detail getForSnapshot(Long exhibitionId, Long requesterId) {
+		Exhibition e = exhibitionRepository.findById(exhibitionId)
+				.orElseThrow(() -> new CoreException(ExhibitionErrorCode.EXHIBITION_NOT_FOUND));
+		if (!e.isAccessibleBy(requesterId)) {
+			throw new CoreException(ErrorType.FORBIDDEN, "타인의 개인 전시 접근: " + exhibitionId);
+		}
+		return ExhibitionResult.Detail.from(e);
 	}
 
 	/** 개인 전시 등록(3.3.3). 제목 필수·기간 검증은 Entity에서 수행한다. */
@@ -76,24 +120,42 @@ public class ExhibitionFacade {
 	@Transactional
 	public int syncCatalog() {
 		List<CatalogExhibitionData> collected = catalogClient.fetchAll();
+		int upserted = 0;
+		int skipped = 0;
 		for (CatalogExhibitionData data : collected) {
+			// 원천 데이터 품질 이슈(예: 종료일<시작일)로 단건이 도메인 불변식을 어겨도 배치 전체가 중단되지 않도록,
+			// 부적합 레코드는 건너뛰고 계속 적재한다. 엔티티를 건드리기 전에 걸러 dirty-flush도 방지한다.
+			if (!hasValidPeriod(data)) {
+				skipped++;
+				continue;
+			}
 			exhibitionRepository.findByExternalId(data.externalId())
 					.ifPresentOrElse(existing -> refresh(existing, data), () -> create(data));
+			upserted++;
 		}
-		return collected.size();
+		if (skipped > 0) {
+			log.warn("전시 동기화: 기간 비정상 {}건 스킵(수집 {}건 중 {}건 적재)", skipped, collected.size(), upserted);
+		}
+		return upserted;
+	}
+
+	/** 원천 데이터 기간 유효성 — 둘 다 있을 때만 시작일 ≤ 종료일. 결측은 관대하게 통과(엔티티 불변식과 동일 기준). */
+	private static boolean hasValidPeriod(CatalogExhibitionData data) {
+		return data.startDate() == null || data.endDate() == null || !data.startDate().isAfter(data.endDate());
 	}
 
 	private void refresh(Exhibition existing, CatalogExhibitionData data) {
 		existing.refreshCatalog(data.title(), data.place(), data.startDate(), data.endDate(), data.region(),
 				data.category(), data.posterUrl(), null, null, null, data.detailUrl(), data.serviceName(),
-				data.gpsX(), data.gpsY());
+				data.gpsX(), data.gpsY(), data.sigungu(), data.realmName(), data.areaText());
 		exhibitionRepository.save(existing);
 	}
 
 	private void create(CatalogExhibitionData data) {
 		exhibitionRepository.save(Exhibition.createCatalog(data.externalId(), data.title(), data.place(),
 				data.startDate(), data.endDate(), data.region(), data.category(), data.posterUrl(), null, null,
-				null, data.detailUrl(), data.serviceName(), data.gpsX(), data.gpsY()));
+				null, data.detailUrl(), data.serviceName(), data.gpsX(), data.gpsY(), data.sigungu(),
+				data.realmName(), data.areaText()));
 	}
 
 	/** date 지정 시 그 날짜, 아무 필터 없으면 오늘(랜딩 기본), 그 외(keyword/region/category만)엔 기간 제한 없음. */

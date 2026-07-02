@@ -19,7 +19,10 @@ public record CatalogExhibitionData(
 		String detailUrl,
 		String serviceName,
 		Double gpsX,
-		Double gpsY) {
+		Double gpsY,
+		String sigungu,
+		String realmName,
+		String areaText) {
 
 	/** 원천 식별자·제목이 없는 행은 적재 불가 — 유효한 수집 데이터만 통과시킨다. */
 	public boolean isPersistable() {
