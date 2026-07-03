@@ -79,24 +79,30 @@ jobs:
           # 커밋 diff 안정화를 위해 키 정렬로 정규화
           python3 -m json.tool --sort-keys /tmp/openapi.json > /tmp/openapi.pretty.json
 
-      - name: Commit spec if changed
+      - name: Publish spec to openapi-spec branch if changed
         id: commit
         run: |
           mkdir -p openapi
           cp /tmp/openapi.pretty.json openapi/openapi.json
-          git add openapi/openapi.json
-          # --cached(스테이지 기준)로 비교해야 최초 실행의 신규(untracked) 파일도 감지된다.
-          # (git diff --quiet는 untracked 파일을 못 봐서 첫 발행이 통째로 누락되는 버그가 있었음)
-          if git diff --cached --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "스펙 변경 없음 - dispatch 생략"
-          else
-            git config user.name  "modi-api-sync-bot"
-            git config user.email "modi-api-sync-bot@users.noreply.github.com"
-            git commit -m "chore: update openapi spec [skip ci]"
-            git push
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+          # develop은 PR 필수(보호 브랜치)라 워크플로가 직접 push 불가(GH006).
+          # 그래서 스펙은 사람이 안 만지는 전용 비보호 브랜치 openapi-spec로 발행한다.
+          # 직전 발행본과 비교해 실제 변경이 있을 때만 발행+dispatch.
+          git fetch origin openapi-spec --depth=1 2>/dev/null || true
+          if git cat-file -e origin/openapi-spec:openapi/openapi.json 2>/dev/null; then
+            git show origin/openapi-spec:openapi/openapi.json > /tmp/prev.json
+            if diff -q /tmp/prev.json openapi/openapi.json >/dev/null; then
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+              echo "스펙 변경 없음 - dispatch 생략"
+              exit 0
+            fi
           fi
+          git config user.name  "modi-api-sync-bot"
+          git config user.email "modi-api-sync-bot@users.noreply.github.com"
+          git checkout -B openapi-spec
+          git add openapi/openapi.json
+          git commit -m "chore: publish openapi spec [skip ci]"
+          git push -f origin openapi-spec
+          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch to modi-frontend
         if: steps.commit.outputs.changed == 'true'
@@ -105,10 +111,11 @@ jobs:
           token: ${{ secrets.FE_REPO_PAT }}
           repository: team-modi/modi-frontend
           event-type: openapi-updated
-          # spec_url은 브랜치를 하드코딩하지 않고 github.ref_name 사용(나중에 main 발행 대비)
+          # 스펙은 항상 openapi-spec 브랜치에 발행되므로 그 raw URL을 넘긴다.
+          # (source_branch로 어느 브랜치 머지가 유발했는지는 별도로 전달)
           client-payload: >-
             {
               "backend_sha": "${{ github.sha }}",
               "source_branch": "${{ github.ref_name }}",
-              "spec_url": "https://raw.githubusercontent.com/team-modi/modi-backend/${{ github.ref_name }}/openapi/openapi.json"
+              "spec_url": "https://raw.githubusercontent.com/team-modi/modi-backend/openapi-spec/openapi/openapi.json"
             }
