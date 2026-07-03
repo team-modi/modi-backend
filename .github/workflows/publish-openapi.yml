@@ -84,13 +84,15 @@ jobs:
         run: |
           mkdir -p openapi
           cp /tmp/openapi.pretty.json openapi/openapi.json
-          if git diff --quiet -- openapi/openapi.json; then
+          git add openapi/openapi.json
+          # --cached(스테이지 기준)로 비교해야 최초 실행의 신규(untracked) 파일도 감지된다.
+          # (git diff --quiet는 untracked 파일을 못 봐서 첫 발행이 통째로 누락되는 버그가 있었음)
+          if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "스펙 변경 없음 - dispatch 생략"
           else
             git config user.name  "modi-api-sync-bot"
             git config user.email "modi-api-sync-bot@users.noreply.github.com"
-            git add openapi/openapi.json
             git commit -m "chore: update openapi spec [skip ci]"
             git push
             echo "changed=true" >> "$GITHUB_OUTPUT"
