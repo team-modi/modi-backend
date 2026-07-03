@@ -59,6 +59,12 @@ public class ExhibitionV1Controller implements ExhibitionV1ApiSpec {
 		return ResponseEntity.ok(ApiResponse.success(data));
 	}
 
+	/** [API-SYNC E2E 데모용 임시 엔드포인트 — 검증 후 제거] 추천 전시(고정 응답). */
+	@GetMapping("/featured")
+	public ResponseEntity<ApiResponse<String>> featured() {
+		return ResponseEntity.ok(ApiResponse.success("featured exhibitions (demo)"));
+	}
+
 	/** 상세. CATALOG 공개 / CUSTOM은 등록자 본인만(타인 접근 403). */
 	@Override
 	@GetMapping("/{exhibitionId}")
