@@ -1,0 +1,112 @@
+name: publish-openapi
+
+# 배치: modi-backend/.github/workflows/publish-openapi.yml
+#
+# 하는 일: develop 머지 시 앱을 부팅해 /v3/api-docs를 덤프·정규화·커밋하고,
+# 변경이 있으면 modi-frontend로 repository_dispatch(openapi-updated)를 쏜다.
+# 이 이벤트가 프론트의 API 자동 동기화(api-sync.yml)를 깨우는 벨이다.
+#
+# springdoc 3.0.3이 이미 build.gradle에 있으므로 애플리케이션/빌드 수정은 없다.
+#
+# 필요한 시크릿: FE_REPO_PAT — modi-frontend에 contents:write + dispatch 가능한 PAT.
+# (앱 부팅에 필요한 JWT/OAuth 시크릿은 application.yaml에 로컬 기본값이 있어 CI 부팅엔 불필요.
+#  운영 값이 아니라 스펙 덤프 목적이므로 기본값으로 충분하다.)
+
+on:
+  push:
+    branches: [develop]        # develop 머지 트리거. (운영 스펙도 발행하려면 main 추가)
+    paths:
+      - 'src/main/**'
+      - 'build.gradle*'
+  workflow_dispatch: {}         # Actions 탭에서 수동 실행(테스트/최초 발행용)
+
+jobs:
+  generate-and-dispatch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: modi
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Boot app & dump OpenAPI spec
+        env:
+          SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/modi
+          SPRING_DATASOURCE_USERNAME: root
+          SPRING_DATASOURCE_PASSWORD: root
+          # spring-boot-docker-compose가 developmentOnly로 클래스패스에 있으므로,
+          # CI에선 compose 기동 시도를 끈다(스펙 덤프에 불필요).
+          SPRING_DOCKER_COMPOSE_ENABLED: 'false'
+          # 부팅 필수 env는 application.yaml 기본값으로 충족됨(JWT/OAuth/culture 모두 default 보유).
+        run: |
+          chmod +x gradlew
+          ./gradlew bootRun --no-daemon &
+          BOOT_PID=$!
+          ok=false
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:8080/v3/api-docs -o /tmp/openapi.json; then
+              ok=true; break
+            fi
+            # 앱 프로세스가 죽었으면 더 기다리지 말고 즉시 중단
+            kill -0 "$BOOT_PID" 2>/dev/null || break
+            sleep 2
+          done
+          kill "$BOOT_PID" 2>/dev/null || true
+          if [ "$ok" != "true" ]; then
+            echo "::error::/v3/api-docs 덤프 실패 (앱 부팅 또는 스펙 노출 확인)"
+            exit 1
+          fi
+          # 커밋 diff 안정화를 위해 키 정렬로 정규화
+          python3 -m json.tool --sort-keys /tmp/openapi.json > /tmp/openapi.pretty.json
+
+      - name: Commit spec if changed
+        id: commit
+        run: |
+          mkdir -p openapi
+          cp /tmp/openapi.pretty.json openapi/openapi.json
+          if git diff --quiet -- openapi/openapi.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "스펙 변경 없음 - dispatch 생략"
+          else
+            git config user.name  "modi-api-sync-bot"
+            git config user.email "modi-api-sync-bot@users.noreply.github.com"
+            git add openapi/openapi.json
+            git commit -m "chore: update openapi spec [skip ci]"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dispatch to modi-frontend
+        if: steps.commit.outputs.changed == 'true'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.FE_REPO_PAT }}
+          repository: team-modi/modi-frontend
+          event-type: openapi-updated
+          # spec_url은 브랜치를 하드코딩하지 않고 github.ref_name 사용(나중에 main 발행 대비)
+          client-payload: >-
+            {
+              "backend_sha": "${{ github.sha }}",
+              "source_branch": "${{ github.ref_name }}",
+              "spec_url": "https://raw.githubusercontent.com/team-modi/modi-backend/${{ github.ref_name }}/openapi/openapi.json"
+            }
