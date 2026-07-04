@@ -97,15 +97,10 @@ class RecordV1ControllerTest {
 						.content("""
 								{
 								  "exhibitionId": %d,
-								  "writeMode": "AI",
+								  "writeMode": "DIRECT",
 								  "viewedAt": "2020-06-28",
 								  "content": "색이 따뜻해서 한참 서 있었다.",
-								  "emotionCodes": ["MOVED", "CALM"],
-								  "userKeywords": ["색감"],
-								  "aiKeywords": ["따뜻한 색감", "위로"],
-								  "aiSummary": "평온하고 뭉클한 관람.",
-								  "representativeEmotion": "MOVED",
-								  "cardPhrase": "그날, 색이 나를 붙잡았다",
+								  "emotionCodes": ["강렬한", "서정적인"],
 								  "media": [
 								    {
 								      "type": "PHOTO",
@@ -132,7 +127,6 @@ class RecordV1ControllerTest {
 				.andExpect(jsonPath("$.data.exhibitionId").value(exhibitionId.intValue()))
 				.andExpect(jsonPath("$.data.content").value("색이 따뜻해서 한참 서 있었다."))
 				.andExpect(jsonPath("$.data.emotionCodes", hasSize(2)))
-				.andExpect(jsonPath("$.data.aiKeywords", hasSize(2)))
 				.andExpect(jsonPath("$.data.media[0].type").value("PHOTO"))
 				.andExpect(jsonPath("$.data.exhibitionTitle").value("모네전"))
 				.andExpect(jsonPath("$.data.exhibitionPlace").value("예술의전당"));
@@ -243,18 +237,13 @@ class RecordV1ControllerTest {
 								{
 								  "viewedAt": "2020-06-29",
 								  "content": "수정한 감상",
-								  "emotionCodes": ["CALM"],
-								  "userKeywords": ["수정"],
-								  "aiKeywords": [],
-								  "aiSummary": "수정된 요약",
-								  "representativeEmotion": "CALM",
-								  "cardPhrase": "다시 남긴 여운",
+								  "emotionCodes": ["서정적인"],
 								  "media": []
 								}
 								"""))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.content").value("수정한 감상"))
-				.andExpect(jsonPath("$.data.emotionCodes[0]").value("CALM"));
+				.andExpect(jsonPath("$.data.emotionCodes[0]").value("서정적인"));
 
 		mockMvc.perform(delete("/api/v1/records/{recordId}", recordId)
 						.header("Authorization", bearerUser1))
@@ -330,7 +319,6 @@ class RecordV1ControllerTest {
 								  "viewedAt": "2020-06-28",
 								  "content": "%s",
 								  "emotionCodes": ["%s"],
-								  "userKeywords": ["모네"],
 								  "media": []
 								}
 								""".formatted(exhibitionId, content, emotion)))
