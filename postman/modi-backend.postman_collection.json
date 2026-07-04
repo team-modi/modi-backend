@@ -671,6 +671,91 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Record AI",
+      "description": "질문으로 작성(AI) — 전시 맥락 질문 생성 · Q&A 감상문 다듬기. 로그인 전용.\n⚠️ 서버에 ANTHROPIC_API_KEY가 설정돼 있어야 하며, 실제 Claude를 호출하므로 응답에 수 초가 걸리고 비용이 발생한다. 키 미설정 시 503 AI_DISABLED.",
+      "item": [
+        {
+          "name": "01 AI Questions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/records/ai/questions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exhibitionId\": {{exhibitionId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "전시 맥락 기반 질문 3개 생성. '다른 질문 보기'=재호출. 앞서 등록한 exhibitionId 사용."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('questions generated', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const qs = pm.response.json().data.questions;",
+                  "  pm.expect(qs).to.be.an('array').with.length.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02 AI Compose",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/records/ai/compose",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exhibitionId\": {{exhibitionId}},\n  \"answers\": [\n    {\n      \"question\": \"가장 오래 눈길이 머문 작품은?\",\n      \"answer\": \"검은 바탕에 희미하게 파도가 보이던 큰 그림\"\n    },\n    {\n      \"question\": \"어떤 기억이 떠올랐나요?\",\n      \"answer\": \"어릴 때 밤바다에서 듣던 파도 소리\"\n    },\n    {\n      \"question\": \"마음에 남은 감정은?\",\n      \"answer\": \"고요하면서도 먹먹한 그리움\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Q&A 답변 → 감상문 본문(≤300) 생성. '다시 다듬기'=재호출. 반환 본문을 확정해 기록 생성 API(writeMode=AI)로 저장한다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('essay composed', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const c = pm.response.json().data.content;",
+                  "  pm.expect(c).to.be.a('string').and.not.empty;",
+                  "  pm.expect(c.length).to.be.at.most(300);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
     }
   ]
 }

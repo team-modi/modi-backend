@@ -135,7 +135,21 @@
 - [x] 전시 수집 실동작 확인 — 부팅 동기화 265건 적재, 매시 스케줄러 ~277건, 목록 API 253건(문화포털 실데이터)
 - [x] 더미 클라이언트(`client-demo/`) 작성 + 직접 작성 플로우 브라우저 왕복 확인(게스트→전시목록→작성→저장 OK)
 - [x] P0: DTO·서비스·검증(content 300·미디어 5·감정 라벨 ≤10)·AI필드 제거·테스트·Postman — 기록 단위/컨트롤러 테스트 통과
-- [ ] P1: provider 추상화 + 에이전트(questions/compose) + 테스트
+- [~] P1: provider 추상화 + questions/compose 엔드포인트 + 테스트 (구현·전체 테스트 통과 / 라이브 Claude 호출은 API 키 필요)
+
+### P1 구현 로그(2026-07-05)
+- **provider 추상화**: `domain/ai/AiChatClient`(포트) + `infra/ai/claude/ClaudeAiChatClient`(Anthropic 공식 `anthropic-java` SDK, 모델 `app.ai.model` 기본 `claude-opus-4-8`). `AiErrorCode`(AI_DISABLED 503 / AI_GENERATION_FAILED 502). `AiProperties`(`app.ai.*`, api-key=env `ANTHROPIC_API_KEY`) — 키 미설정이면 어댑터가 비활성(503)이고 나머지 기능은 정상.
+- **멀티스텝(도구 활용)**: `RecordAiFacade`가 전시 상세를 조회(도구 단계)해 맥락을 만들고 → LLM 포트로 질문 생성/감상문 compose. 현재는 **코드 오케스트레이션**(전시 조회 → 단일 구조화 호출); 향후 SDK tool-runner 기반 모델 주도 루프로 확장 가능.
+- **엔드포인트**(로그인 전용): `POST /api/v1/records/ai/questions`(전시 맥락 질문 3개, "다른 질문 보기"=재호출), `POST /api/v1/records/ai/compose`(Q&A→감상문 ≤300, "다시 다듬기"=재호출). 확정 후 저장은 기존 `POST /api/v1/records`(writeMode=AI).
+- **의존성**: `com.anthropic:anthropic-java:2.34.0` — victools 경유 구버전 `swagger-annotations`(2.2.31)가 springdoc(swagger-core 2.2.47) 문서 생성을 `NoSuchMethodError`로 깨뜨려 해당 전이 의존 exclude.
+- **검증**: 컴파일 통과 / `RecordAiFacadeTest`(JSON·줄폴백·클램프·빈답변) 통과 / 전체 테스트 스위트 통과.
+- **라이브 검증(ANTHROPIC_API_KEY 설정, `claude-opus-4-8`)**:
+  - curl: questions 3개 생성 / compose 감상문(≤300, 근거 기반) — CATALOG·CUSTOM 전시 모두 SUCCESS.
+  - **인증 가드**: 미인증·무효 토큰 → 401 NO_ACCESS_TOKEN (questions/compose 둘 다).
+  - **더미 클라이언트**(`client-demo/`): '질문으로 작성' 모드 추가 — 모드 선택 → 질문 생성 → 답변 → 감상문 다듬기 → 수정/다시 다듬기 → 작성 완료(writeMode=AI). 브라우저 end-to-end 확인(recordId 저장, 콘솔 에러 0).
+  - **Postman**: `Record AI` 폴더(01 AI Questions · 02 AI Compose) 추가. 서버에 키 필요(없으면 503).
+- **키 주입**: `.env`(gitignore) + `compose.yaml` `ANTHROPIC_API_KEY` 패스스루.
+- **미완**: 커밋/PR(현재 P0 브랜치 위 작업트리).
 
 ### 검증 로그(2026-07-05)
 - 전시 수집: `ExhibitionCatalogBootSync` 부팅 시 265건, `ExhibitionSyncScheduler` 매시 재동기화 정상. `GET /api/v1/exhibitions` 253건(포스터 이미지 포함) 반환 확인.

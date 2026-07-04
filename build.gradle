@@ -32,6 +32,13 @@ dependencies {
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 	// 한눈에보는문화정보(15138937) 응답 포맷=XML 파싱용
 	implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml'
+	// AI 감상문 생성(질문/compose) — Anthropic 공식 Java SDK. provider 추상화 뒤 Claude 어댑터에서만 사용.
+	//   victools 경유로 구버전 swagger-annotations(2.2.31)를 끌어와 springdoc(swagger-core 2.2.47)의
+	//   OpenAPI 문서 생성이 NoSuchMethodError(Schema.$dynamicRef)로 깨지므로 해당 전이 의존을 제외한다.
+	//   (우리는 SDK의 swagger 기반 스키마 생성 기능을 쓰지 않음 — 순수 Messages 호출만 사용)
+	implementation('com.anthropic:anthropic-java:2.34.0') {
+		exclude group: 'io.swagger.core.v3', module: 'swagger-annotations'
+	}
 	// OAuth 후 자체 JWT(access/refresh) 발급용
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'

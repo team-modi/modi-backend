@@ -80,6 +80,14 @@ app:
     demo-seed:
       enabled: ${EXHIBITION_DEMO_SEED:false}
 
+  # AI 감상문 생성(질문/compose). provider 교체 가능 — 우선 Claude(Anthropic).
+  #   api-key 미설정이면 AI 엔드포인트는 503(AI_DISABLED)로 응답하고 나머지 기능은 정상 동작한다.
+  ai:
+    provider: ${AI_PROVIDER:claude}
+    model: ${AI_MODEL:claude-opus-4-8}
+    api-key: ${ANTHROPIC_API_KEY:}
+    max-tokens: ${AI_MAX_TOKENS:1024}
+
   # 자체 JWT 설정. secret은 시크릿 → 환경변수 주입 권장(기본값은 로컬 테스트 전용).
   jwt:
     secret: ${JWT_SECRET:local-dev-only-jwt-secret-please-change-min-32-bytes}
