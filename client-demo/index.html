@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Modi 기록 작성 데모 (직접 작성)</title>
+<style>
+  :root { --bg:#f4f4f5; --card:#fff; --line:#e4e4e7; --ink:#18181b; --sub:#71717a; --accent:#3f3f46; --accent2:#111; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  .phone { max-width: 430px; margin: 0 auto; min-height:100vh; background:var(--bg); display:flex; flex-direction:column; }
+  header { display:flex; align-items:center; gap:8px; padding:14px 16px; background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  header .back { border:none; background:none; font-size:20px; cursor:pointer; color:var(--ink); padding:2px 6px; }
+  header h1 { font-size:16px; margin:0; font-weight:600; flex:1; text-align:center; }
+  header .who { font-size:11px; color:var(--sub); max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  main { flex:1; padding:16px; }
+  .muted { color:var(--sub); font-size:13px; }
+  .section-label { font-weight:700; font-size:15px; margin:18px 0 4px; }
+  .section-sub { color:var(--sub); font-size:12px; margin-bottom:8px; }
+  button.primary { width:100%; padding:15px; border:none; border-radius:12px; background:var(--accent2); color:#fff; font-size:15px; font-weight:600; cursor:pointer; }
+  button.primary:disabled { background:#c7c7cc; cursor:not-allowed; }
+  button.ghost { padding:12px 16px; border:1px solid var(--line); border-radius:12px; background:var(--card); cursor:pointer; font-size:14px; }
+  input, textarea { width:100%; border:1px solid var(--line); border-radius:12px; padding:12px; font-size:14px; font-family:inherit; background:var(--card); }
+  textarea { min-height:140px; resize:vertical; }
+  .field { margin-bottom:6px; }
+  .exh-card { display:flex; gap:12px; background:#e9e9ec; border-radius:14px; padding:14px; align-items:center; }
+  .exh-card .poster { width:72px; height:72px; border-radius:8px; background:#cfcfd4 center/cover; display:flex; align-items:center; justify-content:center; color:#8a8a91; font-size:11px; flex:0 0 auto; }
+  .exh-card .meta { font-size:13px; line-height:1.5; }
+  .exh-card .meta b { font-size:15px; }
+  .list { display:flex; flex-direction:column; gap:8px; }
+  .exh-row { display:flex; gap:10px; padding:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; cursor:pointer; align-items:center; }
+  .exh-row:hover { border-color:#a1a1aa; }
+  .exh-row .poster { width:52px; height:52px; border-radius:6px; background:#cfcfd4 center/cover; flex:0 0 auto; }
+  .exh-row .t { font-size:14px; font-weight:600; line-height:1.3; }
+  .exh-row .s { font-size:12px; color:var(--sub); margin-top:2px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { padding:8px 14px; border-radius:999px; border:1px solid var(--line); background:var(--card); font-size:13px; cursor:pointer; user-select:none; }
+  .chip.on { background:var(--accent2); color:#fff; border-color:var(--accent2); }
+  .chip .x { margin-left:6px; opacity:.7; }
+  .row { display:flex; gap:8px; }
+  .row > * { flex:1; }
+  .counter { text-align:right; font-size:11px; color:var(--sub); margin-top:4px; }
+  .toolbar { position:sticky; bottom:0; background:linear-gradient(transparent, var(--bg) 30%); padding:14px 0 4px; }
+  .saved { text-align:center; padding:30px 10px; }
+  .saved .box { width:120px; height:120px; border-radius:16px; background:#d4d4d8; margin:10px auto 20px; }
+  .banner { padding:10px 12px; border-radius:10px; font-size:13px; margin-bottom:10px; }
+  .banner.ok { background:#dcfce7; color:#166534; }
+  .banner.err { background:#fee2e2; color:#991b1b; }
+  .searchbar { display:flex; gap:8px; margin-bottom:12px; }
+  .searchbar input { flex:1; }
+  .pager { display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:13px; color:var(--sub); }
+  .pager button { border:1px solid var(--line); background:var(--card); border-radius:8px; padding:6px 12px; cursor:pointer; }
+  .kv { font-size:13px; line-height:1.7; }
+  .kv b { color:var(--sub); font-weight:500; display:inline-block; min-width:78px; }
+  .config { font-size:11px; color:var(--sub); padding:8px 16px; background:#fafafa; border-top:1px solid var(--line); }
+  .config input { width:auto; display:inline-block; padding:3px 6px; font-size:11px; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header>
+    <button class="back" id="backBtn" style="visibility:hidden">‹</button>
+    <h1 id="title">기록 작성 데모</h1>
+    <span class="who" id="who"></span>
+  </header>
+  <main id="app"></main>
+  <div class="config">
+    API: <input id="baseUrl" value="http://localhost:18080" /> ·
+    <span id="tokState">비로그인</span>
+  </div>
+</div>
+
+<script>
+const S = {
+  base: () => document.getElementById('baseUrl').value.replace(/\/$/, ''),
+  token: null, user: null,
+  page: 0, keyword: '', exhibitions: [], totalPages: 1, total: 0,
+  exh: null,
+  viewedAt: new Date().toISOString().slice(0,10),
+  emotions: new Set(),
+  media: [],
+  screen: 'login',
+};
+const EMOTION_PRESETS = ['슬픈','강렬한','재미있는','유쾌한','서정적인','화나는','아름다운','관심있는','서정적','먹먹한'];
+
+const app = () => document.getElementById('app');
+const el = (html) => { const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstChild; };
+function banner(msg, kind='ok'){ const b=el(`<div class="banner ${kind}">${msg}</div>`); app().prepend(b); setTimeout(()=>b.remove(), 4000); }
+
+async function api(path, { method='GET', body } = {}) {
+  const res = await fetch(S.base()+path, {
+    method,
+    headers: { 'Content-Type':'application/json', ...(S.token ? { Authorization:'Bearer '+S.token } : {}) },
+    credentials: 'include',
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const json = await res.json().catch(()=>({}));
+  if (!res.ok || json?.meta?.result === 'FAIL') {
+    const code = json?.meta?.errorCode || res.status;
+    throw new Error((json?.meta?.message || 'API 오류') + ' ('+code+')');
+  }
+  return json.data;
+}
+
+function setHeader() {
+  document.getElementById('who').textContent = S.user ? `${S.user.nickname} (${S.user.provider})` : '';
+  document.getElementById('tokState').textContent = S.token ? '로그인됨' : '비로그인';
+  const back = document.getElementById('backBtn');
+  back.style.visibility = (S.screen==='exhibitions'||S.screen==='write'||S.screen==='saved') ? 'visible':'hidden';
+}
+
+/* ---------- screens ---------- */
+function renderLogin() {
+  S.screen='login'; setHeader();
+  document.getElementById('title').textContent='기록 작성 데모';
+  app().innerHTML = '';
+  app().append(el(`<div>
+    <p class="muted">모디 백엔드(전시 수집 + 직접 작성 기록) 동작 확인용 더미 클라이언트입니다.</p>
+    <div class="section-label">1) 게스트 로그인</div>
+    <div class="section-sub">소셜 없이 임시 사용자로 토큰을 발급받습니다.</div>
+  </div>`));
+  const btn = el(`<button class="primary">게스트로 시작하기</button>`);
+  btn.onclick = async () => {
+    btn.disabled=true; btn.textContent='로그인 중…';
+    try {
+      const d = await api('/api/v1/auth/guest', { method:'POST' });
+      S.token = d.accessToken; S.user = d.user;
+      await loadExhibitions();
+    } catch(e){ btn.disabled=false; btn.textContent='게스트로 시작하기'; banner(e.message,'err'); }
+  };
+  app().append(btn);
+}
+
+async function loadExhibitions() {
+  S.screen='exhibitions'; setHeader();
+  document.getElementById('title').textContent='전시 선택';
+  try {
+    const q = `?page=${S.page}&size=10${S.keyword?`&keyword=${encodeURIComponent(S.keyword)}`:''}`;
+    const d = await api('/api/v1/exhibitions'+q);
+    S.exhibitions = d.content; S.totalPages = d.totalPages; S.total = d.totalElements;
+  } catch(e){ banner(e.message,'err'); return; }
+  renderExhibitions();
+}
+
+function renderExhibitions() {
+  app().innerHTML='';
+  app().append(el(`<p class="muted">공공데이터(문화포털) 수집 전시 — 총 <b>${S.total}</b>건</p>`));
+  const sb = el(`<div class="searchbar"><input id="kw" placeholder="전시 검색(제목/장소)" value="${S.keyword}"/><button class="ghost" id="go">검색</button></div>`);
+  app().append(sb);
+  sb.querySelector('#go').onclick = ()=>{ S.keyword=sb.querySelector('#kw').value.trim(); S.page=0; loadExhibitions(); };
+  sb.querySelector('#kw').addEventListener('keydown', e=>{ if(e.key==='Enter'){ S.keyword=e.target.value.trim(); S.page=0; loadExhibitions(); }});
+
+  const list = el(`<div class="list"></div>`);
+  if (!S.exhibitions.length) list.append(el(`<p class="muted">결과가 없습니다.</p>`));
+  S.exhibitions.forEach(ex => {
+    const row = el(`<div class="exh-row">
+      <div class="poster" style="${ex.posterUrl?`background-image:url('${ex.posterUrl}')`:''}"></div>
+      <div><div class="t">${ex.title}</div><div class="s">${[ex.place,ex.region,ex.type].filter(Boolean).join(' · ')}</div></div>
+    </div>`);
+    row.onclick = ()=> selectExhibition(ex);
+    list.append(row);
+  });
+  app().append(list);
+
+  const pager = el(`<div class="pager">
+    <button ${S.page<=0?'disabled':''} id="prev">‹ 이전</button>
+    <span>${S.page+1} / ${S.totalPages}</span>
+    <button ${S.page>=S.totalPages-1?'disabled':''} id="next">다음 ›</button>
+  </div>`);
+  pager.querySelector('#prev').onclick=()=>{ if(S.page>0){S.page--; loadExhibitions();} };
+  pager.querySelector('#next').onclick=()=>{ if(S.page<S.totalPages-1){S.page++; loadExhibitions();} };
+  app().append(pager);
+  document.getElementById('backBtn').onclick = renderLogin;
+}
+
+function selectExhibition(ex) {
+  S.exh = ex; S.emotions = new Set(); S.media = []; S.content='';
+  renderWrite();
+}
+
+function renderWrite() {
+  S.screen='write'; setHeader();
+  document.getElementById('title').textContent='기록 작성';
+  document.getElementById('backBtn').onclick = ()=>loadExhibitions();
+  const ex = S.exh;
+  app().innerHTML='';
+
+  app().append(el(`<div class="exh-card">
+    <div class="poster" style="${ex.posterUrl?`background-image:url('${ex.posterUrl}')`:''}">${ex.posterUrl?'':'Poster'}</div>
+    <div class="meta"><b>${ex.title}</b><br/><span class="muted">${[ex.place,ex.region].filter(Boolean).join(' / ')}</span></div>
+  </div>`));
+
+  // 관람일
+  app().append(el(`<div class="section-label">관람일</div>`));
+  const date = el(`<div class="field"><input type="date" id="viewedAt" value="${S.viewedAt}" max="${new Date().toISOString().slice(0,10)}"/></div>`);
+  app().append(date);
+
+  // 감정 키워드
+  app().append(el(`<div class="section-label">감정 키워드</div><div class="section-sub">전시를 보고 마음에 남았던 감정을 선택해 보세요</div>`));
+  const chips = el(`<div class="chips" id="chips"></div>`);
+  app().append(chips);
+  function paintChips(){
+    chips.innerHTML='';
+    const all = [...new Set([...EMOTION_PRESETS, ...S.emotions])];
+    all.forEach(label=>{
+      const on = S.emotions.has(label);
+      const c = el(`<span class="chip ${on?'on':''}">${label}${on?'<span class="x">✕</span>':''}</span>`);
+      c.onclick=()=>{ on ? S.emotions.delete(label) : S.emotions.add(label); paintChips(); };
+      chips.append(c);
+    });
+  }
+  paintChips();
+  const custom = el(`<div class="row" style="margin-top:10px"><input id="customEmo" maxlength="10" placeholder="나만의 키워드 (10자 이내)"/><button class="ghost" id="addEmo" style="flex:0 0 64px">+ 추가</button></div>`);
+  app().append(custom);
+  custom.querySelector('#addEmo').onclick=()=>{ const v=custom.querySelector('#customEmo').value.trim(); if(v){ S.emotions.add(v); custom.querySelector('#customEmo').value=''; paintChips(); } };
+
+  // 미디어 (URL 입력형 — 데모)
+  app().append(el(`<div class="section-label">내가 바라본 전시</div><div class="section-sub">이미지 URL을 추가하면 미디어로 첨부합니다 (최대 5개, 데모)</div>`));
+  const mediaWrap = el(`<div id="mediaWrap"></div>`);
+  app().append(mediaWrap);
+  const addMedia = el(`<div class="row" style="margin-top:8px"><input id="mediaUrl" placeholder="https://…/image.jpg"/><button class="ghost" id="addMedia" style="flex:0 0 64px">+ 추가</button></div>`);
+  app().append(addMedia);
+  function paintMedia(){
+    mediaWrap.innerHTML = S.media.length ? '' : '<span class="muted" style="font-size:12px">첨부 없음</span>';
+    S.media.forEach((m,i)=>{ const t=el(`<div class="kv">• ${m.url} <a href="#" data-i="${i}">삭제</a></div>`); t.querySelector('a').onclick=(e)=>{e.preventDefault(); S.media.splice(i,1); paintMedia();}; mediaWrap.append(t); });
+  }
+  paintMedia();
+  addMedia.querySelector('#addMedia').onclick=()=>{ const u=addMedia.querySelector('#mediaUrl').value.trim(); if(!u) return; if(S.media.length>=5){banner('미디어는 최대 5개','err');return;} S.media.push({type:'PHOTO',url:u,sortOrder:S.media.length,sizeBytes:1048576}); addMedia.querySelector('#mediaUrl').value=''; paintMedia(); };
+
+  // 직접 작성 감상
+  app().append(el(`<div class="section-label">직접 작성</div><div class="section-sub">전시에 대한 감상을 자유롭게 남겨보세요</div>`));
+  const ta = el(`<textarea id="content" maxlength="300" placeholder="답변을 입력해 주세요"></textarea>`);
+  app().append(ta);
+  const cnt = el(`<div class="counter"><span id="len">0</span>/300</div>`);
+  app().append(cnt);
+  ta.addEventListener('input', ()=> cnt.querySelector('#len').textContent = ta.value.length);
+
+  const toolbar = el(`<div class="toolbar"></div>`);
+  const submit = el(`<button class="primary">작성 완료</button>`);
+  submit.onclick = async () => {
+    const content = ta.value.trim();
+    if (S.emotions.size===0) return banner('감정 키워드를 1개 이상 선택해 주세요','err');
+    if (!content) return banner('감상을 입력해 주세요','err');
+    submit.disabled=true; submit.textContent='저장 중…';
+    try {
+      const rec = await api('/api/v1/records', { method:'POST', body: {
+        exhibitionId: ex.exhibitionId,
+        writeMode: 'DIRECT',
+        viewedAt: document.getElementById('viewedAt').value,
+        content,
+        emotionCodes: [...S.emotions],
+        media: S.media,
+      }});
+      const detail = await api('/api/v1/records/'+rec.recordId);
+      renderSaved(detail);
+    } catch(e){ submit.disabled=false; submit.textContent='작성 완료'; banner(e.message,'err'); }
+  };
+  toolbar.append(submit);
+  app().append(toolbar);
+}
+
+function renderSaved(rec) {
+  S.screen='saved'; setHeader();
+  document.getElementById('title').textContent='기록 작성';
+  document.getElementById('backBtn').onclick = ()=>loadExhibitions();
+  app().innerHTML='';
+  app().append(el(`<div class="saved">
+    <div class="box"></div>
+    <h2 style="margin:0 0 6px">기록이 저장되었어요</h2>
+    <p class="muted">아카이브에서 언제든 다시 꺼내볼 수 있어요</p>
+  </div>`));
+  app().append(el(`<div class="exh-card" style="margin-bottom:14px">
+    <div class="poster">${rec.exhibitionPosterUrl?'':'Poster'}</div>
+    <div class="meta"><b>${rec.exhibitionTitle}</b><br/><span class="muted">${[rec.exhibitionPlace,rec.exhibitionRegion].filter(Boolean).join(' / ')}</span></div>
+  </div>`));
+  app().append(el(`<div class="kv">
+    <div><b>recordId</b> ${rec.recordId}</div>
+    <div><b>작성모드</b> ${rec.writeMode}</div>
+    <div><b>관람일</b> ${rec.viewedAt}</div>
+    <div><b>감정</b> ${(rec.emotionCodes||[]).join(', ')}</div>
+    <div><b>미디어</b> ${(rec.media||[]).length}개</div>
+    <div><b>감상</b><br/>${(rec.content||'').replace(/</g,'&lt;')}</div>
+  </div>`));
+  const again = el(`<button class="primary" style="margin-top:20px">다른 전시 기록하기</button>`);
+  again.onclick = ()=>loadExhibitions();
+  app().append(again);
+}
+
+renderLogin();
+</script>
+</body>
+</html>

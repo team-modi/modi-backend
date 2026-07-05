@@ -366,7 +366,7 @@
             "url": "{{baseUrl}}/api/v1/records",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"exhibitionId\": {{exhibitionId}},\n  \"writeMode\": \"AI\",\n  \"viewedAt\": \"2026-06-15\",\n  \"content\": \"모네의 색이 따뜻해서 한참 서 있었다.\",\n  \"emotionCodes\": [\n    \"MOVED\",\n    \"CALM\"\n  ],\n  \"userKeywords\": [\n    \"색감\"\n  ],\n  \"aiKeywords\": [\n    \"따뜻한 색감\",\n    \"위로\"\n  ],\n  \"aiSummary\": \"평온하고 뭉클한 관람.\",\n  \"representativeEmotion\": \"MOVED\",\n  \"cardPhrase\": \"그날, 색이 나를 붙잡았다\",\n  \"media\": [\n    {\n      \"type\": \"PHOTO\",\n      \"url\": \"https://example.com/image.jpg\",\n      \"sortOrder\": 0,\n      \"sizeBytes\": 1048576\n    }\n  ]\n}",
+              "raw": "{\n  \"exhibitionId\": {{exhibitionId}},\n  \"writeMode\": \"DIRECT\",\n  \"viewedAt\": \"2026-06-15\",\n  \"content\": \"모네의 색이 따뜻해서 한참 서 있었다.\",\n  \"emotionCodes\": [\n    \"강렬한\",\n    \"서정적인\"\n  ],\n  \"media\": [\n    {\n      \"type\": \"PHOTO\",\n      \"url\": \"https://example.com/image.jpg\",\n      \"sortOrder\": 0,\n      \"sizeBytes\": 1048576\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -482,7 +482,7 @@
             "url": "{{baseUrl}}/api/v1/records/{{recordId}}",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"viewedAt\": \"2026-06-16\",\n  \"content\": \"다시 보니 모네의 붓질이 더 좋았다.\",\n  \"emotionCodes\": [\n    \"CALM\"\n  ],\n  \"userKeywords\": [\n    \"수정\"\n  ],\n  \"aiKeywords\": [],\n  \"aiSummary\": \"수정된 요약\",\n  \"representativeEmotion\": \"CALM\",\n  \"cardPhrase\": \"다시 남긴 여운\",\n  \"media\": []\n}",
+              "raw": "{\n  \"viewedAt\": \"2026-06-16\",\n  \"content\": \"다시 보니 모네의 붓질이 더 좋았다.\",\n  \"emotionCodes\": [\n    \"서정적인\"\n  ],\n  \"media\": []\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -502,7 +502,7 @@
                   "  pm.response.to.have.status(200);",
                   "  const d = pm.response.json().data;",
                   "  pm.expect(d.content).to.include('붓질');",
-                  "  pm.expect(d.emotionCodes[0]).to.eql('CALM');",
+                  "  pm.expect(d.emotionCodes[0]).to.eql('서정적인');",
                   "});"
                 ]
               }
@@ -570,7 +570,7 @@
             "url": "{{baseUrl}}/api/v1/records",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"exhibitionId\": {{exhibitionId}},\n  \"writeMode\": \"DIRECT\",\n  \"viewedAt\": \"2026-06-15\",\n  \"content\": \"영상이 큰 기록\",\n  \"emotionCodes\": [\n    \"MOVED\"\n  ],\n  \"media\": [\n    {\n      \"type\": \"VIDEO\",\n      \"url\": \"https://example.com/video.mp4\",\n      \"sortOrder\": 0,\n      \"sizeBytes\": 104857601\n    }\n  ]\n}",
+              "raw": "{\n  \"exhibitionId\": {{exhibitionId}},\n  \"writeMode\": \"DIRECT\",\n  \"viewedAt\": \"2026-06-15\",\n  \"content\": \"영상이 큰 기록\",\n  \"emotionCodes\": [\n    \"강렬한\"\n  ],\n  \"media\": [\n    {\n      \"type\": \"VIDEO\",\n      \"url\": \"https://example.com/video.mp4\",\n      \"sortOrder\": 0,\n      \"sizeBytes\": 104857601\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"

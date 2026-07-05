@@ -5,7 +5,6 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Stream;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -41,7 +40,7 @@ import modi.backend.support.error.CoreException;
 @RequiredArgsConstructor
 public class RecordService {
 
-	private static final int MAX_MEDIA_COUNT = 3;
+	private static final int MAX_MEDIA_COUNT = 5;
 	private static final long PHOTO_MAX_BYTES = 10L * 1024 * 1024;
 	private static final long VIDEO_MAX_BYTES = 100L * 1024 * 1024;
 
@@ -58,11 +57,11 @@ public class RecordService {
 		ExhibitionSnapshot snapshot = new ExhibitionSnapshot(detail.title(), detail.type(), detail.posterUrl(),
 				detail.place(), detail.region(), detail.category(), detail.startDate(), detail.endDate());
 
-		AiStatus aiStatus = resolveAiStatus(request);
+		// 확정 저장 시점의 content가 최종본(직접 작성 또는 AI가 다듬어 사용자가 확정한 감상문)이므로 AI 후처리 대기 없음.
+		// AI 산출 필드(요약·대표감정·카드문구)는 이번 범위 밖 → null. (아카이브 카드 정식화 시 재도입)
 		Record record = Record.create(userId, request.exhibitionId(), snapshot, request.writeMode(), viewedAt,
-				request.content(), request.aiSummary(), request.representativeEmotion(), request.cardPhrase(), aiStatus);
+				request.content(), null, null, null, AiStatus.READY);
 		record.replaceEmotions(toEmotions(request.emotionCodes()));
-		record.replaceKeywords(toKeywords(request.userKeywords(), request.aiKeywords()));
 		record.replaceMedia(toMedia(request.media()));
 
 		Record saved = recordRepository.save(record);
@@ -93,12 +92,10 @@ public class RecordService {
 
 		LocalDate viewedAt = resolveViewedAt(request.viewedAt());
 		validateContentRules(viewedAt, request.emotionCodes(), request.media());
-		AiStatus aiStatus = hasText(request.aiSummary()) ? AiStatus.READY : AiStatus.PENDING;
 
-		record.replaceContent(viewedAt, request.content(), request.aiSummary(), request.representativeEmotion(),
-				request.cardPhrase(), aiStatus);
+		record.replaceContent(viewedAt, request.content(), null, null, null, AiStatus.READY);
 		record.replaceEmotions(toEmotions(request.emotionCodes()));
-		record.replaceKeywords(toKeywords(request.userKeywords(), request.aiKeywords()));
+		record.replaceKeywords(List.of()); // 키워드 개념 폐지 — 레거시 기록 수정 시 정리
 		record.replaceMedia(toMedia(request.media()));
 
 		recordRepository.flush();
@@ -162,7 +159,7 @@ public class RecordService {
 			return;
 		}
 		if (media.size() > MAX_MEDIA_COUNT) {
-			throw new CoreException(RecordErrorCode.INVALID_RECORD_MEDIA, "미디어는 최대 3개까지 첨부할 수 있습니다.");
+			throw new CoreException(RecordErrorCode.INVALID_RECORD_MEDIA, "미디어는 최대 5개까지 첨부할 수 있습니다.");
 		}
 		long distinctSortOrders = media.stream().map(RecordMediaRequest::sortOrder).distinct().count();
 		if (distinctSortOrders != media.size()) {
@@ -178,36 +175,12 @@ public class RecordService {
 		}
 	}
 
-	private AiStatus resolveAiStatus(RecordCreateRequest request) {
-		if (request.writeMode() == WriteMode.DIRECT && !hasText(request.aiSummary())) {
-			return AiStatus.PENDING;
-		}
-		return hasText(request.aiSummary()) ? AiStatus.READY : AiStatus.PENDING;
-	}
-
 	private List<RecordEmotion> toEmotions(List<String> emotionCodes) {
 		return emotionCodes.stream()
 				.filter(RecordService::hasText)
 				.distinct()
 				.map(RecordEmotion::create)
 				.toList();
-	}
-
-	private List<RecordKeyword> toKeywords(List<String> userKeywords, List<String> aiKeywords) {
-		return Stream.concat(
-						toKeywordStream(userKeywords, KeywordSource.USER),
-						toKeywordStream(aiKeywords, KeywordSource.AI))
-				.toList();
-	}
-
-	private Stream<RecordKeyword> toKeywordStream(List<String> keywords, KeywordSource source) {
-		if (keywords == null) {
-			return Stream.empty();
-		}
-		return keywords.stream()
-				.filter(RecordService::hasText)
-				.distinct()
-				.map(keyword -> RecordKeyword.create(keyword, source));
 	}
 
 	private List<RecordMedia> toMedia(List<RecordMediaRequest> media) {

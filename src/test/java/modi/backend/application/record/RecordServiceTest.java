@@ -65,8 +65,7 @@ class RecordServiceTest {
 	}
 
 	private RecordCreateRequest createReq(Long exhibitionId) {
-		return new RecordCreateRequest(exhibitionId, WriteMode.DIRECT, LocalDate.now(), "감상", List.of("MOVED"), null,
-				null, null, null, null, null);
+		return new RecordCreateRequest(exhibitionId, WriteMode.DIRECT, LocalDate.now(), "감상", List.of("강렬한"), null);
 	}
 
 	private ExhibitionResult.Detail detailResult(String title, String type, String region) {
