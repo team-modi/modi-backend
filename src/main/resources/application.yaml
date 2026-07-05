@@ -23,7 +23,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics   # metrics: AI 토큰 사용량(modi.ai.tokens/calls) 관측용
   endpoint:
     health:
       probes:
