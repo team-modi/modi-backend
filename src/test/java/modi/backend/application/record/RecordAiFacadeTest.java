@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 
 import java.time.LocalDate;
@@ -37,11 +38,11 @@ class RecordAiFacadeTest {
 	RecordAiFacade facade;
 
 	@Test
-	@DisplayName("questions — LLM의 JSON 배열 응답을 질문 목록으로 파싱한다")
-	void questions_JSON파싱() {
+	@DisplayName("questions — 구조화 출력(3개 필드)을 질문 목록으로 변환한다")
+	void questions_구조화출력() {
 		given(exhibitionFacade.getForSnapshot(any(), any())).willReturn(detail());
-		given(aiChatClient.complete(anyString(), anyString()))
-				.willReturn("[\"가장 오래 남은 장면은?\", \"어떤 감정이었나요?\", \"한 문장으로 남긴다면?\"]");
+		given(aiChatClient.completeStructured(anyString(), anyString(), eq(AiQuestionsOutput.class)))
+				.willReturn(new AiQuestionsOutput("가장 오래 남은 장면은?", "어떤 감정이었나요?", "한 문장으로 남긴다면?"));
 
 		RecordAiResult.Questions result = facade.questions(new RecordAiCriteria.Questions(1L, 10L));
 
@@ -50,27 +51,14 @@ class RecordAiFacadeTest {
 	}
 
 	@Test
-	@DisplayName("questions — JSON이 아니어도 줄 단위로 폴백 파싱한다")
-	void questions_줄폴백() {
+	@DisplayName("questions — 빈 필드는 걸러내고, 모두 비면 실패한다")
+	void questions_모두빈값_실패() {
 		given(exhibitionFacade.getForSnapshot(any(), any())).willReturn(detail());
-		given(aiChatClient.complete(anyString(), anyString()))
-				.willReturn("1. 첫 질문\n2. 둘째 질문\n3. 셋째 질문");
+		given(aiChatClient.completeStructured(anyString(), anyString(), eq(AiQuestionsOutput.class)))
+				.willReturn(new AiQuestionsOutput(" ", "", null));
 
-		RecordAiResult.Questions result = facade.questions(new RecordAiCriteria.Questions(1L, 10L));
-
-		assertThat(result.questions()).containsExactly("첫 질문", "둘째 질문", "셋째 질문");
-	}
-
-	@Test
-	@DisplayName("questions — 모델이 3개를 초과해 반환해도 3개로 자른다")
-	void questions_3개초과_클램프() {
-		given(exhibitionFacade.getForSnapshot(any(), any())).willReturn(detail());
-		given(aiChatClient.complete(anyString(), anyString()))
-				.willReturn("[\"q1\",\"q2\",\"q3\",\"q4\",\"q5\"]");
-
-		RecordAiResult.Questions result = facade.questions(new RecordAiCriteria.Questions(1L, 10L));
-
-		assertThat(result.questions()).containsExactly("q1", "q2", "q3");
+		assertThatThrownBy(() -> facade.questions(new RecordAiCriteria.Questions(1L, 10L)))
+				.isInstanceOf(CoreException.class);
 	}
 
 	@Test

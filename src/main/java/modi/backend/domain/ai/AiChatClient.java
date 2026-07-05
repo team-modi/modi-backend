@@ -12,4 +12,11 @@ public interface AiChatClient {
 	 * provider 미설정 시 {@link AiErrorCode#AI_DISABLED}, 생성 실패 시 {@link AiErrorCode#AI_GENERATION_FAILED}.
 	 */
 	String complete(String systemPrompt, String userPrompt);
+
+	/**
+	 * 구조화 출력 — 응답이 {@code schemaType} 스키마(POJO/record)에 맞게 오도록 강제하고 그 타입으로 반환한다.
+	 * 자연어 파싱 없이 계약된 형태의 값을 얻는다(예: 질문 개수 강제). 미지원 provider는 {@link UnsupportedOperationException} 가능.
+	 * provider 미설정 시 {@link AiErrorCode#AI_DISABLED}, 생성 실패 시 {@link AiErrorCode#AI_GENERATION_FAILED}.
+	 */
+	<T> T completeStructured(String systemPrompt, String userPrompt, Class<T> schemaType);
 }
