@@ -24,6 +24,7 @@ import modi.backend.domain.exhibition.ExhibitionRegion;
 import modi.backend.domain.exhibition.ExhibitionRepository;
 import modi.backend.support.error.CoreException;
 import modi.backend.support.error.ErrorType;
+import modi.backend.support.time.AppTime;
 
 /**
  * 전시 유스케이스 조율(03_전시.md). load·조율·save만 하고, 상태 변경·규칙 판단은 {@link Exhibition} 메서드에 위임한다.
@@ -168,6 +169,7 @@ public class ExhibitionFacade {
 			return date;
 		}
 		boolean noOtherFilter = (keyword == null || keyword.isBlank()) && region == null && category == null;
-		return noOtherFilter ? LocalDate.now() : null;
+		// 랜딩 기본 "진행중"은 한국 기준 오늘(JVM 기본 타임존은 UTC).
+		return noOtherFilter ? LocalDate.now(AppTime.KST) : null;
 	}
 }
