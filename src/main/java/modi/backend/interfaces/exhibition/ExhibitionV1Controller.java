@@ -78,7 +78,8 @@ public class ExhibitionV1Controller implements ExhibitionV1ApiSpec {
 			@Valid @RequestBody ExhibitionDto.CustomCreateRequest request) {
 		ExhibitionResult.Created result = exhibitionFacade.registerCustom(new ExhibitionCriteria.CustomCreate(
 				user.userId(), request.title(), request.place(), parseDate(request.startDate()),
-				parseDate(request.endDate()), request.region(), request.category(), request.posterUrl()));
+				parseDate(request.endDate()), request.region(), request.category(), request.format(),
+				request.artist(), request.posterUrl()));
 		return ResponseEntity.ok(ApiResponse.success(ExhibitionDto.CreatedResponse.from(result)));
 	}
 

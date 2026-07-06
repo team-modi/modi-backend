@@ -25,8 +25,8 @@ public final class ExhibitionCriteria {
 	public record Detail(Long exhibitionId, Long requesterId) {
 	}
 
-	/** 개인 전시(CUSTOM) 등록 입력. ownerId는 인증에서 채운다. */
+	/** 개인 전시(CUSTOM) 등록 입력. ownerId는 인증에서 채운다. format은 전시 형태 코드(원시 문자열, Facade에서 enum 변환). */
 	public record CustomCreate(Long ownerId, String title, String place, LocalDate startDate,
-			LocalDate endDate, String region, String category, String posterUrl) {
+			LocalDate endDate, String region, String category, String format, String artist, String posterUrl) {
 	}
 }

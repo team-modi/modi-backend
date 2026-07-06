@@ -294,14 +294,14 @@
             "url": "{{baseUrl}}/api/v1/exhibitions/custom",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"포스트맨 검수 전시\",\n  \"place\": \"성수 갤러리\",\n  \"startDate\": \"2026-06-01\",\n  \"endDate\": \"2026-06-30\",\n  \"region\": \"SEOUL\",\n  \"category\": \"PHOTO\",\n  \"posterUrl\": \"https://cdn.modi.app/exhibitions/postman/poster.jpg\"\n}",
+              "raw": "{\n  \"title\": \"포스트맨 검수 전시\",\n  \"place\": \"성수 갤러리\",\n  \"startDate\": \"2026-06-01\",\n  \"endDate\": \"2026-06-30\",\n  \"region\": \"SEOUL\",\n  \"category\": \"PHOTO\",\n  \"format\": \"SOLO\",\n  \"artist\": \"김선영\",\n  \"posterUrl\": \"https://cdn.modi.app/exhibitions/postman/poster.jpg\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "개인 전시(CUSTOM) 등록. 인증 필수. 등록된 exhibitionId를 환경변수에 저장해 기록 생성에서 사용한다."
+            "description": "개인 전시(CUSTOM) 등록. 인증 필수. 등록된 exhibitionId를 환경변수에 저장해 기록 생성에서 사용한다. format(전시 형태: SOLO/GROUP/CURATED/ART_FAIR)·artist(작가)는 선택."
           },
           "response": [],
           "event": [

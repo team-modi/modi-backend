@@ -18,6 +18,7 @@ import modi.backend.domain.exhibition.Exhibition;
 import modi.backend.domain.exhibition.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.ExhibitionCategory;
 import modi.backend.domain.exhibition.ExhibitionErrorCode;
+import modi.backend.domain.exhibition.ExhibitionFormat;
 import modi.backend.domain.exhibition.ExhibitionQuery;
 import modi.backend.domain.exhibition.ExhibitionRegion;
 import modi.backend.domain.exhibition.ExhibitionRepository;
@@ -106,8 +107,10 @@ public class ExhibitionFacade {
 		ExhibitionRegion region = criteria.region() == null ? null : ExhibitionRegion.from(criteria.region());
 		ExhibitionCategory category = criteria.category() == null ? null
 				: ExhibitionCategory.from(criteria.category());
+		ExhibitionFormat format = criteria.format() == null ? null : ExhibitionFormat.from(criteria.format());
 		Exhibition exhibition = Exhibition.createCustom(criteria.ownerId(), criteria.title(), criteria.place(),
-				criteria.startDate(), criteria.endDate(), region, category, criteria.posterUrl());
+				criteria.startDate(), criteria.endDate(), region, category, format, criteria.artist(),
+				criteria.posterUrl());
 		return ExhibitionResult.Created.from(exhibitionRepository.save(exhibition));
 	}
 
