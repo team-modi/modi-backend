@@ -23,7 +23,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics   # metrics: AI 토큰 사용량(modi.ai.tokens/calls) 관측용
   endpoint:
     health:
       probes:
@@ -79,6 +79,17 @@ app:
   exhibition:
     demo-seed:
       enabled: ${EXHIBITION_DEMO_SEED:false}
+
+  # AI 감상문 생성(질문/compose). provider 교체 가능 — 우선 Claude(Anthropic).
+  #   api-key 미설정이면 AI 엔드포인트는 503(AI_DISABLED)로 응답하고 나머지 기능은 정상 동작한다.
+  ai:
+    provider: ${AI_PROVIDER:claude}
+    # 짧은 질문/감상문 생성 작업 — 비용 최적화 시 AI_MODEL=claude-haiku-4-5 등으로 즉시 교체 가능(코드 변경 불필요).
+    model: ${AI_MODEL:claude-opus-4-8}
+    api-key: ${ANTHROPIC_API_KEY:}
+    max-tokens: ${AI_MAX_TOKENS:1024}
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:30}     # 외부 LLM 호출 타임아웃(워커 스레드 장기 점유 방지)
+    rate-limit-seconds: ${AI_RATE_LIMIT_SECONDS:3} # 사용자당 AI 호출 최소 간격(반복 클릭 폭주 방지)
 
   # 자체 JWT 설정. secret은 시크릿 → 환경변수 주입 권장(기본값은 로컬 테스트 전용).
   jwt:

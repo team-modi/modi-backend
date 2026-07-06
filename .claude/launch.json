@@ -4,7 +4,7 @@
     {
       "name": "client-demo",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "3000", "--directory", "client-demo"],
+      "runtimeArgs": ["client-demo/proxy.py"],
       "port": 3000
     }
   ]
