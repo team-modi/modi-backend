@@ -2,7 +2,7 @@
 """데모용 정적 서버 + API 프록시.
 
 미리보기 패널의 오리진이 localhost:3000이 아닐 수 있어(또는 https라 http 요청이 mixed-content로 차단)
-클라이언트가 백엔드(18080)를 직접 호출하면 CORS/mixed-content로 막힌다.
+클라이언트가 백엔드(18090)를 직접 호출하면 CORS/mixed-content로 막힌다.
 이 서버는 정적 파일을 서빙하면서 /api·/actuator·/v3 요청을 백엔드로 프록시해,
 클라이언트가 '같은 오리진'(이 서버)으로만 호출하게 만든다 → CORS·mixed-content 무관하게 동작.
 """
@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-BACKEND = os.environ.get("BACKEND_URL", "http://localhost:18080")
+BACKEND = os.environ.get("BACKEND_URL", "http://localhost:18090")
 PROXY_PREFIXES = ("/api/", "/actuator", "/v3/", "/swagger")
 HOP_BY_HOP = {"connection", "keep-alive", "transfer-encoding", "content-encoding",
               "content-length", "te", "trailers", "upgrade", "host"}

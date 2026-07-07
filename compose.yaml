@@ -48,8 +48,8 @@ services:
       #   (여기서 `CULTURE_API_KEY=${CULTURE_API_KEY:-}`로 빈값을 넘기면 Spring이 "변수 존재=빈값"으로 보고 yaml 기본값을 덮어써 버림.)
       #   env로 바꾸고 싶으면 이 줄을 살리되 반드시 실제 값이 채워질 때만 넘길 것.
     ports:
-      # 호스트 8080은 다른 로컬 컨테이너가 쓰는 경우가 많아 18080으로 노출한다(README·Postman baseUrl과 일치).
-      - '18080:8080'
+      # 호스트 8080은 다른 로컬 컨테이너가 쓰는 경우가 많아 18090으로 노출한다(README·Postman baseUrl과 일치).
+      - '18090:8080'
 
 volumes:
   mysql-data:

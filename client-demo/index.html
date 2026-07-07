@@ -79,6 +79,7 @@ const S = {
   viewedAt: new Date().toISOString().slice(0,10),
   emotions: new Set(),
   media: [],
+  remindEmotions: new Set(),
   screen: 'login',
 };
 const EMOTION_PRESETS = ['슬픈','강렬한','재미있는','유쾌한','서정적인','화나는','아름다운','관심있는','서정적','먹먹한'];
@@ -87,8 +88,17 @@ const app = () => document.getElementById('app');
 const el = (html) => { const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstChild; };
 function banner(msg, kind='ok'){ const b=el(`<div class="banner ${kind}">${msg}</div>`); app().prepend(b); setTimeout(()=>b.remove(), 4000); }
 
+function apiUrl(path) {
+  const base = S.base();
+  if (base) return base + path;                 // 명시 baseUrl이 있으면 그대로
+  // baseUrl 비었을 때: 상대경로를 location 기준 절대 URL로 변환.
+  // (srcdoc 등 document base가 유효하지 않은 컨텍스트에서 'Failed to parse URL' 방지 → same-origin 프록시로 감)
+  try { return new URL(path, location.href).href; }
+  catch { return 'http://localhost:18090' + path; } // 최후 폴백(직접 서버)
+}
+
 async function api(path, { method='GET', body } = {}) {
-  const res = await fetch(S.base()+path, {
+  const res = await fetch(apiUrl(path), {
     method,
     headers: { 'Content-Type':'application/json', ...(S.token ? { Authorization:'Bearer '+S.token } : {}) },
     credentials: 'include',
@@ -106,7 +116,7 @@ function setHeader() {
   document.getElementById('who').textContent = S.user ? `${S.user.nickname} (${S.user.provider})` : '';
   document.getElementById('tokState').textContent = S.token ? '로그인됨' : '비로그인';
   const back = document.getElementById('backBtn');
-  back.style.visibility = ['exhibitions','write','saved','customExhibition','customCreated'].includes(S.screen) ? 'visible':'hidden';
+  back.style.visibility = ['exhibitions','write','saved','customExhibition','customCreated','remindCandidate','remindInput','remindResult','remindArchive'].includes(S.screen) ? 'visible':'hidden';
 }
 
 /* ---------- screens ---------- */
@@ -153,6 +163,10 @@ function renderExhibitions() {
   const addBtn = el(`<button class="ghost" style="width:100%;margin-bottom:10px">＋ 전시 직접 추가 (개인 전시)</button>`);
   addBtn.onclick = ()=> renderCustomExhibitionForm();
   app().append(addBtn);
+
+  const remindBtn = el(`<button class="ghost" style="width:100%;margin-bottom:10px">🔔 리마인드(회고) — 지난 기록 다시 보기</button>`);
+  remindBtn.onclick = ()=> loadRemindCandidate();
+  app().append(remindBtn);
 
   const list = el(`<div class="list"></div>`);
   if (!S.exhibitions.length) list.append(el(`<p class="muted">결과가 없습니다.</p>`));
@@ -447,6 +461,135 @@ function renderSaved(rec) {
   const again = el(`<button class="primary" style="margin-top:20px">다른 전시 기록하기</button>`);
   again.onclick = ()=>loadExhibitions();
   app().append(again);
+}
+
+/* ---------- 리마인드(회고) 플로우 ---------- */
+const remindLead = (html)=>`<div style="font-size:18px;font-weight:700;text-align:center;margin:10px 0 14px;line-height:1.45">${html}</div>`;
+
+async function loadRemindCandidate(){
+  S.screen='remindCandidate'; setHeader();
+  document.getElementById('title').textContent='리마인드';
+  document.getElementById('backBtn').onclick=()=>loadExhibitions();
+  app().innerHTML='<p class="muted">불러오는 중…</p>';
+  let c;
+  try { c = await api('/api/v1/reminds/candidate'); }
+  catch(e){ app().innerHTML=''; banner(e.message,'err'); return; }
+  renderRemindCandidate(c);
+}
+
+function renderRemindCandidate(c){
+  S.screen='remindCandidate'; setHeader();
+  document.getElementById('backBtn').onclick=()=>loadExhibitions();
+  app().innerHTML='';
+  const arch = el(`<button class="ghost" style="width:100%;margin-bottom:10px">📼 리마인드 아카이브 보기</button>`);
+  arch.onclick=()=>loadRemindArchive();
+  app().append(arch);
+  if(!c || !c.recordId){
+    app().append(el(`<div class="saved" style="padding:24px 0"><h2 style="margin:0 0 6px">소환할 기록이 없어요</h2><p class="muted">작성한 지 7일이 지난, 아직 회고하지 않은 기록이 있으면 여기에 나타나요.</p></div>`));
+    return;
+  }
+  app().append(el(remindLead(`<b>${c.elapsedLabel}</b>,<br/>이 전시를 기록했어요`)));
+  app().append(el(`<div class="exh-card">
+    <div class="poster" style="${c.posterUrl?`background-image:url('${c.posterUrl}')`:''}">${c.posterUrl?'':'Poster'}</div>
+    <div class="meta"><b>${c.exhibitionTitle}</b><br/><span class="muted">${[c.artist,c.place,c.region].filter(Boolean).join(' / ')}</span><br/><span class="muted">관람일 ${c.viewedAt||'-'}</span></div>
+  </div>`));
+  app().append(el(`<div class="section-label">그때 내가 기록한 여운</div>`));
+  app().append(el(`<div class="kv"><div>${(c.originalContent||'').replace(/</g,'&lt;')}</div></div>`));
+  app().append(el(`<div class="chips" style="margin-top:8px">${(c.originalEmotionCodes||[]).map(e=>`<span class="chip on" style="pointer-events:none">${e}</span>`).join('')}</div>`));
+  const go = el(`<button class="primary" style="margin-top:16px">감정 다시 남기기</button>`);
+  go.onclick=()=>renderRemindInput(c);
+  app().append(go);
+}
+
+function renderRemindInput(c){
+  S.screen='remindInput'; setHeader();
+  document.getElementById('title').textContent='리마인드';
+  document.getElementById('backBtn').onclick=()=>renderRemindCandidate(c);
+  S.remindEmotions = new Set();
+  app().innerHTML='';
+  app().append(el(remindLead('지금 다시 보니<br/>어떤가요?')));
+  app().append(el(`<div class="section-label">감정 다시 남기기</div>`));
+  const chips = el(`<div class="chips" id="rchips"></div>`);
+  app().append(chips);
+  function paint(){
+    chips.innerHTML='';
+    [...new Set([...EMOTION_PRESETS, ...S.remindEmotions])].forEach(label=>{
+      const on=S.remindEmotions.has(label);
+      const cc=el(`<span class="chip ${on?'on':''}">${label}${on?'<span class="x">✕</span>':''}</span>`);
+      cc.onclick=()=>{ on?S.remindEmotions.delete(label):S.remindEmotions.add(label); paint(); };
+      chips.append(cc);
+    });
+  }
+  paint();
+  const custom = el(`<div class="row" style="margin-top:10px"><input id="rcustom" maxlength="10" placeholder="나만의 키워드 (10자 이내)"/><button class="ghost" id="radd" style="flex:0 0 64px">+ 추가</button></div>`);
+  app().append(custom);
+  custom.querySelector('#radd').onclick=()=>{ const v=custom.querySelector('#rcustom').value.trim(); if(v){ S.remindEmotions.add(v); custom.querySelector('#rcustom').value=''; paint(); } };
+  app().append(el(`<div class="section-label">한 줄로 남기고 싶은 문장</div>`));
+  const ta = el(`<textarea id="reflection" maxlength="300" placeholder="지금 떠오르는 생각을 적어보세요"></textarea>`);
+  app().append(ta);
+  const cnt = el(`<div class="counter"><span id="rlen">0</span>/300</div>`);
+  app().append(cnt);
+  ta.addEventListener('input', ()=> cnt.querySelector('#rlen').textContent=ta.value.length);
+  const submit = el(`<button class="primary" style="margin-top:8px">오늘의 여운 저장</button>`);
+  submit.onclick=async()=>{
+    const reflection=ta.value.trim();
+    if(!reflection) return banner('한 줄 소감을 입력해 주세요','err');
+    submit.disabled=true; submit.textContent='저장 중… (AI 요약 생성)';
+    try{
+      const s = await api('/api/v1/reminds', { method:'POST', body:{ recordId:c.recordId, emotionCodes:[...S.remindEmotions], reflection }});
+      renderRemindResult(s);
+    }catch(e){ submit.disabled=false; submit.textContent='오늘의 여운 저장'; banner(e.message,'err'); }
+  };
+  app().append(submit);
+}
+
+function renderRemindResult(s){
+  S.screen='remindResult'; setHeader();
+  document.getElementById('title').textContent='감정 변화 요약';
+  document.getElementById('backBtn').onclick=()=>loadRemindArchive();
+  app().innerHTML='';
+  app().append(el(`<div class="saved" style="padding:16px 0"><h2 style="margin:0 0 6px">오늘의 여운이 저장되었어요</h2><p class="muted">아카이브의 '리마인드'에서 확인해 보세요</p></div>`));
+  const aiBox = s.aiStatus==='READY'
+    ? `<div class="kv"><div><b>감정 변화 요약 (AI)</b><br/>${(s.aiSummary||'').replace(/</g,'&lt;')}</div></div>`
+    : `<div class="kv"><div><b>감정 변화 요약 (AI)</b><br/><span class="muted">AI 요약 미생성 (${s.aiStatus}) — 저장은 완료됐어요</span></div></div>`;
+  app().append(el(aiBox));
+  app().append(el(`<div class="section-label">그때 → 지금</div>`));
+  app().append(el(`<div class="kv">
+    <div><b>그때 감정</b> ${(s.before&&s.before.emotionCodes||[]).join(', ')||'-'}</div>
+    <div><b>지금 감정</b> ${(s.after&&s.after.emotionCodes||[]).join(', ')||'-'}</div>
+    <div><b>그때 감상</b><br/>${((s.before&&s.before.text)||'-').replace(/</g,'&lt;')}</div>
+    <div><b>지금 소감</b><br/>${((s.after&&s.after.text)||'-').replace(/</g,'&lt;')}</div>
+  </div>`));
+  const go = el(`<button class="primary" style="margin-top:16px">아카이브 보러가기</button>`);
+  go.onclick=()=>loadRemindArchive();
+  app().append(go);
+  const home = el(`<button class="ghost" style="width:100%;margin-top:8px">전시 목록으로</button>`);
+  home.onclick=()=>loadExhibitions();
+  app().append(home);
+}
+
+async function loadRemindArchive(){
+  S.screen='remindArchive'; setHeader();
+  document.getElementById('title').textContent='리마인드 아카이브';
+  document.getElementById('backBtn').onclick=()=>loadExhibitions();
+  app().innerHTML='<p class="muted">불러오는 중…</p>';
+  let d;
+  try{ d = await api('/api/v1/reminds?page=0&size=20'); }
+  catch(e){ app().innerHTML=''; banner(e.message,'err'); return; }
+  app().innerHTML='';
+  const cand = el(`<button class="ghost" style="width:100%;margin-bottom:10px">🔔 오늘의 소환 대상 보기</button>`);
+  cand.onclick=()=>loadRemindCandidate();
+  app().append(cand);
+  app().append(el(`<p class="muted">내 리마인드 — 총 <b>${d.totalElements}</b>건</p>`));
+  if(!d.content.length) app().append(el(`<p class="muted">아직 저장한 리마인드가 없어요.</p>`));
+  d.content.forEach(i=>{
+    const row = el(`<div class="exh-row">
+      <div class="poster" style="${i.posterUrl?`background-image:url('${i.posterUrl}')`:''}"></div>
+      <div><div class="t">${i.exhibitionTitle}</div><div class="s">${(i.reflectionPreview||'').replace(/</g,'&lt;')}</div><div class="s">감정 ${(i.emotionCodes||[]).join(', ')} · AI ${i.aiStatus}</div></div>
+    </div>`);
+    row.onclick=async()=>{ try{ const full=await api('/api/v1/reminds/'+i.remindId); renderRemindResult(full); }catch(e){ banner(e.message,'err'); } };
+    app().append(row);
+  });
 }
 
 renderLogin();

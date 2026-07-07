@@ -4,10 +4,10 @@ Modi 백엔드 전체 API(Auth·User·Exhibition·Record)를 게스트 로그인
 
 ## 실행 서버
 
-- Docker API 서버: `http://localhost:18080`
-- Swagger UI: `http://localhost:18080/swagger-ui.html`
+- Docker API 서버: `http://localhost:18090`
+- Swagger UI: `http://localhost:18090/swagger-ui.html`
 
-`localhost:8080`은 다른 로컬 컨테이너가 사용 중이라, Modi 백엔드는 `18080`으로 열어 두었다.
+`localhost:8080`은 다른 로컬 컨테이너가 사용 중이라, Modi 백엔드는 `18090`으로 열어 두었다.
 (포트가 다르면 환경변수 `baseUrl`만 바꾸면 된다.)
 
 ## 인증 방식
@@ -39,6 +39,10 @@ Modi 백엔드 전체 API(Auth·User·Exhibition·Record)를 게스트 로그인
    - `Reject Video Over 100MB` — 영상 100MB 초과 400 `INVALID_MEDIA`
    - `Reject Without Token` — 토큰 없는 기록 요청 401 `NO_ACCESS_TOKEN`(인증 강제 확인)
    - 삭제 후 상세 조회 404 `NOT_FOUND`
+6. **Record AI** — 전시 맥락 질문 생성 · Q&A 감상문 다듬기(서버에 `ANTHROPIC_API_KEY` 필요, 없으면 503)
+7. **Remind** — 리마인드(회고) 소환·저장·상세·목록
+   - `Save Remind` — 앞서 만든 `recordId`로 회고 저장 후 `remindId` 저장(감정 변화 AI 요약은 best-effort → `aiStatus` READY/SKIPPED)
+   - `Get Candidate` — 소환 대상 조회(순차 실행에선 방금 만든 기록이 7일 미만이라 보통 `data=null`이 정상)
 
 사진은 10MB, 영상은 100MB 제한을 기준으로 검증한다.
 
@@ -46,3 +50,4 @@ Modi 백엔드 전체 API(Auth·User·Exhibition·Record)를 게스트 로그인
 
 - `Auth ▸ Social Login (Kakao) - 참고용`은 실제 카카오 인가 코드가 필요하므로 기본 실행 흐름에서 제외돼 있다. 실제 소셜 로그인을 검수하려면 body의 `code`·`redirectUri`를 실제 값으로 교체한다.
 - `Auth ▸ Logout`은 실행하면 이후 인증 요청이 실패하므로 전체 실행에 포함하지 않았다. 필요 시 개별 요청으로 확인한다.
+- `Remind ▸ Get Candidate`가 실제 기록을 반환하려면 작성한 지 7일이 지난, 아직 회고하지 않은 기록이 필요하다. 순차 검수에서는 `Save Remind`→`Detail`→`List`로 저장·조회 왕복을 확인한다.
