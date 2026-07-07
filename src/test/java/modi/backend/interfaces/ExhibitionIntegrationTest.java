@@ -2,6 +2,7 @@ package modi.backend.interfaces;
 
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -251,6 +252,51 @@ class ExhibitionIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.exhibitionId").isNumber())
 				.andExpect(jsonPath("$.data.type").value("CUSTOM"));
+	}
+
+	@Test
+	@DisplayName("POST /exhibitions/custom — 전시 형태·작가 포함 등록 → 상세에 format=SOLO·artists=[작가] 반영")
+	void 개인전시_등록_전시형태_작가() throws Exception {
+		String token = loginAndGetAccessToken(7000010L, "형태유저");
+		MvcResult created = mockMvc.perform(post("/api/v1/exhibitions/custom")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "title": "조용한 오후",
+								  "place": "아리랑 문화관",
+								  "startDate": "2026-06-24",
+								  "endDate": "2026-07-31",
+								  "region": "SEOUL",
+								  "format": "SOLO",
+								  "artist": "김선영"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.type").value("CUSTOM"))
+				.andReturn();
+		long customId = ((Number) JsonPath.read(created.getResponse().getContentAsString(), "$.data.exhibitionId"))
+				.longValue();
+
+		mockMvc.perform(get("/api/v1/exhibitions/{id}", customId)
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.format").value("SOLO"))
+				.andExpect(jsonPath("$.data.place").value("아리랑 문화관"))
+				.andExpect(jsonPath("$.data.artists", hasSize(1)))
+				.andExpect(jsonPath("$.data.artists[0]").value("김선영"));
+	}
+
+	@Test
+	@DisplayName("POST /exhibitions/custom — 정의되지 않은 전시 형태, 400 INVALID_INPUT")
+	void 개인전시_등록_잘못된_형태_400() throws Exception {
+		String token = loginAndGetAccessToken(7000011L, "형태오류유저");
+		mockMvc.perform(post("/api/v1/exhibitions/custom")
+						.header("Authorization", "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"title\":\"형태오류전\",\"format\":\"UNKNOWN\"}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.meta.errorCode").value("INVALID_INPUT"));
 	}
 
 	@Test

@@ -64,6 +64,15 @@ public class Exhibition extends BaseEntity {
 	@Column(length = 20)
 	private ExhibitionCategory category;
 
+	/** 전시 형태(개인전/단체전/기획전/아트페어). CUSTOM 등록 시 선택. CATALOG는 null. */
+	@Enumerated(EnumType.STRING)
+	@Column(length = 20)
+	private ExhibitionFormat format;
+
+	/** 참여 작가·주최명(예: "김선영"). CUSTOM 등록 시 입력. */
+	@Column(length = 100)
+	private String artist;
+
 	@Column(name = "poster_url", length = 2048)
 	private String posterUrl;
 
@@ -129,8 +138,9 @@ public class Exhibition extends BaseEntity {
 
 	private Exhibition(ExhibitionType type, String externalId, Long ownerId, String title, String place,
 			LocalDate startDate, LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category,
-			String posterUrl, String description, String operatingHours, String price, String detailUrl,
-			String serviceName, Double gpsX, Double gpsY, String sigungu, String realmName, String areaText) {
+			ExhibitionFormat format, String artist, String posterUrl, String description, String operatingHours,
+			String price, String detailUrl, String serviceName, Double gpsX, Double gpsY, String sigungu,
+			String realmName, String areaText) {
 		this.type = type;
 		this.externalId = externalId;
 		this.ownerId = ownerId;
@@ -140,6 +150,8 @@ public class Exhibition extends BaseEntity {
 		this.endDate = endDate;
 		this.region = region;
 		this.category = category;
+		this.format = format;
+		this.artist = artist;
 		this.posterUrl = posterUrl;
 		this.description = description;
 		this.operatingHours = operatingHours;
@@ -154,11 +166,13 @@ public class Exhibition extends BaseEntity {
 		validatePeriod();
 	}
 
-	/** 사용자 개인 전시(CUSTOM) 등록. 제목 필수, 기간 {@code RULE: 전시 기간} 검증. */
+	/** 사용자 개인 전시(CUSTOM) 등록. 제목 필수, 기간 {@code RULE: 전시 기간} 검증. format·artist는 선택. */
 	public static Exhibition createCustom(Long ownerId, String title, String place, LocalDate startDate,
-			LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category, String posterUrl) {
+			LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category, ExhibitionFormat format,
+			String artist, String posterUrl) {
 		return new Exhibition(ExhibitionType.CUSTOM, null, ownerId, title, place, startDate, endDate,
-				region, category, posterUrl, null, null, null, null, null, null, null, null, null, null);
+				region, category, format, artist, posterUrl, null, null, null, null, null, null, null, null, null,
+				null);
 	}
 
 	/** 외부 API 수집 전시(CATALOG) 생성. {@code externalId}는 동기화 upsert 기준키. */
@@ -167,7 +181,7 @@ public class Exhibition extends BaseEntity {
 			String description, String operatingHours, String price, String detailUrl, String serviceName,
 			Double gpsX, Double gpsY, String sigungu, String realmName, String areaText) {
 		return new Exhibition(ExhibitionType.CATALOG, externalId, null, title, place, startDate, endDate,
-				region, category, posterUrl, description, operatingHours, price, detailUrl, serviceName,
+				region, category, null, null, posterUrl, description, operatingHours, price, detailUrl, serviceName,
 				gpsX, gpsY, sigungu, realmName, areaText);
 	}
 

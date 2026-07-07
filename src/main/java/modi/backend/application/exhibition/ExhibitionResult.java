@@ -5,6 +5,7 @@ import java.util.List;
 
 import modi.backend.domain.exhibition.Exhibition;
 import modi.backend.domain.exhibition.ExhibitionCategory;
+import modi.backend.domain.exhibition.ExhibitionFormat;
 import modi.backend.domain.exhibition.ExhibitionRegion;
 
 /**
@@ -32,17 +33,20 @@ public final class ExhibitionResult {
 	 * 현재 항상 빈 배열이다 — 04_전시_구현.md 오픈 질문 참고.
 	 */
 	public record Detail(Long exhibitionId, String type, String title, String posterUrl,
-			LocalDate startDate, LocalDate endDate, String place, String region, String category,
+			LocalDate startDate, LocalDate endDate, String place, String region, String category, String format,
 			String description, String operatingHours, String price, List<String> artists, List<String> keywords,
 			String serviceName, String detailUrl, Double gpsX, Double gpsY,
 			String address, String imgUrl, String phone, long viewCount, String sigungu, String placeUrl) {
 
 		public static Detail from(Exhibition exhibition) {
+			List<String> artists = exhibition.getArtist() == null || exhibition.getArtist().isBlank()
+					? List.of() : List.of(exhibition.getArtist());
 			return new Detail(exhibition.getId(), exhibition.getType().name(), exhibition.getTitle(),
 					exhibition.getPosterUrl(), exhibition.getStartDate(), exhibition.getEndDate(),
 					exhibition.getPlace(), name(exhibition.getRegion()), name(exhibition.getCategory()),
+					name(exhibition.getFormat()),
 					exhibition.getDescription(), exhibition.getOperatingHours(), exhibition.getPrice(),
-					List.of(), List.of(), exhibition.getServiceName(), exhibition.getDetailUrl(),
+					artists, List.of(), exhibition.getServiceName(), exhibition.getDetailUrl(),
 					exhibition.getGpsX(), exhibition.getGpsY(),
 					exhibition.getPlaceAddr(), exhibition.getImgUrl(), exhibition.getPhone(),
 					exhibition.getOurViewCount(), exhibition.getSigungu(), exhibition.getPlaceUrl());
@@ -63,5 +67,9 @@ public final class ExhibitionResult {
 
 	private static String name(ExhibitionCategory category) {
 		return category == null ? null : category.name();
+	}
+
+	private static String name(ExhibitionFormat format) {
+		return format == null ? null : format.name();
 	}
 }

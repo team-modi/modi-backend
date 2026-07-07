@@ -20,7 +20,7 @@
   button.primary { width:100%; padding:15px; border:none; border-radius:12px; background:var(--accent2); color:#fff; font-size:15px; font-weight:600; cursor:pointer; }
   button.primary:disabled { background:#c7c7cc; cursor:not-allowed; }
   button.ghost { padding:12px 16px; border:1px solid var(--line); border-radius:12px; background:var(--card); cursor:pointer; font-size:14px; }
-  input, textarea { width:100%; border:1px solid var(--line); border-radius:12px; padding:12px; font-size:14px; font-family:inherit; background:var(--card); }
+  input, textarea, select { width:100%; border:1px solid var(--line); border-radius:12px; padding:12px; font-size:14px; font-family:inherit; background:var(--card); }
   textarea { min-height:140px; resize:vertical; }
   .field { margin-bottom:6px; }
   .exh-card { display:flex; gap:12px; background:#e9e9ec; border-radius:14px; padding:14px; align-items:center; }
@@ -106,7 +106,7 @@ function setHeader() {
   document.getElementById('who').textContent = S.user ? `${S.user.nickname} (${S.user.provider})` : '';
   document.getElementById('tokState').textContent = S.token ? '로그인됨' : '비로그인';
   const back = document.getElementById('backBtn');
-  back.style.visibility = (S.screen==='exhibitions'||S.screen==='write'||S.screen==='saved') ? 'visible':'hidden';
+  back.style.visibility = ['exhibitions','write','saved','customExhibition','customCreated'].includes(S.screen) ? 'visible':'hidden';
 }
 
 /* ---------- screens ---------- */
@@ -150,6 +150,10 @@ function renderExhibitions() {
   sb.querySelector('#go').onclick = ()=>{ S.keyword=sb.querySelector('#kw').value.trim(); S.page=0; loadExhibitions(); };
   sb.querySelector('#kw').addEventListener('keydown', e=>{ if(e.key==='Enter'){ S.keyword=e.target.value.trim(); S.page=0; loadExhibitions(); }});
 
+  const addBtn = el(`<button class="ghost" style="width:100%;margin-bottom:10px">＋ 전시 직접 추가 (개인 전시)</button>`);
+  addBtn.onclick = ()=> renderCustomExhibitionForm();
+  app().append(addBtn);
+
   const list = el(`<div class="list"></div>`);
   if (!S.exhibitions.length) list.append(el(`<p class="muted">결과가 없습니다.</p>`));
   S.exhibitions.forEach(ex => {
@@ -176,6 +180,80 @@ function renderExhibitions() {
 function selectExhibition(ex) {
   S.exh = ex; S.emotions = new Set(); S.media = []; S.content='';
   renderWrite();
+}
+
+const REGIONS = ['SEOUL','GYEONGGI','INCHEON','DAEGU','GYEONGBUK','BUSAN','ULSAN','GYEONGNAM','SEJONG','JEONNAM','JEONBUK','JEJU','CHUNGNAM','CHUNGBUK','ETC'];
+const FORMATS = [['SOLO','개인전'],['GROUP','단체전'],['CURATED','기획전'],['ART_FAIR','아트페어']];
+const FORMAT_LABEL = { SOLO:'개인전', GROUP:'단체전', CURATED:'기획전', ART_FAIR:'아트페어' };
+
+function renderCustomExhibitionForm() {
+  S.screen='customExhibition'; setHeader();
+  document.getElementById('title').textContent='전시 추가';
+  document.getElementById('backBtn').onclick = ()=>loadExhibitions();
+  app().innerHTML='';
+  app().append(el(`<p class="muted">API로 받지 않는 개인 전시를 직접 등록합니다. (본인에게만 보임)</p>`));
+  const title = el(`<input maxlength="100" placeholder="전시명을 입력해 주세요"/>`);
+  const place = el(`<input placeholder="전시관을 입력해 주세요"/>`);
+  const start = el(`<input type="date"/>`);
+  const end = el(`<input type="date"/>`);
+  const format = el(`<select><option value="">선택 안 함</option>${FORMATS.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select>`);
+  const artist = el(`<input maxlength="100" placeholder="작가·주최명 (예: 김선영)"/>`);
+  const region = el(`<select><option value="">선택 안 함</option>${REGIONS.map(r=>`<option value="${r}">${r}</option>`).join('')}</select>`);
+  const poster = el(`<input placeholder="포스터 이미지 URL (선택)"/>`);
+  function field(label, node){ app().append(el(`<div class="section-label">${label}</div>`)); app().append(node); }
+  field('전시명 *', title);
+  field('전시관', place);
+  app().append(el(`<div class="section-label">전시 기간</div>`));
+  const period = el(`<div class="row"></div>`); period.append(start); period.append(end); app().append(period);
+  field('전시 형태', format);
+  field('작가', artist);
+  field('장소(지역)', region);
+  field('포스터 URL', poster);
+  const submit = el(`<button class="primary" style="margin-top:16px">등록</button>`);
+  submit.onclick = async ()=>{
+    const t = title.value.trim();
+    if(!t) return banner('전시명을 입력해 주세요','err');
+    submit.disabled=true; submit.textContent='등록 중…';
+    try {
+      const created = await api('/api/v1/exhibitions/custom', { method:'POST', body: {
+        title: t,
+        place: place.value.trim() || null,
+        startDate: start.value || null,
+        endDate: end.value || null,
+        format: format.value || null,
+        artist: artist.value.trim() || null,
+        region: region.value || null,
+        posterUrl: poster.value.trim() || null,
+      }});
+      const detail = await api('/api/v1/exhibitions/'+created.exhibitionId);
+      renderCustomCreated(detail);
+    } catch(e){ submit.disabled=false; submit.textContent='등록'; banner(e.message,'err'); }
+  };
+  app().append(submit);
+}
+
+function renderCustomCreated(detail) {
+  S.screen='customCreated'; setHeader();
+  document.getElementById('title').textContent='전시 추가';
+  document.getElementById('backBtn').onclick = ()=>loadExhibitions();
+  app().innerHTML='';
+  app().append(el(`<div class="saved" style="padding:16px 0"><h2 style="margin:0 0 6px">전시가 등록되었어요</h2><p class="muted">개인 전시(CUSTOM)로 저장됐습니다. 아래는 서버가 저장한 값입니다.</p></div>`));
+  const artists = (detail.artists && detail.artists.length) ? detail.artists.join(', ') : '-';
+  app().append(el(`<div class="kv">
+    <div><b>전시명</b> ${detail.title}</div>
+    <div><b>전시관</b> ${detail.place||'-'}</div>
+    <div><b>기간</b> ${detail.startDate||'-'} ~ ${detail.endDate||'-'}</div>
+    <div><b>전시 형태</b> ${FORMAT_LABEL[detail.format]||detail.format||'-'}</div>
+    <div><b>작가</b> ${artists}</div>
+    <div><b>지역</b> ${detail.region||'-'}</div>
+    <div><b>출처</b> ${detail.type}</div>
+  </div>`));
+  const rec = el(`<button class="primary" style="margin-top:16px">이 전시로 기록하기</button>`);
+  rec.onclick = ()=> selectExhibition(detail);
+  app().append(rec);
+  const back = el(`<button class="ghost" style="width:100%;margin-top:8px">전시 목록으로</button>`);
+  back.onclick = ()=> loadExhibitions();
+  app().append(back);
 }
 
 function renderWrite() {

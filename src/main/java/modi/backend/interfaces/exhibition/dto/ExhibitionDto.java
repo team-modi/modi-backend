@@ -39,10 +39,17 @@ public final class ExhibitionDto {
 							"BUSAN", "ULSAN", "GYEONGNAM", "SEJONG", "JEONNAM", "JEONBUK", "JEJU", "CHUNGNAM",
 							"CHUNGBUK", "ETC" }, nullable = true)
 			String region,
-			@Schema(description = "카테고리 코드. 정의되지 않은 코드는 400 INVALID_INPUT.",
+			@Schema(description = "카테고리 코드(회화·사진 등 매체). 정의되지 않은 코드는 400 INVALID_INPUT.",
 					example = "PHOTO", allowableValues = { "PAINTING", "PHOTO", "MEDIA", "SCULPTURE", "ETC" },
 					nullable = true)
 			String category,
+			@Schema(description = "전시 형태. 정의되지 않은 코드는 400 INVALID_INPUT. SOLO=개인전, GROUP=단체전, "
+					+ "CURATED=기획전, ART_FAIR=아트페어.", example = "SOLO",
+					allowableValues = { "SOLO", "GROUP", "CURATED", "ART_FAIR" }, nullable = true)
+			String format,
+			@Size(max = 100)
+			@Schema(description = "참여 작가·주최명. 선택.", example = "김선영", nullable = true)
+			String artist,
 			@Size(max = 2048)
 			@Schema(description = "포스터 이미지 URL. 선택.", example = "https://cdn.modi.app/exhibitions/108/poster.jpg",
 					nullable = true)
@@ -86,6 +93,8 @@ public final class ExhibitionDto {
 			@Schema(description = "전시 장소명", example = "예술의전당 한가람미술관") String place,
 			@Schema(description = "지역 코드", example = "SEOUL") String region,
 			@Schema(description = "카테고리 코드", example = "PAINTING") String category,
+			@Schema(description = "전시 형태(개인 전시 등록 시). CATALOG·미지정은 null. SOLO/GROUP/CURATED/ART_FAIR.",
+					example = "SOLO", nullable = true) String format,
 			@Schema(description = "전시 설명. 데이터 없으면 null.",
 					example = "인상주의 거장 모네의 대표작을 만나는 특별전.", nullable = true) String description,
 			@Schema(description = "운영시간. 데이터 없으면 null.", example = "10:00~19:00(월요일 휴관)", nullable = true)
@@ -114,6 +123,7 @@ public final class ExhibitionDto {
 		public static DetailResponse from(ExhibitionResult.Detail result) {
 			return new DetailResponse(result.exhibitionId(), result.type(), result.title(), result.posterUrl(),
 					result.startDate(), result.endDate(), result.place(), result.region(), result.category(),
+					result.format(),
 					result.description(), result.operatingHours(), result.price(), result.artists(),
 					result.keywords(), result.serviceName(), result.detailUrl(), result.gpsX(), result.gpsY(),
 					result.address(), result.imgUrl(), result.phone(), result.viewCount(), result.sigungu(),

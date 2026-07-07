@@ -83,7 +83,7 @@ class RecordAiFacadeTest {
 
 	private ExhibitionResult.Detail detail() {
 		return new ExhibitionResult.Detail(10L, "CATALOG", "모네: 빛을 그리다", "http://p",
-				LocalDate.now(), null, "예술의전당", "SEOUL", "PAINTING",
+				LocalDate.now(), null, "예술의전당", "SEOUL", "PAINTING", null,
 				"인상주의 대표전", null, null, List.of("클로드 모네"), List.of("인상주의"),
 				null, null, null, null, null, null, null, 0L, null, null);
 	}

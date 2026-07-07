@@ -35,6 +35,7 @@ import modi.backend.interfaces.record.dto.RecordMediaRequest;
 import modi.backend.interfaces.record.dto.RecordMediaResponse;
 import modi.backend.interfaces.record.dto.RecordUpdateRequest;
 import modi.backend.support.error.CoreException;
+import modi.backend.support.time.AppTime;
 
 @Service
 @RequiredArgsConstructor
@@ -46,7 +47,8 @@ public class RecordService {
 
 	private final RecordJpaRepository recordRepository;
 	private final ExhibitionFacade exhibitionFacade;
-	private final Clock clock = Clock.systemDefaultZone();
+	// 관람일 기본값·미래 방지 검증은 "한국 기준 오늘"을 따른다(JVM 기본 타임존은 UTC).
+	private final Clock clock = AppTime.clock();
 
 	@Transactional
 	public RecordCreateResponse create(Long userId, RecordCreateRequest request) {

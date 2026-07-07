@@ -17,6 +17,7 @@ import modi.backend.domain.exhibition.ExhibitionCategory;
 import modi.backend.domain.exhibition.ExhibitionQuery;
 import modi.backend.domain.exhibition.ExhibitionRegion;
 import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.support.time.AppTime;
 
 /**
  * 로컬 데모 시드(내장 웹페이지 시연용). {@code app.exhibition.demo-seed.enabled=true}일 때만 부팅 시 1회 실행한다.
@@ -48,7 +49,7 @@ public class ExhibitionDemoSeeder implements ApplicationRunner {
 			log.info("데모 시드: 카탈로그가 이미 존재 — 표본 적재 스킵");
 			return;
 		}
-		LocalDate today = LocalDate.now();
+		LocalDate today = LocalDate.now(AppTime.KST);
 		// 포스터는 항상 로드되는 표본 이미지(picsum.photos seed)로 둔다 — 실제 인증키 동기화 시엔 원천 thumbnail로 채워진다.
 		List<Row> rows = List.of(
 				new Row("SEED-CCA-204512", "국립현대미술관 소장품 상설전 ‘빛과 그림자’", "국립현대미술관 서울관",
