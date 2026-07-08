@@ -56,6 +56,16 @@ public final class ExhibitionResult {
 		}
 	}
 
+	/** 홈 배너 항목(03_전시.md E-10). 배너 이미지는 전시 포스터(posterUrl)를 사용한다. */
+	public record Banner(Long exhibitionId, String title, String bannerImageUrl,
+			LocalDate startDate, LocalDate endDate, String place) {
+
+		public static Banner from(Exhibition exhibition) {
+			return new Banner(exhibition.getId(), exhibition.getTitle(), exhibition.getPosterUrl(),
+					exhibition.getStartDate(), exhibition.getEndDate(), exhibition.getPlace());
+		}
+	}
+
 	/** 개인 전시 등록 결과(03_전시.md 3.3.3). */
 	public record Created(Long exhibitionId, String type) {
 

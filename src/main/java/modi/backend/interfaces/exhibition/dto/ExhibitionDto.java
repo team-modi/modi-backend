@@ -131,6 +131,31 @@ public final class ExhibitionDto {
 		}
 	}
 
+	/** 홈 배너 목록(E-10). data.banners 배열로 최대 3개. 진행 중 전시가 없으면 빈 배열. */
+	public record BannersResponse(
+			@Schema(description = "홈 배너 목록(최대 3개). 진행 중 전시가 없으면 빈 배열.") List<BannerResponse> banners) {
+
+		public static BannersResponse from(List<ExhibitionResult.Banner> banners) {
+			return new BannersResponse(banners.stream().map(BannerResponse::from).toList());
+		}
+	}
+
+	/** 홈 배너 항목(E-10). 배너 이미지는 전시 포스터를 사용한다. */
+	public record BannerResponse(
+			@Schema(description = "전시 ID", example = "51") Long exhibitionId,
+			@Schema(description = "전시 제목", example = "모네: 빛을 그리다") String title,
+			@Schema(description = "배너 이미지 URL(전시 포스터). 없으면 null.",
+					example = "https://cdn.modi.app/exhibitions/51/poster.jpg", nullable = true) String bannerImageUrl,
+			@Schema(description = "시작일", example = "2026-06-01") LocalDate startDate,
+			@Schema(description = "종료일", example = "2026-08-31") LocalDate endDate,
+			@Schema(description = "전시 장소명", example = "예술의전당 한가람미술관") String place) {
+
+		public static BannerResponse from(ExhibitionResult.Banner result) {
+			return new BannerResponse(result.exhibitionId(), result.title(), result.bannerImageUrl(),
+					result.startDate(), result.endDate(), result.place());
+		}
+	}
+
 	/** 개인 전시 등록 결과(3.3.3). */
 	public record CreatedResponse(
 			@Schema(description = "등록된 전시 ID", example = "108") Long exhibitionId,

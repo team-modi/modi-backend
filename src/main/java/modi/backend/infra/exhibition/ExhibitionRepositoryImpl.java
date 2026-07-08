@@ -1,5 +1,6 @@
 package modi.backend.infra.exhibition;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,5 +48,12 @@ public class ExhibitionRepositoryImpl implements ExhibitionRepository {
 	public List<Exhibition> findCatalogWithoutGenre(int limit) {
 		return jpaRepository.findByTypeAndGenreKeywordIsNullAndDeletedAtIsNull(
 				ExhibitionType.CATALOG, PageRequest.of(0, Math.max(1, limit)));
+	}
+
+	@Override
+	public List<Exhibition> findOngoingCatalogTopByViews(LocalDate onDate, int limit) {
+		return jpaRepository
+				.findByTypeAndStartDateLessThanEqualAndEndDateGreaterThanEqualAndDeletedAtIsNullOrderByOurViewCountDesc(
+						ExhibitionType.CATALOG, onDate, onDate, PageRequest.of(0, Math.max(1, limit)));
 	}
 }

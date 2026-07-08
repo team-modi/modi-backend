@@ -62,6 +62,19 @@ public class ExhibitionFacade {
 		return exhibitionRepository.search(query, sortedPageable).map(ExhibitionResult.ListItem::from);
 	}
 
+	/** 홈 배너 최대 노출 개수(03_전시.md E-10). */
+	private static final int BANNER_LIMIT = 3;
+
+	/**
+	 * 홈 배너(03_전시.md E-10). 운영자 지정 기능은 아직 없어, 오늘 진행 중인 전시 중 조회수 상위 최대 3개를 노출한다.
+	 * 진행 중 전시가 없으면 빈 배열을 반환한다(홈은 배너 부재 시 섹션만 노출).
+	 */
+	@Transactional(readOnly = true)
+	public List<ExhibitionResult.Banner> banners() {
+		return exhibitionRepository.findOngoingCatalogTopByViews(LocalDate.now(AppTime.KST), BANNER_LIMIT)
+				.stream().map(ExhibitionResult.Banner::from).toList();
+	}
+
 	/** sort 코드 → DB 정렬. latest(기본)=시작일 최신순, ending=종료일 임박순, popular=조회수 많은순. 미정의 값은 latest로 취급. */
 	private Sort toSort(String sort) {
 		return switch (sort == null ? "latest" : sort) {

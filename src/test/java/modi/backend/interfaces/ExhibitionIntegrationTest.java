@@ -3,6 +3,7 @@ package modi.backend.interfaces;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -177,6 +178,31 @@ class ExhibitionIntegrationTest {
 		mockMvc.perform(get("/api/v1/exhibitions").param("region", "SEOUL").param("sort", "popular"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.content[0].title").value(PICASSO));
+	}
+
+	@Test
+	@DisplayName("GET /exhibitions/banners — 진행 중 CATALOG만(종료 전시 제외), 조회수 상위순, 최대 3개, 배너이미지=포스터")
+	void 배너_진행중_조회수순() throws Exception {
+		// 진행 중인 사진전 상세를 여러 번 조회해 조회수를 확실히 올림 → 배너 1위가 되게(다른 테스트의 부수 조회수를 넘어서도록 넉넉히).
+		Long photoId = exhibitionRepository.findByExternalId("CAT-PHOTO").orElseThrow().getId();
+		for (int i = 0; i < 10; i++) {
+			mockMvc.perform(get("/api/v1/exhibitions/{id}", photoId)).andExpect(status().isOk());
+		}
+
+		mockMvc.perform(get("/api/v1/exhibitions/banners"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.meta.result").value("SUCCESS"))
+				.andExpect(jsonPath("$.data.banners").isArray())
+				.andExpect(jsonPath("$.data.banners.length()", lessThanOrEqualTo(3)))
+				// 진행 중(모네·사진전) 포함, 종료된 피카소는 제외
+				.andExpect(jsonPath("$.data.banners[*].title", hasItem(PHOTO_SHOW)))
+				.andExpect(jsonPath("$.data.banners[*].title", hasItem(MONET)))
+				.andExpect(jsonPath("$.data.banners[*].title", not(hasItem(PICASSO))))
+				// 조회수를 크게 올린 사진전이 1위
+				.andExpect(jsonPath("$.data.banners[0].title").value(PHOTO_SHOW))
+				// 배너 이미지는 전시 포스터(모네는 posterUrl 보유)
+				.andExpect(jsonPath("$.data.banners[?(@.title=='" + MONET + "')].bannerImageUrl")
+						.value(hasItem("https://poster/monet.jpg")));
 	}
 
 	@Test

@@ -1,5 +1,6 @@
 package modi.backend.domain.exhibition;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,4 +24,10 @@ public interface ExhibitionRepository {
 
 	/** 장르 초기화 백필용 — 아직 장르가 없는 CATALOG(공공데이터) 전시를 최대 {@code limit}건 조회(살아있는 행만). */
 	List<Exhibition> findCatalogWithoutGenre(int limit);
+
+	/**
+	 * 홈 배너용(03_전시.md E-10) — {@code onDate}에 진행 중(startDate ≤ onDate ≤ endDate)인 CATALOG 전시를
+	 * 조회수(ourViewCount) 내림차순으로 최대 {@code limit}건 조회한다(살아있는 행만).
+	 */
+	List<Exhibition> findOngoingCatalogTopByViews(LocalDate onDate, int limit);
 }
