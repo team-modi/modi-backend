@@ -38,7 +38,8 @@ class ExhibitionDetailTest {
 	void setUp() {
 		exhibitionRepository = mock(ExhibitionRepository.class);
 		catalogClient = mock(ExhibitionCatalogClient.class);
-		facade = new ExhibitionFacade(exhibitionRepository, catalogClient);
+		facade = new ExhibitionFacade(exhibitionRepository, catalogClient,
+				new modi.backend.infra.genre.RandomGenreClassifier());
 		given(exhibitionRepository.save(any(Exhibition.class))).willAnswer(invocation -> invocation.getArgument(0));
 	}
 
@@ -100,7 +101,8 @@ class ExhibitionDetailTest {
 	@Test
 	@DisplayName("타인의 CUSTOM 전시 조회 시 403")
 	void 상세_타인의_CUSTOM_403() {
-		Exhibition custom = Exhibition.createCustom(10L, "개인 전시", "장소", null, null, null, null, null, null, null);
+		Exhibition custom = Exhibition.createCustom(10L, "개인 전시", "장소", null, null, null, null, null, null, null,
+				null);
 		given(exhibitionRepository.findById(3L)).willReturn(Optional.of(custom));
 
 		assertThatThrownBy(() -> facade.getDetail(new ExhibitionCriteria.Detail(3L, 20L)))

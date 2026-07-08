@@ -41,12 +41,15 @@ public final class ExhibitionResult {
 		public static Detail from(Exhibition exhibition) {
 			List<String> artists = exhibition.getArtist() == null || exhibition.getArtist().isBlank()
 					? List.of() : List.of(exhibition.getArtist());
+			// 장르 키워드(분류기가 부여)가 있으면 keywords로 노출. 미분류면 빈 배열.
+			List<String> keywords = exhibition.getGenreKeyword() == null || exhibition.getGenreKeyword().isBlank()
+					? List.of() : List.of(exhibition.getGenreKeyword());
 			return new Detail(exhibition.getId(), exhibition.getType().name(), exhibition.getTitle(),
 					exhibition.getPosterUrl(), exhibition.getStartDate(), exhibition.getEndDate(),
 					exhibition.getPlace(), name(exhibition.getRegion()), name(exhibition.getCategory()),
 					name(exhibition.getFormat()),
 					exhibition.getDescription(), exhibition.getOperatingHours(), exhibition.getPrice(),
-					artists, List.of(), exhibition.getServiceName(), exhibition.getDetailUrl(),
+					artists, keywords, exhibition.getServiceName(), exhibition.getDetailUrl(),
 					exhibition.getGpsX(), exhibition.getGpsY(),
 					exhibition.getPlaceAddr(), exhibition.getImgUrl(), exhibition.getPhone(),
 					exhibition.getOurViewCount(), exhibition.getSigungu(), exhibition.getPlaceUrl());

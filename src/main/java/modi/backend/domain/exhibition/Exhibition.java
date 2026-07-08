@@ -136,11 +136,18 @@ public class Exhibition extends BaseEntity {
 	@Column(name = "our_view_count", nullable = false)
 	private long ourViewCount = 0;
 
+	/**
+	 * 장르 키워드(마스터 중 1개, {@link GenreKeyword}). {@link GenreClassifier}(랜덤/AI)가 부여한다 —
+	 * CUSTOM은 등록 시, CATALOG는 초기화 백필({@code applyGenre}) 시 채운다. 미분류(백필 전/폴백 전)는 null. 상세의 keywords로 노출.
+	 */
+	@Column(name = "genre_keyword", length = 50)
+	private String genreKeyword;
+
 	private Exhibition(ExhibitionType type, String externalId, Long ownerId, String title, String place,
 			LocalDate startDate, LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category,
 			ExhibitionFormat format, String artist, String posterUrl, String description, String operatingHours,
 			String price, String detailUrl, String serviceName, Double gpsX, Double gpsY, String sigungu,
-			String realmName, String areaText) {
+			String realmName, String areaText, String genreKeyword) {
 		this.type = type;
 		this.externalId = externalId;
 		this.ownerId = ownerId;
@@ -163,16 +170,20 @@ public class Exhibition extends BaseEntity {
 		this.sigungu = sigungu;
 		this.realmName = realmName;
 		this.areaText = areaText;
+		this.genreKeyword = genreKeyword;
 		validatePeriod();
 	}
 
-	/** 사용자 개인 전시(CUSTOM) 등록. 제목 필수, 기간 {@code RULE: 전시 기간} 검증. format·artist는 선택. */
+	/**
+	 * 사용자 개인 전시(CUSTOM) 등록. 제목 필수, 기간 {@code RULE: 전시 기간} 검증. format·artist는 선택.
+	 * {@code genreKeyword}는 앱 레이어가 {@link GenreClassifier}로 산출해 넘긴다(랜덤/AI).
+	 */
 	public static Exhibition createCustom(Long ownerId, String title, String place, LocalDate startDate,
 			LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category, ExhibitionFormat format,
-			String artist, String posterUrl) {
+			String artist, String posterUrl, String genreKeyword) {
 		return new Exhibition(ExhibitionType.CUSTOM, null, ownerId, title, place, startDate, endDate,
 				region, category, format, artist, posterUrl, null, null, null, null, null, null, null, null, null,
-				null);
+				null, genreKeyword);
 	}
 
 	/** 외부 API 수집 전시(CATALOG) 생성. {@code externalId}는 동기화 upsert 기준키. */
@@ -182,7 +193,17 @@ public class Exhibition extends BaseEntity {
 			Double gpsX, Double gpsY, String sigungu, String realmName, String areaText) {
 		return new Exhibition(ExhibitionType.CATALOG, externalId, null, title, place, startDate, endDate,
 				region, category, null, null, posterUrl, description, operatingHours, price, detailUrl, serviceName,
-				gpsX, gpsY, sigungu, realmName, areaText);
+				gpsX, gpsY, sigungu, realmName, areaText, null);
+	}
+
+	/**
+	 * 분류기(랜덤/AI)가 산출한 장르 키워드를 부여한다(CATALOG 초기화 백필·재분류용). 공백/null은 무시해 기존 값을 지키지 않는다
+	 * — 초기화는 부가 처리라 유효한 값일 때만 반영한다.
+	 */
+	public void applyGenre(String genreKeyword) {
+		if (genreKeyword != null && !genreKeyword.isBlank()) {
+			this.genreKeyword = genreKeyword.trim();
+		}
 	}
 
 	/**

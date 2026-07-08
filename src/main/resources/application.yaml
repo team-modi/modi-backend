@@ -79,6 +79,13 @@ app:
   exhibition:
     demo-seed:
       enabled: ${EXHIBITION_DEMO_SEED:false}
+    # 전시 장르 분류. classifier로 랜덤/AI 두 구현 중 하나를 주 분류기로 고른다(둘 다 빈으로 공존, 무중단 교체).
+    #   gemini(기본): 실제 AI 분류. api-key 미설정·429·오류 시 자동으로 random 폴백. random: 마스터에서 무작위 1개.
+    # init-on-boot: 부팅 시 미분류 CATALOG(공공데이터)에 장르를 채우는 초기화 백필(무료 한도·부팅 지연 보호로 init-max-per-run 상한).
+    genre:
+      classifier: ${GENRE_CLASSIFIER:gemini}
+      init-on-boot: ${GENRE_INIT_ON_BOOT:true}
+      init-max-per-run: ${GENRE_INIT_MAX_PER_RUN:20}
 
   # AI 감상문 생성(질문/compose). provider 교체 가능 — 우선 Claude(Anthropic).
   #   api-key 미설정이면 AI 엔드포인트는 503(AI_DISABLED)로 응답하고 나머지 기능은 정상 동작한다.
@@ -90,6 +97,16 @@ app:
     max-tokens: ${AI_MAX_TOKENS:1024}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}     # 외부 LLM 호출 타임아웃(워커 스레드 장기 점유 방지)
     rate-limit-seconds: ${AI_RATE_LIMIT_SECONDS:3} # 사용자당 AI 호출 최소 간격(반복 클릭 폭주 방지)
+
+    # 전시 장르 분류용 Gemini(무료 한도). api-key 미설정이면 AI 분류기가 random으로 폴백(나머지 기능 정상).
+    #   model 기본은 무료 한도에서 동작 확인된 gemini-2.5-flash. 429(한도 초과)는 max-retries·max-retry-delay-seconds로 제어.
+    gemini:
+      base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+      api-key: ${GEMINI_API_KEY:}
+      model: ${GEMINI_MODEL:gemini-2.5-flash}
+      timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:20}
+      max-retries: ${GEMINI_MAX_RETRIES:1}                    # 429 시 재시도 횟수(Retry-After 존중)
+      max-retry-delay-seconds: ${GEMINI_MAX_RETRY_DELAY_SECONDS:2}  # 재시도 백오프 상한(부팅 지연 방지)
 
   # 자체 JWT 설정. secret은 시크릿 → 환경변수 주입 권장(기본값은 로컬 테스트 전용).
   jwt:

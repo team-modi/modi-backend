@@ -78,7 +78,7 @@ class RemindV1ControllerTest {
 
 		Exhibition exhibition = exhibitionRepository.save(Exhibition.createCustom(
 				u1.getId(), "조용한 호숫가", "동작아트갤러리", LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30),
-				null, null, null, "김미경 외 10인", "http://poster/lake.jpg"));
+				null, null, null, "김미경 외 10인", "http://poster/lake.jpg", null));
 
 		Record record = Record.create(u1.getId(), exhibition.getId(),
 				new ExhibitionSnapshot("조용한 호숫가", "CUSTOM", "http://poster/lake.jpg", "동작아트갤러리",

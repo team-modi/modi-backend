@@ -1,0 +1,21 @@
+package modi.backend.infra.genre;
+
+import org.springframework.stereotype.Component;
+
+import modi.backend.domain.exhibition.GenreClassification;
+import modi.backend.domain.exhibition.GenreClassifier;
+import modi.backend.domain.exhibition.GenreKeyword;
+
+/**
+ * 마스터에서 무작위로 1개를 뽑는 "가짜" 장르 분류기(기존 임시 전략). 입력을 실제로 분석하지 않는다.
+ * AI 분류기({@link GeminiGenreClassifier})와 함께 빈으로 공존하며, {@code app.exhibition.genre.classifier=random}일 때
+ * 주 분류기로 선택된다. AI 분류기의 미설정·429·오류 폴백 대상이기도 하다.
+ */
+@Component
+public class RandomGenreClassifier implements GenreClassifier {
+
+	@Override
+	public String classify(GenreClassification input) {
+		return GenreKeyword.random();
+	}
+}

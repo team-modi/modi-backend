@@ -22,6 +22,8 @@ import modi.backend.domain.exhibition.ExhibitionFormat;
 import modi.backend.domain.exhibition.ExhibitionQuery;
 import modi.backend.domain.exhibition.ExhibitionRegion;
 import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.GenreClassification;
+import modi.backend.domain.exhibition.GenreClassifier;
 import modi.backend.support.error.CoreException;
 import modi.backend.support.error.ErrorType;
 import modi.backend.support.time.AppTime;
@@ -39,6 +41,8 @@ public class ExhibitionFacade {
 
 	private final ExhibitionRepository exhibitionRepository;
 	private final ExhibitionCatalogClient catalogClient;
+	/** 장르 분류 전략(랜덤/AI) — 주입되는 구현은 {@code app.exhibition.genre.classifier}로 선택된다(@Primary). */
+	private final GenreClassifier genreClassifier;
 
 	/**
 	 * 목록/탐색(3.3.1). 필터 미지정 시 오늘 진행 중인 전시를 기본 노출한다. 비로그인은 CATALOG만.
@@ -109,10 +113,32 @@ public class ExhibitionFacade {
 		ExhibitionCategory category = criteria.category() == null ? null
 				: ExhibitionCategory.from(criteria.category());
 		ExhibitionFormat format = criteria.format() == null ? null : ExhibitionFormat.from(criteria.format());
+		// 장르는 분류기(랜덤/AI)가 부여한다. 분류기는 실패해도 예외를 던지지 않고 유효 장르를 반환하므로 등록 흐름을 깨지 않는다.
+		String genreKeyword = genreClassifier.classify(new GenreClassification(criteria.title(),
+				category == null ? null : category.name(), null, criteria.place(), criteria.artist(), null));
 		Exhibition exhibition = Exhibition.createCustom(criteria.ownerId(), criteria.title(), criteria.place(),
 				criteria.startDate(), criteria.endDate(), region, category, format, criteria.artist(),
-				criteria.posterUrl());
+				criteria.posterUrl(), genreKeyword);
 		return ExhibitionResult.Created.from(exhibitionRepository.save(exhibition));
+	}
+
+	/**
+	 * 장르 초기화 백필 — 아직 장르가 없는 CATALOG(공공데이터) 전시를 최대 {@code max}건 분류기(랜덤/AI)로 채운다.
+	 * 부팅 시 {@code ExhibitionGenreInitializer}가 호출한다. 분류기가 폴백을 보장하므로 개별 실패로 중단되지 않으며,
+	 * 무료 한도(429)로 일부가 랜덤 폴백되어도 다음 실행에서 다시 시도한다(장르가 채워진 행은 대상에서 빠짐).
+	 *
+	 * @return 이번 실행으로 장르를 부여한 전시 수
+	 */
+	@Transactional
+	public int initGenres(int max) {
+		List<Exhibition> targets = exhibitionRepository.findCatalogWithoutGenre(max);
+		int classified = 0;
+		for (Exhibition exhibition : targets) {
+			exhibition.applyGenre(genreClassifier.classify(GenreClassification.from(exhibition)));
+			exhibitionRepository.save(exhibition);
+			classified++;
+		}
+		return classified;
 	}
 
 	/**

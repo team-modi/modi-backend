@@ -1,5 +1,6 @@
 package modi.backend.domain.exhibition;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -19,4 +20,7 @@ public interface ExhibitionRepository {
 
 	/** CATALOG 동기화 upsert용 — 원천 식별자로 기존 행 조회. */
 	Optional<Exhibition> findByExternalId(String externalId);
+
+	/** 장르 초기화 백필용 — 아직 장르가 없는 CATALOG(공공데이터) 전시를 최대 {@code limit}건 조회(살아있는 행만). */
+	List<Exhibition> findCatalogWithoutGenre(int limit);
 }
