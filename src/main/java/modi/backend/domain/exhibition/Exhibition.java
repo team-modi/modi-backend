@@ -4,6 +4,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -26,6 +28,9 @@ import modi.backend.support.error.ErrorType;
  */
 @Entity
 @Table(name = "exhibitions")
+// 변경된 컬럼만 UPDATE — 정기 동기화(refreshCatalog, 목록 필드)와 보강(장르·상세)이 같은 행을 짧은 시간차로
+// 갱신할 때 서로의 전체-컬럼 UPDATE가 상대 필드를 덮어쓰는 lost update를 막는다(@Version 미도입 환경 방어).
+@DynamicUpdate
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Exhibition extends BaseEntity {
@@ -209,13 +214,16 @@ public class Exhibition extends BaseEntity {
 	}
 
 	/**
-	 * CATALOG 동기화 재적재 — 원천에서 다시 받은 값으로 카탈로그 필드를 갱신한다(같은 externalId 재수신 시).
+	 * CATALOG 동기화 재적재 — 원천 목록에서 다시 받은 값으로 목록 필드를 갱신한다(같은 externalId 재수신 시).
 	 * type·externalId·ownerId 등 정체성 필드는 바꾸지 않는다.
+	 * <p>
+	 * price·description·operatingHours 등 <b>상세2 전용 필드</b>는 목록 응답에 없어 여기서 건드리지 않는다.
+	 * (상세 지연수집/백필로 채워진 값을 매 정기 동기화가 null로 덮어써 무료 판정·상세를 잃던 회귀를 막는다.)
+	 * detailSyncedAt도 유지되어 이미 상세를 채운 행은 백필 대상에서 제외된다.
 	 */
 	public void refreshCatalog(String title, String place, LocalDate startDate, LocalDate endDate,
-			ExhibitionRegion region, ExhibitionCategory category, String posterUrl, String description,
-			String operatingHours, String price, String detailUrl, String serviceName, Double gpsX, Double gpsY,
-			String sigungu, String realmName, String areaText) {
+			ExhibitionRegion region, ExhibitionCategory category, String posterUrl, String detailUrl,
+			String serviceName, Double gpsX, Double gpsY, String sigungu, String realmName, String areaText) {
 		this.title = requireTitle(title);
 		this.place = place;
 		this.startDate = startDate;
@@ -223,9 +231,6 @@ public class Exhibition extends BaseEntity {
 		this.region = region;
 		this.category = category;
 		this.posterUrl = posterUrl;
-		this.description = description;
-		this.operatingHours = operatingHours;
-		this.price = price;
 		this.detailUrl = detailUrl;
 		this.serviceName = serviceName;
 		this.gpsX = gpsX;
@@ -253,6 +258,17 @@ public class Exhibition extends BaseEntity {
 
 	public boolean isDetailSynced() {
 		return detailSyncedAt != null;
+	}
+
+	/**
+	 * 상세 확인 완료 표기(값은 채우지 않음) — 원천 상세2에 항목이 없어(상세 미보유) 채울 게 없을 때 호출한다.
+	 * detailSyncedAt만 기록해 상세 백필의 재조회 대상(detailSyncedAt IS NULL)에서 빠지게 한다
+	 * (매 보강 주기마다 상세 없는 행에 외부 호출을 반복하지 않도록). 일시 실패는 예외로 처리되어 이 경로를 타지 않는다.
+	 */
+	public void markDetailChecked() {
+		if (this.detailSyncedAt == null) {
+			this.detailSyncedAt = LocalDateTime.now();
+		}
 	}
 
 	/** 우리 앱 내 조회 1회 발생 시 호출(인기순 정렬용 카운터). */

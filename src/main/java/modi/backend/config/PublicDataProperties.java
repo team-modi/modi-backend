@@ -11,6 +11,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param realmCode  분야 코드(기본 D000=전시)
  * @param numOfRows  1회 호출당 행 수
  * @param maxPages   동기화 시 순회할 최대 페이지 수(무한 호출 방지)
+ * @param timeoutSeconds 응답 타임아웃(초). 게이트웨이가 TCP는 받고 응답을 안 줄 때 무한 대기하지 않도록 —
+ *                       상세 백필이 단일 스케줄러 스레드에서 도는데 한 건이 멈추면 스레드·DB 커넥션이 영구 점유될 수 있어 필수.
  */
 @ConfigurationProperties(prefix = "app.public-data.culture")
 public record PublicDataProperties(
@@ -18,7 +20,8 @@ public record PublicDataProperties(
 		String serviceKey,
 		String realmCode,
 		Integer numOfRows,
-		Integer maxPages) {
+		Integer maxPages,
+		Long timeoutSeconds) {
 
 	public PublicDataProperties {
 		if (numOfRows == null || numOfRows <= 0) {
@@ -29,6 +32,9 @@ public record PublicDataProperties(
 		}
 		if (realmCode == null || realmCode.isBlank()) {
 			realmCode = "D000";
+		}
+		if (timeoutSeconds == null || timeoutSeconds <= 0) {
+			timeoutSeconds = 15L;
 		}
 	}
 

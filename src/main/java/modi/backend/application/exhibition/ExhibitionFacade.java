@@ -211,11 +211,12 @@ public class ExhibitionFacade {
 	}
 
 	/**
-	 * 장르 초기화 백필 — 아직 장르가 없는 CATALOG(공공데이터) 전시를 최대 {@code max}건 분류기(랜덤/AI)로 채운다.
-	 * 부팅 시 {@code ExhibitionGenreInitializer}가 호출한다. 분류기가 폴백을 보장하므로 개별 실패로 중단되지 않으며,
-	 * 무료 한도(429)로 일부가 랜덤 폴백되어도 다음 실행에서 다시 시도한다(장르가 채워진 행은 대상에서 빠짐).
+	 * 장르 백필 1배치 — 아직 장르가 없는 CATALOG(공공데이터) 전시를 최대 {@code max}건 <b>한 번의 AI 호출(배치)</b>로 분류한다.
+	 * {@link CatalogEnricher}가 이 메서드를 미분류가 소진될 때까지 반복 호출해 전량을 채운다(배치당 1콜 → 273건도 몇 콜로).
+	 * 분류기가 폴백을 보장하므로 개별 실패로 중단되지 않으며, 429로 일부가 랜덤 폴백되어도 다음 주기에 다시 시도한다
+	 * (장르가 채워진 행은 대상에서 빠져 멱등 — 반복 실행돼도 신규 행만 AI를 태운다).
 	 *
-	 * @return 이번 실행으로 장르를 부여한 전시 수
+	 * @return 이번 배치로 장르를 부여한 전시 수(0이면 미분류 없음 → 소진)
 	 */
 	@Transactional
 	public int initGenres(int max) {
@@ -268,10 +269,45 @@ public class ExhibitionFacade {
 	}
 
 	private void refresh(Exhibition existing, CatalogExhibitionData data) {
+		// 목록 필드만 갱신 — price 등 상세2 필드는 refreshCatalog가 건드리지 않는다(백필로 채운 값 보존).
 		existing.refreshCatalog(data.title(), data.place(), data.startDate(), data.endDate(), data.region(),
-				data.category(), data.posterUrl(), null, null, null, data.detailUrl(), data.serviceName(),
+				data.category(), data.posterUrl(), data.detailUrl(), data.serviceName(),
 				data.gpsX(), data.gpsY(), data.sigungu(), data.realmName(), data.areaText());
 		exhibitionRepository.save(existing);
+	}
+
+	/**
+	 * 상세 백필 대상 조회 — 아직 상세(가격 등)를 안 채운 CATALOG 전시의 id를 최대 {@code limit}건 반환한다.
+	 * 실제 외부 상세 수집은 {@link #syncCatalogDetail(Long)}가 행 단위(짧은 트랜잭션)로 수행한다
+	 * (다건 외부 호출을 한 트랜잭션에 오래 물지 않도록 조회/수집을 분리).
+	 */
+	@Transactional(readOnly = true)
+	public List<Long> findCatalogIdsWithoutDetail(int limit) {
+		return exhibitionRepository.findCatalogWithoutDetail(limit).stream().map(Exhibition::getId).toList();
+	}
+
+	/**
+	 * CATALOG 상세 1건 지연수집 백필 — 원천 상세2에서 price·description 등을 받아 채운다(상세 진입 없이 선반영).
+	 * 이미 상세를 채웠거나 CATALOG가 아니면 아무 것도 하지 않는다. 외부가 상세를 안 주면 detailSyncedAt이 null로 남아 다음 주기에 재시도된다.
+	 *
+	 * @return 이번 호출로 상세를 채웠으면 true
+	 */
+	@Transactional
+	public boolean syncCatalogDetail(Long exhibitionId) {
+		Exhibition exhibition = exhibitionRepository.findById(exhibitionId).orElse(null);
+		if (exhibition == null || !exhibition.isCatalog() || exhibition.isDetailSynced()) {
+			return false;
+		}
+		return catalogClient.fetchDetail(exhibition.getExternalId()).map(detail -> {
+			exhibition.applyDetail(detail);
+			exhibitionRepository.save(exhibition);
+			return true;
+		}).orElseGet(() -> {
+			// 원천이 상세를 안 줌(항목 없음) — 확인 완료로 표기해 매 주기 재조회를 막는다. 일시 실패는 예외라 여기 안 옴.
+			exhibition.markDetailChecked();
+			exhibitionRepository.save(exhibition);
+			return false;
+		});
 	}
 
 	private void create(CatalogExhibitionData data) {

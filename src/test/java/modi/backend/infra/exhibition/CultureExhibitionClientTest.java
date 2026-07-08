@@ -54,7 +54,7 @@ class CultureExhibitionClientTest {
 		WebClient webClient = WebClient.builder().baseUrl(baseUrl).build();
 		CultureApi cultureApi = HttpServiceProxyFactory.builderFor(WebClientAdapter.create(webClient)).build()
 				.createClient(CultureApi.class);
-		PublicDataProperties properties = new PublicDataProperties(baseUrl, "test-service-key", "D000", 100, 5);
+		PublicDataProperties properties = new PublicDataProperties(baseUrl, "test-service-key", "D000", 100, 5, 15L);
 		client = new CultureExhibitionClient(cultureApi, new CultureApiMapper(), properties);
 	}
 

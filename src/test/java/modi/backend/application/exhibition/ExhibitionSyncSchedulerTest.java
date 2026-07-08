@@ -20,22 +20,26 @@ import modi.backend.support.error.CoreException;
 class ExhibitionSyncSchedulerTest {
 
 	private ExhibitionFacade exhibitionFacade;
+	private CatalogEnricher catalogEnricher;
 	private ExhibitionSyncScheduler scheduler;
 
 	@BeforeEach
 	void setUp() {
 		exhibitionFacade = mock(ExhibitionFacade.class);
-		scheduler = new ExhibitionSyncScheduler(exhibitionFacade);
+		catalogEnricher = mock(CatalogEnricher.class);
+		scheduler = new ExhibitionSyncScheduler(exhibitionFacade, catalogEnricher);
 	}
 
 	@Test
-	@DisplayName("syncHourly: facade.syncCatalog()를 1회 호출한다")
+	@DisplayName("syncHourly: 동기화 후 장르·상세 보강을 이어서 호출한다")
 	void syncHourly_facade호출() {
 		given(exhibitionFacade.syncCatalog()).willReturn(3);
 
 		scheduler.syncHourly();
 
 		verify(exhibitionFacade, times(1)).syncCatalog();
+		verify(catalogEnricher, times(1)).enrichGenres();
+		verify(catalogEnricher, times(1)).enrichDetails();
 	}
 
 	@Test

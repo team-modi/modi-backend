@@ -24,7 +24,7 @@ import reactor.netty.http.client.HttpClient;
  * 주 분류기(@Primary)를 고른다 — 주입 지점(Facade·초기화기)은 선택된 하나만 본다. Gemini 어댑터는 폴백용으로 랜덤 구현을 직접 참조한다.
  */
 @Configuration
-@EnableConfigurationProperties({ GeminiProperties.class, GenreProperties.class })
+@EnableConfigurationProperties({ GeminiProperties.class, GenreProperties.class, CatalogEnrichProperties.class })
 public class GenreConfig {
 
 	/**
