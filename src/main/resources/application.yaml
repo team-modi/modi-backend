@@ -105,7 +105,7 @@ app:
       base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
       api-key: ${GEMINI_API_KEY:}
       model: ${GEMINI_MODEL:gemini-2.5-flash}
-      timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:20}
+      timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:60}   # 배치(초기화)는 여러 전시를 한 응답으로 받아 오래 걸림 → 여유 있게(단일 호출·초과 시 랜덤 폴백)
       max-retries: ${GEMINI_MAX_RETRIES:1}                    # 429 시 재시도 횟수(Retry-After 존중)
       max-retry-delay-seconds: ${GEMINI_MAX_RETRY_DELAY_SECONDS:2}  # 재시도 백오프 상한(부팅 지연 방지)
 

@@ -19,7 +19,9 @@ public record GeminiProperties(String baseUrl, String apiKey, String model,
 			model = "gemini-2.5-flash";
 		}
 		if (timeoutSeconds == null || timeoutSeconds <= 0) {
-			timeoutSeconds = 20L;
+			// 배치(초기화 백필)는 여러 전시를 한 응답으로 받아 단건보다 오래 걸린다(모델 사고 토큰 포함).
+			// 20s는 20건 배치가 EC2에서 ReadTimeout → 전량 랜덤 폴백됐다. 여유 있게 60s(단일 호출·best-effort).
+			timeoutSeconds = 60L;
 		}
 		if (maxRetries == null || maxRetries < 0) {
 			maxRetries = 1;
