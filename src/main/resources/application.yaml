@@ -80,13 +80,15 @@ app:
     demo-seed:
       enabled: ${EXHIBITION_DEMO_SEED:false}
 
-  # AI 감상문 생성(질문/compose). provider 교체 가능 — 우선 Claude(Anthropic).
+  # AI 감상문 생성(질문/compose). provider 교체 가능 — claude(Anthropic) | gemini(Google).
+  #   AI_PROVIDER로 어댑터를 전환한다(코드 변경 불필요). 예: AI_PROVIDER=gemini.
   #   api-key 미설정이면 AI 엔드포인트는 503(AI_DISABLED)로 응답하고 나머지 기능은 정상 동작한다.
   ai:
     provider: ${AI_PROVIDER:claude}
-    # 짧은 질문/감상문 생성 작업 — 비용 최적화 시 AI_MODEL=claude-haiku-4-5 등으로 즉시 교체 가능(코드 변경 불필요).
-    model: ${AI_MODEL:claude-opus-4-8}
-    api-key: ${ANTHROPIC_API_KEY:}
+    # 미지정 시 provider별 기본 모델(claude-opus-4-8 / gemini-2.5-flash, 장르 분류와 동일). 비용 최적화 시 AI_MODEL로 즉시 교체 가능.
+    model: ${AI_MODEL:}
+    # provider별 키를 폭넓게 수용: 공통(AI_API_KEY) > Gemini(GEMINI_API_KEY) > Claude(ANTHROPIC_API_KEY).
+    api-key: ${AI_API_KEY:${GEMINI_API_KEY:${ANTHROPIC_API_KEY:}}}
     max-tokens: ${AI_MAX_TOKENS:1024}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}     # 외부 LLM 호출 타임아웃(워커 스레드 장기 점유 방지)
     rate-limit-seconds: ${AI_RATE_LIMIT_SECONDS:3} # 사용자당 AI 호출 최소 간격(반복 클릭 폭주 방지)
