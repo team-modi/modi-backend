@@ -87,6 +87,16 @@ app:
       classifier: ${GENRE_CLASSIFIER:gemini}
       init-on-boot: ${GENRE_INIT_ON_BOOT:true}
       init-max-per-run: ${GENRE_INIT_MAX_PER_RUN:20}
+    # 공공데이터(CATALOG) 보강 — 목록 동기화는 목록 필드만 적재하므로 장르(AI 분류)·상세2(price 등)를 별도 백필한다.
+    #   장르: 미분류 행을 배치로(배치당 AI 1콜) 소진될 때까지 반복 → 273건도 배치 40이면 몇 콜(멱등: 신규 행만 재분류).
+    #   상세: 상세 미수집 행을 상세 API로 채워 price를 확보(무료 섹션이 실제로 뜨게 하는 근본 값).
+    #   부팅 직후(startup-delay-ms) 1차 실행 + 이후 interval-ms 주기. 스케줄러라 배포 readiness/헬스체크를 막지 않는다.
+    enrich:
+      genre-batch-size: ${ENRICH_GENRE_BATCH_SIZE:40}
+      genre-max-batches-per-run: ${ENRICH_GENRE_MAX_BATCHES:20}
+      detail-max-per-run: ${ENRICH_DETAIL_MAX_PER_RUN:150}
+      startup-delay-ms: ${ENRICH_STARTUP_DELAY_MS:15000}
+      interval-ms: ${ENRICH_INTERVAL_MS:600000}
 
   # AI 감상문 생성(질문/compose). provider 교체 가능 — claude(Anthropic) | gemini(Google).
   #   AI_PROVIDER로 어댑터를 전환한다(코드 변경 불필요). 예: AI_PROVIDER=gemini.

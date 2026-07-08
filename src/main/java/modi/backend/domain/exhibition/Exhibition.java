@@ -209,13 +209,16 @@ public class Exhibition extends BaseEntity {
 	}
 
 	/**
-	 * CATALOG 동기화 재적재 — 원천에서 다시 받은 값으로 카탈로그 필드를 갱신한다(같은 externalId 재수신 시).
+	 * CATALOG 동기화 재적재 — 원천 목록에서 다시 받은 값으로 목록 필드를 갱신한다(같은 externalId 재수신 시).
 	 * type·externalId·ownerId 등 정체성 필드는 바꾸지 않는다.
+	 * <p>
+	 * price·description·operatingHours 등 <b>상세2 전용 필드</b>는 목록 응답에 없어 여기서 건드리지 않는다.
+	 * (상세 지연수집/백필로 채워진 값을 매 정기 동기화가 null로 덮어써 무료 판정·상세를 잃던 회귀를 막는다.)
+	 * detailSyncedAt도 유지되어 이미 상세를 채운 행은 백필 대상에서 제외된다.
 	 */
 	public void refreshCatalog(String title, String place, LocalDate startDate, LocalDate endDate,
-			ExhibitionRegion region, ExhibitionCategory category, String posterUrl, String description,
-			String operatingHours, String price, String detailUrl, String serviceName, Double gpsX, Double gpsY,
-			String sigungu, String realmName, String areaText) {
+			ExhibitionRegion region, ExhibitionCategory category, String posterUrl, String detailUrl,
+			String serviceName, Double gpsX, Double gpsY, String sigungu, String realmName, String areaText) {
 		this.title = requireTitle(title);
 		this.place = place;
 		this.startDate = startDate;
@@ -223,9 +226,6 @@ public class Exhibition extends BaseEntity {
 		this.region = region;
 		this.category = category;
 		this.posterUrl = posterUrl;
-		this.description = description;
-		this.operatingHours = operatingHours;
-		this.price = price;
 		this.detailUrl = detailUrl;
 		this.serviceName = serviceName;
 		this.gpsX = gpsX;
