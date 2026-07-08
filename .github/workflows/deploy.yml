@@ -80,10 +80,11 @@ jobs:
             sudo docker compose --profile app up -d --build
 
             # 배포 후 헬스체크 검증: UP 될 때까지 최대 150초 폴링, 실패 시 로그 출력하고 배포 실패 처리
-            # 포트 18090 = compose.yaml이 호스트로 노출하는 포트(18090:8080). 컨테이너 내부는 8080이지만 호스트에선 18090으로 접근.
+            # 운영 호스트 노출 포트 = 8080(.env의 APP_HOST_PORT=8080 → compose가 8080:8080으로 매핑).
+            # 공개 주소(3.35.111.143:8080)와 동일 포트라 헬스체크도 8080. (로컬 도커는 18090이지만 배포는 prod 기준)
             echo "Waiting for app to become healthy..."
             for i in $(seq 1 30); do
-              if curl -fsS http://localhost:18090/actuator/health | grep -q '"status":"UP"'; then
+              if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
                 echo "✅ Health check passed"
                 sudo docker compose --profile app ps
                 exit 0
