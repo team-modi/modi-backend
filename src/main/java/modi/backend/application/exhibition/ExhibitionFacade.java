@@ -132,13 +132,18 @@ public class ExhibitionFacade {
 	@Transactional
 	public int initGenres(int max) {
 		List<Exhibition> targets = exhibitionRepository.findCatalogWithoutGenre(max);
-		int classified = 0;
-		for (Exhibition exhibition : targets) {
-			exhibition.applyGenre(genreClassifier.classify(GenreClassification.from(exhibition)));
-			exhibitionRepository.save(exhibition);
-			classified++;
+		if (targets.isEmpty()) {
+			return 0;
 		}
-		return classified;
+		// 전시마다 호출하지 않고 한 번의 AI 호출(배치)로 전부 분류한다 — 무료 한도 429 폭주·부팅 지연 방지.
+		List<GenreClassification> inputs = targets.stream().map(GenreClassification::from).toList();
+		List<String> genres = genreClassifier.classifyAll(inputs);
+		for (int i = 0; i < targets.size(); i++) {
+			Exhibition exhibition = targets.get(i);
+			exhibition.applyGenre(i < genres.size() ? genres.get(i) : null);
+			exhibitionRepository.save(exhibition);
+		}
+		return targets.size();
 	}
 
 	/**
