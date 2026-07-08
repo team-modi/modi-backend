@@ -65,6 +65,9 @@ jobs:
             GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
             JWT_SECRET=${JWT_SECRET}
             GEMINI_API_KEY=${GEMINI_API_KEY}
+            # record-AI 감상문을 Gemini로 활성화 (위 GEMINI_API_KEY 시크릿 재사용).
+            AI_PROVIDER=gemini
+            AI_API_KEY=${GEMINI_API_KEY}
             EOF
             sudo docker compose --profile app up -d --build
 

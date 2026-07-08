@@ -3,8 +3,10 @@ package modi.backend.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * AI(LLM) 설정. {@code app.ai.*} 바인딩. provider는 교체 가능하도록 문자열로 둔다(우선 claude).
- * api-key는 시크릿 → 환경변수(ANTHROPIC_API_KEY) 주입. 미설정이면 어댑터가 비활성(AI_DISABLED)으로 동작.
+ * AI(LLM) 설정. {@code app.ai.*} 바인딩. provider는 교체 가능하도록 문자열로 둔다(claude | gemini).
+ * api-key는 시크릿 → 환경변수 주입. provider와 짝지어 지정한다(교차 오염 방지):
+ *   claude=ANTHROPIC_API_KEY, gemini=AI_API_KEY(=Gemini 키). 미설정이면 어댑터가 비활성(AI_DISABLED)으로 동작.
+ * model 미지정 시 provider에 맞는 기본 모델을 쓴다(claude → claude-opus-4-8, gemini → gemini-2.5-flash).
  * timeoutSeconds: 외부 LLM 호출 타임아웃(워커 스레드 장기 점유 방지).
  * rateLimitSeconds: 사용자당 AI 호출 최소 간격(반복 클릭에 의한 유료 호출 폭주 방지).
  */
@@ -12,12 +14,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record AiProperties(String provider, String model, String apiKey, Long maxTokens,
 		Long timeoutSeconds, Long rateLimitSeconds) {
 
+	private static final String DEFAULT_CLAUDE_MODEL = "claude-opus-4-8";
+	// 장르 분류(app.genre.gemini)와 동일 모델로 맞춤 — 무료 한도에서 동작 확인된 모델.
+	private static final String DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+
 	public AiProperties {
 		if (provider == null || provider.isBlank()) {
 			provider = "claude";
 		}
 		if (model == null || model.isBlank()) {
-			model = "claude-opus-4-8";
+			model = "gemini".equalsIgnoreCase(provider) ? DEFAULT_GEMINI_MODEL : DEFAULT_CLAUDE_MODEL;
 		}
 		if (maxTokens == null || maxTokens <= 0) {
 			maxTokens = 1024L;

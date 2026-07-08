@@ -47,6 +47,10 @@ services:
       # 전시 장르 AI 분류(Gemini). 미설정(빈값)이면 AI 분류기가 random으로 폴백 → 크래시 없음.
       #   model·base-url은 여기서 넘기지 않는다 — 빈값을 넘기면 application.yaml 기본값(gemini-2.5-flash 등)을 덮어써 버림.
       - 'GEMINI_API_KEY=${GEMINI_API_KEY:-}'
+      # record-AI 감상문 provider·키(gemini 사용 시 AI_PROVIDER=gemini, AI_API_KEY=Gemini 키).
+      #   미설정이면 claude/빈키 → AI 엔드포인트만 503, 나머지 정상.
+      - 'AI_PROVIDER=${AI_PROVIDER:-claude}'
+      - 'AI_API_KEY=${AI_API_KEY:-}'
       # 공공데이터(전시) 인증키는 application.yaml에 기본값으로 박아 뒀다 → compose에서 CULTURE_API_KEY를 주입하지 않는다.
       #   (여기서 `CULTURE_API_KEY=${CULTURE_API_KEY:-}`로 빈값을 넘기면 Spring이 "변수 존재=빈값"으로 보고 yaml 기본값을 덮어써 버림.)
       #   env로 바꾸고 싶으면 이 줄을 살리되 반드시 실제 값이 채워질 때만 넘길 것.
