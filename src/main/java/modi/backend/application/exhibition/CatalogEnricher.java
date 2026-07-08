@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
 import modi.backend.config.CatalogEnrichProperties;
+import modi.backend.config.PublicDataProperties;
 
 /**
  * 공공데이터(CATALOG) 보강 오케스트레이션.
@@ -29,6 +30,7 @@ public class CatalogEnricher {
 
 	private final ExhibitionFacade exhibitionFacade;
 	private final CatalogEnrichProperties properties;
+	private final PublicDataProperties publicDataProperties;
 
 	/**
 	 * 미분류 CATALOG 장르를 배치로 상한 내 전량 백필. 각 배치는 AI 1회 호출(배치가 batchSize 미만이면 미분류 소진 → 종료).
@@ -57,6 +59,10 @@ public class CatalogEnricher {
 	 * @return 이번 실행으로 상세를 채운 전시 수
 	 */
 	public int enrichDetails() {
+		// 원천 키 미설정이면 fetchDetail이 전부 empty로 와 상세 없음으로 오인·표기될 수 있어 아예 스킵한다(불필요한 외부 호출도 방지).
+		if (!publicDataProperties.isConfigured()) {
+			return 0;
+		}
 		List<Long> ids = exhibitionFacade.findCatalogIdsWithoutDetail(properties.detailMaxPerRun());
 		int done = 0;
 		for (Long id : ids) {

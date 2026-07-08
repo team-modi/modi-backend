@@ -302,7 +302,12 @@ public class ExhibitionFacade {
 			exhibition.applyDetail(detail);
 			exhibitionRepository.save(exhibition);
 			return true;
-		}).orElse(false);
+		}).orElseGet(() -> {
+			// 원천이 상세를 안 줌(항목 없음) — 확인 완료로 표기해 매 주기 재조회를 막는다. 일시 실패는 예외라 여기 안 옴.
+			exhibition.markDetailChecked();
+			exhibitionRepository.save(exhibition);
+			return false;
+		});
 	}
 
 	private void create(CatalogExhibitionData data) {
