@@ -94,7 +94,7 @@ app:
     #   부팅 직후(startup-delay-ms) 1차 실행 + 이후 interval-ms 주기. 스케줄러라 배포 readiness/헬스체크를 막지 않는다.
     enrich:
       genre-batch-size: ${ENRICH_GENRE_BATCH_SIZE:20}  # 60s 타임아웃 안에서 검증된 크기(키우면 ReadTimeout→랜덤 폴백 위험)
-      genre-max-batches-per-run: ${ENRICH_GENRE_MAX_BATCHES:20}
+      genre-max-batches-per-run: ${ENRICH_GENRE_MAX_BATCHES:3}  # 회당 소량 → 무료 RPM 안 넘김(한 번에 14배치 몰면 429 폭풍+한도 소진)
       detail-max-per-run: ${ENRICH_DETAIL_MAX_PER_RUN:150}
       startup-delay-ms: ${ENRICH_STARTUP_DELAY_MS:15000}
       interval-ms: ${ENRICH_INTERVAL_MS:600000}
@@ -104,23 +104,26 @@ app:
   #   api-key 미설정이면 AI 엔드포인트는 503(AI_DISABLED)로 응답하고 나머지 기능은 정상 동작한다.
   ai:
     provider: ${AI_PROVIDER:claude}
-    # 미지정 시 provider별 기본 모델(claude-opus-4-8 / gemini-2.5-flash, 장르 분류와 동일). 비용 최적화 시 AI_MODEL로 즉시 교체 가능.
+    # 미지정 시 provider별 기본 모델(claude-opus-4-8 / gemini-2.5-flash-lite). gemini 기본을 flash-lite로 —
+    #   무료 일일 한도가 flash보다 훨씬 크고 감상문 질문/다듬기엔 품질 충분. 필요 시 AI_MODEL로 flash 등 즉시 교체(별도 한도 버킷).
     model: ${AI_MODEL:}
     # 키는 provider와 짝을 이뤄 명시한다(교차 오염 방지): 공통 AI_API_KEY > Claude ANTHROPIC_API_KEY.
     #   gemini 사용 시엔 AI_PROVIDER=gemini + AI_API_KEY=<Gemini 키>(예: AI_API_KEY=${GEMINI_API_KEY}).
     #   ※ GEMINI_API_KEY를 여기 자동 폴백에 넣지 않는다 — 배포 env에 GEMINI_API_KEY만 있고 provider=claude면
-    #     Claude 어댑터가 Gemini 키를 오용(AI_GENERATION_FAILED)하기 때문. 장르 분류는 별도로 app.genre.gemini에서 GEMINI_API_KEY 사용.
+    #     Claude 어댑터가 Gemini 키를 오용(AI_GENERATION_FAILED)하기 때문. 장르 분류는 별도로 app.ai.gemini에서 GEMINI_API_KEY 사용.
     api-key: ${AI_API_KEY:${ANTHROPIC_API_KEY:}}
     max-tokens: ${AI_MAX_TOKENS:1024}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}     # 외부 LLM 호출 타임아웃(워커 스레드 장기 점유 방지)
     rate-limit-seconds: ${AI_RATE_LIMIT_SECONDS:3} # 사용자당 AI 호출 최소 간격(반복 클릭 폭주 방지)
+    max-retries: ${AI_MAX_RETRIES:2}               # 429(무료 RPM 순간 초과) 시 재시도 횟수(Retry-After 존중, 소진 시 AI_RATE_LIMITED)
+    max-retry-delay-seconds: ${AI_MAX_RETRY_DELAY_SECONDS:4}  # 재시도 백오프 상한(대화형이라 과도한 대기 방지)
 
     # 전시 장르 분류용 Gemini(무료 한도). api-key 미설정이면 AI 분류기가 random으로 폴백(나머지 기능 정상).
-    #   model 기본은 무료 한도에서 동작 확인된 gemini-2.5-flash. 429(한도 초과)는 max-retries·max-retry-delay-seconds로 제어.
+    #   model 기본을 flash-lite로 — 장르는 10종 중 1개 고르기라 lite로 품질 충분 + 무료 일일 한도가 커 백필 폭식에 유리.
     gemini:
       base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
       api-key: ${GEMINI_API_KEY:}
-      model: ${GEMINI_MODEL:gemini-2.5-flash}
+      model: ${GEMINI_MODEL:gemini-2.5-flash-lite}
       timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:60}   # 배치(초기화)는 여러 전시를 한 응답으로 받아 오래 걸림 → 여유 있게(단일 호출·초과 시 랜덤 폴백)
       max-retries: ${GEMINI_MAX_RETRIES:1}                    # 429 시 재시도 횟수(Retry-After 존중)
       max-retry-delay-seconds: ${GEMINI_MAX_RETRY_DELAY_SECONDS:2}  # 재시도 백오프 상한(부팅 지연 방지)

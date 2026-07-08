@@ -8,9 +8,11 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -72,24 +74,64 @@ public class GeminiAiChatClient implements AiChatClient {
 
 	private JsonNode call(Map<String, Object> body) {
 		requireEnabled();
-		try {
-			JsonNode response = webClient.post()
-					.uri("/models/{model}:generateContent", properties.model())
-					.contentType(MediaType.APPLICATION_JSON)
-					.bodyValue(body)
-					.retrieve()
-					.bodyToMono(JsonNode.class)
-					.block(Duration.ofSeconds(properties.timeoutSeconds()));
-			if (response == null) {
-				throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, "빈 응답");
+		// 무료 한도(RPM) 순간 초과(429)는 Retry-After만큼(상한 내) 대기 후 재시도한다.
+		// 재시도까지 소진되면 AI_RATE_LIMITED(429)로 반환해 "잠시 후 다시 시도" UX를 준다(생성 실패와 구분).
+		int attempts = properties.maxRetries() + 1;
+		for (int i = 0; i < attempts; i++) {
+			try {
+				JsonNode response = webClient.post()
+						.uri("/models/{model}:generateContent", properties.model())
+						.contentType(MediaType.APPLICATION_JSON)
+						.bodyValue(body)
+						.retrieve()
+						.bodyToMono(JsonNode.class)
+						.block(Duration.ofSeconds(properties.timeoutSeconds()));
+				if (response == null) {
+					throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, "빈 응답");
+				}
+				record(response);
+				return response;
+			} catch (WebClientResponseException.TooManyRequests e) {
+				log.warn("AI 호출 429(무료 한도) 시도 {}/{}", i + 1, attempts);
+				if (i < attempts - 1) {
+					backoff(e.getHeaders());
+					continue;
+				}
+				throw new CoreException(AiErrorCode.AI_RATE_LIMITED, "AI 무료 한도 초과(429)");
+			} catch (CoreException e) {
+				throw e;
+			} catch (Exception e) {
+				throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, e.getMessage());
 			}
-			record(response);
-			return response;
-		} catch (CoreException e) {
-			throw e;
-		} catch (Exception e) {
-			throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, e.getMessage());
 		}
+		// 도달 불가(위 루프가 반환/예외로 끝남) — 방어적 안전망.
+		throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, "AI 호출 실패");
+	}
+
+	/** 429 백오프 — Retry-After(초)만큼, 단 {@code max-retry-delay-seconds} 상한 내에서 대기한다. */
+	private void backoff(HttpHeaders headers) {
+		long wait = Math.min(retryAfterSeconds(headers), properties.maxRetryDelaySeconds());
+		if (wait <= 0) {
+			return;
+		}
+		try {
+			Thread.sleep(wait * 1000L);
+		} catch (InterruptedException ie) {
+			Thread.currentThread().interrupt();
+		}
+	}
+
+	/** Retry-After 헤더(초). 없거나 파싱 불가면 1초를 기본 백오프로 본다. */
+	private static long retryAfterSeconds(HttpHeaders headers) {
+		String value = headers == null ? null : headers.getFirst(HttpHeaders.RETRY_AFTER);
+		if (value != null) {
+			try {
+				return Math.max(0, Long.parseLong(value.trim()));
+			} catch (NumberFormatException ignored) {
+				// 날짜 형식 등은 무시하고 기본 백오프
+			}
+		}
+		return 1;
 	}
 
 	private Map<String, Object> requestBody(String systemPrompt, String userPrompt, Map<String, Object> responseSchema) {
