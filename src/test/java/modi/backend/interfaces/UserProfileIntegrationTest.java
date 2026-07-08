@@ -37,7 +37,7 @@ import modi.backend.infra.user.UserJpaRepository;
  * 유저 도메인(02_유저.md) API end-to-end 검증.
  * 외부 카카오 HTTP({@link KakaoApi})만 목으로 두고, 로그인으로 실제 토큰을 발급받아
  * GET /users/me · PUT /users/me/profile 를 실제 컨트롤러·DB(Testcontainers)로 태운다.
- * (프로젝트 컨벤션 우선: 성공 200, 프로필 수정은 PUT. tasteKeywords/stats는 스텁으로 []·0.)
+ * (프로젝트 컨벤션 우선: 성공 200, 프로필 수정은 PUT. 기록 없는 신규 유저는 tasteKeywords []·기록/전시 통계 0이 정상.)
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -96,7 +96,7 @@ class UserProfileIntegrationTest {
 				.andExpect(jsonPath("$.data.ageGroup").doesNotExist())
 				.andExpect(jsonPath("$.data.residenceRegion").doesNotExist())
 				.andExpect(jsonPath("$.data.residenceDistrict").doesNotExist())
-				// 스텁: 취향 키워드 빈 배열, 통계 0
+				// 기록 없는 신규 유저: 감정 키워드 빈 배열, 기록/전시 통계 0
 				.andExpect(jsonPath("$.data.tasteKeywords").isArray())
 				.andExpect(jsonPath("$.data.tasteKeywords").isEmpty())
 				.andExpect(jsonPath("$.data.stats.recordCount").value(0))

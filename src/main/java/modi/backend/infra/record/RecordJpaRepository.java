@@ -1,6 +1,7 @@
 package modi.backend.infra.record;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -18,6 +19,23 @@ public interface RecordJpaRepository extends JpaRepository<Record, Long> {
 
 	/** 해당 사용자가 이 전시에 대한 (살아있는) 기록을 가지고 있는지 — 전시 상세의 recorded 필드용. */
 	boolean existsByUserIdAndExhibitionIdAndDeletedAtIsNull(Long userId, Long exhibitionId);
+
+	/** 사용자의 (살아있는) 기록 수 — 프로필 통계용. */
+	long countByUserIdAndDeletedAtIsNull(Long userId);
+
+	/** 사용자가 기록을 남긴 서로 다른 전시 수(다녀온 전시) — 프로필 통계용. */
+	@Query("select count(distinct r.exhibitionId) from Record r where r.userId = :userId and r.deletedAt is null")
+	long countDistinctExhibitionByUserId(@Param("userId") Long userId);
+
+	/** 사용자의 기록에 쓰인 감정 키워드 — 빈도 내림차순, 중복 제거(프로필 '나의 감정 키워드'용). */
+	@Query("""
+			select e.emotionCode
+			from Record r join r.emotions e
+			where r.userId = :userId and r.deletedAt is null
+			group by e.emotionCode
+			order by count(e) desc, e.emotionCode asc
+			""")
+	List<String> findEmotionCodesByUserIdOrderByFrequency(@Param("userId") Long userId);
 
 	/** 감정까지 즉시 로딩해 반환(리마인드에서 원본 감정을 세션 밖에서 안전히 읽기 위함). */
 	@Query("select distinct r from Record r left join fetch r.emotions where r.id = :id and r.deletedAt is null")

@@ -39,18 +39,8 @@ public final class UserResult {
 		}
 	}
 
-	/** 활동 통계(기록 수, 다녀온 전시 수, 북마크 수). */
+	/** 활동 통계(기록 수, 다녀온 전시 수=기록 남긴 서로 다른 전시 수, 북마크 수). 모두 실집계. */
 	public record Stats(long recordCount, long exhibitionCount, long bookmarkCount) {
-
-		/** 집계 미구현 구간용 0 스텁. */
-		public static Stats empty() {
-			return new Stats(0, 0, 0);
-		}
-
-		/** 북마크 수만 실집계, 기록·다녀온 전시 수는 record 도메인 도입 전까지 0 스텁. */
-		public static Stats ofBookmarkCount(long bookmarkCount) {
-			return new Stats(0, 0, bookmarkCount);
-		}
 	}
 
 	/** 알림 설정 조회·수정 결과(4.3·4.4) — 리마인드·공지 수신 여부. */
