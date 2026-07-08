@@ -12,11 +12,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "app.ai")
 public record AiProperties(String provider, String model, String apiKey, Long maxTokens,
-		Long timeoutSeconds, Long rateLimitSeconds) {
+		Long timeoutSeconds, Long rateLimitSeconds, Integer maxRetries, Long maxRetryDelaySeconds) {
 
 	private static final String DEFAULT_CLAUDE_MODEL = "claude-opus-4-8";
-	// 장르 분류(app.genre.gemini)와 동일 모델로 맞춤 — 무료 한도에서 동작 확인된 모델.
-	private static final String DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+	// 무료 한도가 flash보다 훨씬 큰 flash-lite를 기본값으로 — 감상문 질문/다듬기는 가벼운 작업이라 lite로 품질 충분.
+	//   (장르 백필과 한도를 나눠 쓰려면 AI_MODEL로 flash 등 다른 모델을 지정하면 별도 한도 버킷을 사용.)
+	private static final String DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
 
 	public AiProperties {
 		if (provider == null || provider.isBlank()) {
@@ -33,6 +34,12 @@ public record AiProperties(String provider, String model, String apiKey, Long ma
 		}
 		if (rateLimitSeconds == null || rateLimitSeconds < 0) {
 			rateLimitSeconds = 3L;
+		}
+		if (maxRetries == null || maxRetries < 0) {
+			maxRetries = 2;
+		}
+		if (maxRetryDelaySeconds == null || maxRetryDelaySeconds < 0) {
+			maxRetryDelaySeconds = 4L;
 		}
 	}
 
