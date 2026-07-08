@@ -130,12 +130,14 @@ spring:
 app:
   cors:
     allowed-origin-patterns:
-      - https://yeowun.vercel.app # 여운 Vercel 운영 도메인 (이것만 허용)
+      - https://yeowun.vercel.app      # 여운 Vercel 운영 도메인
+      - https://yeowun-demo.vercel.app # 여운 베타테스트 데모 프론트(별도 레포 yeowun-demo)
   oauth:
     # 운영 redirect_uri = 여운 프론트 운영 콜백 (콘솔 등록값과 일치). 필요 시 env로 override.
     redirect-uri: ${OAUTH_REDIRECT_URI:https://yeowun.vercel.app/login}
     allowed-redirect-uris:
       - https://yeowun.vercel.app/login
+      - https://yeowun-demo.vercel.app/login # 데모 프론트 카카오 콜백 (콘솔에도 동일 등록 필요)
   # 운영: HTTPS(yeowun.vercel.app, Vercel 프록시로 same-origin)라 Secure 켜고 SameSite=Lax.
   auth:
     cookie:
