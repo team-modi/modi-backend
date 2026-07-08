@@ -39,13 +39,14 @@ jobs:
           KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           command_timeout: 20m
           # GitHub Actions secrets를 원격 SSH 세션 환경변수로 전달
-          envs: KAKAO_CLIENT_SECRET,GOOGLE_CLIENT_SECRET,JWT_SECRET
+          envs: KAKAO_CLIENT_SECRET,GOOGLE_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY
           script: |
             set -e
             cd ~/modi-backend
@@ -60,6 +61,7 @@ jobs:
             KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}
             GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
             JWT_SECRET=${JWT_SECRET}
+            GEMINI_API_KEY=${GEMINI_API_KEY}
             EOF
             sudo docker compose --profile app up -d --build
 
