@@ -95,6 +95,9 @@ public class GeminiAiChatClient implements AiChatClient {
 	private Map<String, Object> requestBody(String systemPrompt, String userPrompt, Map<String, Object> responseSchema) {
 		Map<String, Object> generationConfig = new LinkedHashMap<>();
 		generationConfig.put("maxOutputTokens", properties.maxTokens());
+		// gemini-2.5-flash는 thinking 모델 — thinking이 maxOutputTokens를 소진해 (특히 구조화 출력에서)
+		//   응답 텍스트가 비거나 잘리는 것을 막는다. 짧은 결정형 작업(질문 3개·감상문)이라 thinking 불필요 → 0으로 비활성화.
+		generationConfig.put("thinkingConfig", Map.of("thinkingBudget", 0));
 		if (responseSchema != null) {
 			generationConfig.put("responseMimeType", "application/json");
 			generationConfig.put("responseSchema", responseSchema);
@@ -106,11 +109,14 @@ public class GeminiAiChatClient implements AiChatClient {
 		return body;
 	}
 
-	/** {@code candidates[0].content.parts[*].text}를 이어붙인다. 비면 생성 실패. */
+	/** {@code candidates[0].content.parts[*].text}를 이어붙인다. 비면 생성 실패(finishReason을 로그에 남긴다). */
 	private String extractText(JsonNode response) {
-		JsonNode parts = response.path("candidates").path(0).path("content").path("parts");
+		JsonNode candidate = response.path("candidates").path(0);
+		JsonNode parts = candidate.path("content").path("parts");
 		if (!parts.isArray() || parts.isEmpty()) {
-			throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, "응답 본문이 비어 있습니다.");
+			String finishReason = candidate.path("finishReason").asString("UNKNOWN");
+			throw new CoreException(AiErrorCode.AI_GENERATION_FAILED,
+					"응답 본문이 비어 있습니다(finishReason=" + finishReason + ").");
 		}
 		StringBuilder sb = new StringBuilder();
 		for (JsonNode part : parts) {
