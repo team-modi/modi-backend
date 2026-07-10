@@ -45,16 +45,9 @@ final class ExhibitionSpecifications {
 		// soft delete 제외
 		predicates.add(cb.isNull(root.get("deletedAt")));
 
-		// 노출 범위: CATALOG는 공개, CUSTOM은 요청자 본인 것만. 비로그인이면 CATALOG만.
-		Predicate isCatalog = cb.equal(root.get("type"), ExhibitionType.CATALOG);
-		if (query.requesterId() == null) {
-			predicates.add(isCatalog);
-		} else {
-			Predicate ownCustom = cb.and(
-					cb.equal(root.get("type"), ExhibitionType.CUSTOM),
-					cb.equal(root.get("ownerId"), query.requesterId()));
-			predicates.add(cb.or(isCatalog, ownCustom));
-		}
+		// 노출 범위: 전시탐색은 공개(CATALOG) 전시만 노출한다. 개인(CUSTOM) 전시는 등록자 본인이라도
+		// 탐색 목록에 노출하지 않는다 — 개인 전시는 내 기록/아카이브(및 상세 직접 접근)로만 다룬다.
+		predicates.add(cb.equal(root.get("type"), ExhibitionType.CATALOG));
 
 		// keyword: 전시명·전시장명 부분 일치(대소문자 무시). (작가명은 원천 미보유 — 04_전시_구현.md 참고)
 		if (query.keyword() != null && !query.keyword().isBlank()) {

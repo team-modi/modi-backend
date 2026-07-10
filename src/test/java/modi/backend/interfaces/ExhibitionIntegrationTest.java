@@ -536,7 +536,7 @@ class ExhibitionIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("CUSTOM 노출/접근 — 등록자 본인만 목록·상세, 타인/비로그인은 403·미노출")
+	@DisplayName("CUSTOM 노출/접근 — 개인 전시는 탐색 목록에 아무에게도(본인 포함) 안 보이고, 상세는 본인만 200·타인/비로그인 403")
 	void 개인전시_노출_권한() throws Exception {
 		String ownerToken = loginAndGetAccessToken(7100001L, "소유자");
 		String otherToken = loginAndGetAccessToken(7100002L, "타인");
@@ -551,10 +551,10 @@ class ExhibitionIntegrationTest {
 		long customId = ((Number) JsonPath.read(created.getResponse().getContentAsString(), "$.data.exhibitionId"))
 				.longValue();
 
-		// 목록: 본인은 보이고, 비로그인/타인 목록엔 없음
+		// 목록(전시탐색): 개인 전시는 등록자 본인 목록에도, 비로그인/타인 목록에도 노출되지 않는다.
 		mockMvc.perform(get("/api/v1/exhibitions").param("keyword", uniqueTitle)
 						.header("Authorization", "Bearer " + ownerToken))
-				.andExpect(jsonPath("$.data.content[*].title", hasItem(uniqueTitle)));
+				.andExpect(jsonPath("$.data.content[*].title", not(hasItem(uniqueTitle))));
 		mockMvc.perform(get("/api/v1/exhibitions").param("keyword", uniqueTitle))
 				.andExpect(jsonPath("$.data.content[*].title", not(hasItem(uniqueTitle))));
 
