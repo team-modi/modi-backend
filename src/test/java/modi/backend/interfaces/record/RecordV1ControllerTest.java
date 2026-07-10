@@ -146,7 +146,7 @@ class RecordV1ControllerTest {
 	}
 
 	@Test
-	@DisplayName("기록 스냅샷 독립성(e2e) — CATALOG 재동기화로 원본 전시 제목이 실제로 바뀌어도 다녀온 목록의 스냅샷 제목은 기록 작성 시점 값으로 유지된다")
+	@DisplayName("기록 스냅샷 독립성(e2e) — 재동기화는 기존 전시를 건드리지 않고(신규만 추가), 원본이 삭제돼도 다녀온 목록의 스냅샷 제목은 기록 작성 시점 값으로 유지된다")
 	void 기록_스냅샷은_전시_원본_재동기화와_독립적이다() throws Exception {
 		LocalDate today = LocalDate.now();
 		String externalId = "CAT-SNAPSHOT-E2E-" + System.nanoTime();
@@ -189,18 +189,21 @@ class RecordV1ControllerTest {
 				.andExpect(jsonPath("$.data.content[?(@.recordId==" + recordId + ")].exhibitionTitle")
 						.value(hasItem(originalTitle)));
 
-		// 4) 같은 externalId를 다른 제목으로 재동기화 — 실제 운영에서 매시 배치가 하는 일과 동일(ExhibitionFacade.refresh)
+		// 4) 같은 externalId를 다른 제목으로 재동기화 — 동기화는 "신규만 추가" 정책이라 기존 행을 건드리지 않는다.
 		given(catalogClient.fetchAll()).willReturn(List.of(
 				new CatalogExhibitionData(externalId, mutatedTitle, "스냅샷 갤러리 이전", today.minusDays(5),
 						today.plusDays(25), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING,
 						"https://poster/mutated.jpg", null, "기관", null, null, null, "전시", "서울")));
 		exhibitionFacade.syncCatalog();
 
-		// 원본 전시 행의 제목이 실제로 바뀌었음을 먼저 확인한다 — 이래야 다음 단계가 "아무것도 안 해도 통과"하는 가짜 검증이 아니게 된다.
-		Exhibition mutated = exhibitionRepository.findByExternalId(externalId).orElseThrow();
-		assertThat(mutated.getTitle()).isEqualTo(mutatedTitle);
+		// 기존 전시 행이 원천 갱신본으로 덮이지 않았음을 확인한다(신규만 추가 — 재적재 갱신 없음).
+		Exhibition afterResync = exhibitionRepository.findByExternalId(externalId).orElseThrow();
+		assertThat(afterResync.getTitle()).isEqualTo(originalTitle);
 
-		// 5) 재동기화 이후에도 다녀온 목록의 스냅샷 제목은 여전히 "기록 작성 시점" 제목 — 전시 원본 변경과 무관하다.
+		// 5) 원본 전시가 삭제(soft-delete)돼도 — 남아 있는 유일한 원본 변경 경로 — 다녀온 목록의 스냅샷 제목은
+		//    여전히 "기록 작성 시점" 제목이다(스냅샷은 기록 행에 박제되어 전시 원본과 무관).
+		afterResync.delete();
+		exhibitionRepository.save(afterResync);
 		mockMvc.perform(get("/api/v1/records/exhibitions/visited")
 						.header("Authorization", bearerUser1)
 						.param("exhibitionId", String.valueOf(catalogExhibitionId)))

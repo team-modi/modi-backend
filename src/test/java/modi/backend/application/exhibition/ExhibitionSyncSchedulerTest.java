@@ -2,22 +2,23 @@ package modi.backend.application.exhibition;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 import modi.backend.domain.exhibition.ExhibitionErrorCode;
 import modi.backend.support.error.CoreException;
 
 /**
- * ExhibitionSyncScheduler 단위 검증. 매일 자정 트리거 시 facade.syncCatalog()·상세 보강을 호출하고,
- * 장르 백필은 3시간 주기의 별도 메서드로 분리되어 있으며, 실패(외부 API 불가 등)해도 예외를 삼켜
- * 스케줄러 스레드가 죽지 않아야 한다(다음 주기 재시도).
+ * ExhibitionSyncScheduler 단위 검증. 매일 자정 트리거 시 동기화(신규 적재) → 장르 분류(신규분) → 상세 보강을
+ * 순서대로 호출하고, 실패(외부 API 불가 등)해도 예외를 삼켜 스케줄러 스레드가 죽지 않아야 한다(다음 주기 재시도).
+ * 장르는 별도 주기 없이 동기화 직후에만 생성된다(신규 전시 = 미분류 행만 대상이라 멱등).
  */
 class ExhibitionSyncSchedulerTest {
 
@@ -33,15 +34,16 @@ class ExhibitionSyncSchedulerTest {
 	}
 
 	@Test
-	@DisplayName("syncDaily: 동기화 후 상세 보강을 이어서 호출한다(장르 보강은 별도 주기)")
-	void syncDaily_facade호출() {
+	@DisplayName("syncDaily: 동기화 → 장르 분류(신규분) → 상세 보강을 순서대로 호출한다")
+	void syncDaily_동기화후_장르_상세_순서호출() {
 		given(exhibitionFacade.syncCatalog()).willReturn(3);
 
 		scheduler.syncDaily();
 
-		verify(exhibitionFacade, times(1)).syncCatalog();
-		verify(catalogEnricher, times(1)).enrichDetails();
-		verify(catalogEnricher, never()).enrichGenres();
+		InOrder order = inOrder(exhibitionFacade, catalogEnricher);
+		order.verify(exhibitionFacade, times(1)).syncCatalog();
+		order.verify(catalogEnricher, times(1)).enrichGenres();
+		order.verify(catalogEnricher, times(1)).enrichDetails();
 	}
 
 	@Test
@@ -53,26 +55,5 @@ class ExhibitionSyncSchedulerTest {
 		assertThatCode(() -> scheduler.syncDaily()).doesNotThrowAnyException();
 
 		verify(exhibitionFacade, times(1)).syncCatalog();
-	}
-
-	@Test
-	@DisplayName("enrichGenresPeriodically: 장르 백필만 호출한다(동기화·상세는 건드리지 않음)")
-	void enrichGenresPeriodically_장르만() {
-		scheduler.enrichGenresPeriodically();
-
-		verify(catalogEnricher, times(1)).enrichGenres();
-		verify(catalogEnricher, never()).enrichDetails();
-		verify(exhibitionFacade, never()).syncCatalog();
-	}
-
-	@Test
-	@DisplayName("enrichGenresPeriodically: 장르 보강 중 예외가 나도 삼켜서 다음 주기까지 살아있는다")
-	void enrichGenresPeriodically_예외삼킴() {
-		given(catalogEnricher.enrichGenres())
-				.willThrow(new CoreException(ExhibitionErrorCode.EXTERNAL_API_UNAVAILABLE, "장르 분류 실패"));
-
-		assertThatCode(() -> scheduler.enrichGenresPeriodically()).doesNotThrowAnyException();
-
-		verify(catalogEnricher, times(1)).enrichGenres();
 	}
 }
