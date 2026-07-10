@@ -323,6 +323,14 @@ public class Exhibition extends BaseEntity {
 		return isCatalog() || (requesterId != null && requesterId.equals(ownerId));
 	}
 
+	/**
+	 * 요청자가 직접 등록한 개인(CUSTOM) 전시인가 — 기록 삭제 시 동반 삭제 가능 여부 판단용.
+	 * 공용 CATALOG나 타인의 CUSTOM은 삭제 대상이 아니다.
+	 */
+	public boolean isCustomOwnedBy(Long requesterId) {
+		return type == ExhibitionType.CUSTOM && requesterId != null && requesterId.equals(ownerId);
+	}
+
 	private String requireTitle(String value) {
 		String trimmed = Optional.ofNullable(value).map(String::trim).orElse("");
 		if (trimmed.isEmpty() || trimmed.length() > TITLE_MAX_LENGTH) {

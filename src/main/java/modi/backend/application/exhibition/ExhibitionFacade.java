@@ -211,6 +211,21 @@ public class ExhibitionFacade {
 	}
 
 	/**
+	 * 개인 전시(CUSTOM) 동반 삭제 — 기록 삭제 시, 그 기록이 직접 만든 전시를 더는 어떤 기록도 참조하지 않을 때 호출된다.
+	 * 본인이 등록한 CUSTOM만 soft-delete하고(공용 CATALOG·타인 전시·이미 삭제된 전시는 무시) 멱등하게 동작한다.
+	 * (기록을 지워도 전시가 '내 전시' 목록에 남아 조회되던 고아 전시 문제 방지)
+	 */
+	@Transactional
+	public void deleteCustomOwnedBy(Long exhibitionId, Long ownerId) {
+		exhibitionRepository.findById(exhibitionId)
+				.filter(exhibition -> exhibition.isCustomOwnedBy(ownerId))
+				.ifPresent(exhibition -> {
+					exhibition.delete();
+					exhibitionRepository.save(exhibition);
+				});
+	}
+
+	/**
 	 * 장르 백필 1배치 — 아직 장르가 없는 CATALOG(공공데이터) 전시를 최대 {@code max}건 <b>한 번의 AI 호출(배치)</b>로 분류한다.
 	 * {@link CatalogEnricher}가 이 메서드를 미분류가 소진될 때까지 반복 호출해 전량을 채운다(배치당 1콜 → 273건도 몇 콜로).
 	 * 분류기가 폴백을 보장하므로 개별 실패로 중단되지 않으며, 429로 일부가 랜덤 폴백되어도 다음 주기에 다시 시도한다

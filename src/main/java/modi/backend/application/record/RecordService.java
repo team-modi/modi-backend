@@ -109,6 +109,12 @@ public class RecordService {
 		Record record = getExisting(recordId);
 		validateOwner(record, userId);
 		record.delete();
+		// 이 기록이 직접 만든 개인 전시(CUSTOM)를 더는 어떤 기록도 참조하지 않으면 전시도 함께 삭제한다.
+		// (삭제를 먼저 flush해 방금 지운 기록이 남은-참조 카운트에서 빠지게 한 뒤 확인)
+		recordRepository.flush();
+		if (!recordRepository.existsByUserIdAndExhibitionIdAndDeletedAtIsNull(userId, record.getExhibitionId())) {
+			exhibitionFacade.deleteCustomOwnedBy(record.getExhibitionId(), userId);
+		}
 	}
 
 	@Transactional
