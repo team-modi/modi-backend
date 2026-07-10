@@ -251,15 +251,17 @@ public class ExhibitionFacade {
 	}
 
 	/**
-	 * 외부 전시 API 수집 → DB upsert(externalId 기준). 이미 있으면 카탈로그 필드 갱신, 없으면 신규 적재.
+	 * 외부 전시 API 수집 → DB 적재. <b>신규(externalId 미존재) 전시만 추가</b>하고 기존 행은 건드리지 않는다
+	 * — 장르(AI 분류)·상세 등 보강으로 채운 값이 재적재로 덮이지 않고, 장르 생성도 동기화 직후 신규분에만 수행된다
+	 * (호출부가 {@link CatalogEnricher#enrichGenres()}를 이어서 호출 — 미분류 행 = 방금 추가된 신규 전시).
 	 * 인증키 미설정 시 수집 목록이 비어 0을 반환한다(외부 호출 없음).
 	 *
-	 * @return 이번 동기화로 적재/갱신된 전시 수
+	 * @return 이번 동기화로 새로 적재된 전시 수
 	 */
 	@Transactional
 	public int syncCatalog() {
 		List<CatalogExhibitionData> collected = catalogClient.fetchAll();
-		int upserted = 0;
+		int inserted = 0;
 		int skipped = 0;
 		for (CatalogExhibitionData data : collected) {
 			// 원천 데이터 품질 이슈(예: 종료일<시작일)로 단건이 도메인 불변식을 어겨도 배치 전체가 중단되지 않도록,
@@ -268,27 +270,21 @@ public class ExhibitionFacade {
 				skipped++;
 				continue;
 			}
-			exhibitionRepository.findByExternalId(data.externalId())
-					.ifPresentOrElse(existing -> refresh(existing, data), () -> create(data));
-			upserted++;
+			if (exhibitionRepository.findByExternalId(data.externalId()).isPresent()) {
+				continue; // 이미 적재된 전시 — 신규만 추가(재적재 갱신 없음)
+			}
+			create(data);
+			inserted++;
 		}
 		if (skipped > 0) {
-			log.warn("전시 동기화: 기간 비정상 {}건 스킵(수집 {}건 중 {}건 적재)", skipped, collected.size(), upserted);
+			log.warn("전시 동기화: 기간 비정상 {}건 스킵(수집 {}건 중 신규 {}건 적재)", skipped, collected.size(), inserted);
 		}
-		return upserted;
+		return inserted;
 	}
 
 	/** 원천 데이터 기간 유효성 — 둘 다 있을 때만 시작일 ≤ 종료일. 결측은 관대하게 통과(엔티티 불변식과 동일 기준). */
 	private static boolean hasValidPeriod(CatalogExhibitionData data) {
 		return data.startDate() == null || data.endDate() == null || !data.startDate().isAfter(data.endDate());
-	}
-
-	private void refresh(Exhibition existing, CatalogExhibitionData data) {
-		// 목록 필드만 갱신 — price 등 상세2 필드는 refreshCatalog가 건드리지 않는다(백필로 채운 값 보존).
-		existing.refreshCatalog(data.title(), data.place(), data.startDate(), data.endDate(), data.region(),
-				data.category(), data.posterUrl(), data.detailUrl(), data.serviceName(),
-				data.gpsX(), data.gpsY(), data.sigungu(), data.realmName(), data.areaText());
-		exhibitionRepository.save(existing);
 	}
 
 	/**
