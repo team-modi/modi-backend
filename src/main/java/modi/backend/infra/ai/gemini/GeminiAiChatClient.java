@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,12 +45,17 @@ public class GeminiAiChatClient implements AiChatClient {
 	private final WebClient webClient; // api-key 미설정 시 null
 
 	public GeminiAiChatClient(AiProperties properties, MeterRegistry meterRegistry, ObjectMapper objectMapper) {
+		this(properties, meterRegistry, objectMapper, BASE_URL);
+	}
+
+	// 테스트가 목 서버 URL로 baseUrl을 주입하기 위한 패키지 전용 생성자(운영은 위 public이 BASE_URL로 위임).
+	GeminiAiChatClient(AiProperties properties, MeterRegistry meterRegistry, ObjectMapper objectMapper, String baseUrl) {
 		this.properties = properties;
 		this.meterRegistry = meterRegistry;
 		this.objectMapper = objectMapper;
 		this.webClient = properties.isConfigured()
 				? WebClient.builder()
-						.baseUrl(BASE_URL)
+						.baseUrl(baseUrl)
 						.defaultHeader("x-goog-api-key", properties.apiKey()) // 키를 URL이 아닌 헤더로(로그 노출 방지)
 						.build()
 				: null;
@@ -57,40 +63,50 @@ public class GeminiAiChatClient implements AiChatClient {
 
 	@Override
 	public String complete(String systemPrompt, String userPrompt) {
-		JsonNode response = call(requestBody(systemPrompt, userPrompt, null));
-		return extractText(response).trim();
+		return callWithRetry(() -> extractText(callOnce(requestBody(systemPrompt, userPrompt, null))).trim());
 	}
 
 	@Override
 	public <T> T completeStructured(String systemPrompt, String userPrompt, Class<T> schemaType) {
-		JsonNode response = call(requestBody(systemPrompt, userPrompt, GeminiSchema.of(schemaType)));
-		String json = extractText(response).trim();
-		try {
-			return objectMapper.readValue(json, schemaType);
-		} catch (Exception e) {
-			throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, "구조화 응답 파싱 실패: " + e.getMessage());
-		}
+		return callWithRetry(() -> {
+			String json = extractText(callOnce(requestBody(systemPrompt, userPrompt, GeminiSchema.of(schemaType)))).trim();
+			try {
+				return objectMapper.readValue(json, schemaType);
+			} catch (Exception e) {
+				throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, "구조화 응답 파싱 실패: " + e.getMessage());
+			}
+		});
 	}
 
-	private JsonNode call(Map<String, Object> body) {
+	/** generateContent 단일 호출(재시도 없음). 성공 시 사용량을 기록하고 원시 응답을 반환한다. */
+	private JsonNode callOnce(Map<String, Object> body) {
+		JsonNode response = webClient.post()
+				.uri("/models/{model}:generateContent", properties.model())
+				.contentType(MediaType.APPLICATION_JSON)
+				.bodyValue(body)
+				.retrieve()
+				.bodyToMono(JsonNode.class)
+				.block(Duration.ofSeconds(properties.timeoutSeconds()));
+		if (response == null) {
+			throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, "빈 응답");
+		}
+		record(response);
+		return response;
+	}
+
+	/**
+	 * 한 번의 시도(HTTP 호출 + 텍스트 추출/파싱) 전체를 감싸 순간적 Gemini 장애를 서버측에서 재시도한다.
+	 * 재시도 대상: 429(무료 한도 — Retry-After 백오프), 5xx(모델 과부하 등 — 고정 백오프),
+	 *   빈 응답·구조화 파싱 실패(AI_GENERATION_FAILED — 고정 백오프). 관측된 실패는 30s 타임아웃이 아닌 빠른 5xx·빈 응답이라 이걸 노린다.
+	 * 재시도 안 함: 타임아웃·네트워크 예외(재시도하면 타임아웃 지연만 배가), AI_DISABLED·AI_RATE_LIMITED.
+	 * 429가 재시도까지 소진되면 AI_RATE_LIMITED(429)로 반환해 "잠시 후 다시 시도" UX를 준다(생성 실패와 구분).
+	 */
+	private <T> T callWithRetry(Supplier<T> attempt) {
 		requireEnabled();
-		// 무료 한도(RPM) 순간 초과(429)는 Retry-After만큼(상한 내) 대기 후 재시도한다.
-		// 재시도까지 소진되면 AI_RATE_LIMITED(429)로 반환해 "잠시 후 다시 시도" UX를 준다(생성 실패와 구분).
 		int attempts = properties.maxRetries() + 1;
 		for (int i = 0; i < attempts; i++) {
 			try {
-				JsonNode response = webClient.post()
-						.uri("/models/{model}:generateContent", properties.model())
-						.contentType(MediaType.APPLICATION_JSON)
-						.bodyValue(body)
-						.retrieve()
-						.bodyToMono(JsonNode.class)
-						.block(Duration.ofSeconds(properties.timeoutSeconds()));
-				if (response == null) {
-					throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, "빈 응답");
-				}
-				record(response);
-				return response;
+				return attempt.get();
 			} catch (WebClientResponseException.TooManyRequests e) {
 				log.warn("AI 호출 429(무료 한도) 시도 {}/{}", i + 1, attempts);
 				if (i < attempts - 1) {
@@ -98,14 +114,46 @@ public class GeminiAiChatClient implements AiChatClient {
 					continue;
 				}
 				throw new CoreException(AiErrorCode.AI_RATE_LIMITED, "AI 무료 한도 초과(429)");
+			} catch (WebClientResponseException e) {
+				if (e.getStatusCode().is5xxServerError() && i < attempts - 1) {
+					log.warn("AI 호출 5xx({}) 재시도 {}/{}", e.getStatusCode().value(), i + 1, attempts);
+					fixedBackoff(i);
+					continue;
+				}
+				throw new CoreException(AiErrorCode.AI_GENERATION_FAILED,
+						e.getStatusCode().value() + " " + e.getMessage());
 			} catch (CoreException e) {
+				if (isRetryable(e) && i < attempts - 1) {
+					log.warn("AI 생성 실패(빈 응답/파싱) 재시도 {}/{}: {}", i + 1, attempts, e.getMessage());
+					fixedBackoff(i);
+					continue;
+				}
 				throw e;
 			} catch (Exception e) {
+				// 타임아웃·네트워크 오류 — 재시도하면 지연만 배가되므로 즉시 실패로 처리한다.
 				throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, e.getMessage());
 			}
 		}
 		// 도달 불가(위 루프가 반환/예외로 끝남) — 방어적 안전망.
 		throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, "AI 호출 실패");
+	}
+
+	/** 생성 실패(빈 응답·구조화 파싱 실패)만 재시도 대상. AI_DISABLED·AI_RATE_LIMITED는 재시도하지 않는다. */
+	private static boolean isRetryable(CoreException e) {
+		return e.errorCode() == AiErrorCode.AI_GENERATION_FAILED;
+	}
+
+	/** 5xx·빈 응답 재시도용 고정 백오프 — 소량(시도마다 300ms씩 증가), {@code max-retry-delay-seconds} 상한 내에서 대기. */
+	private void fixedBackoff(int i) {
+		long wait = Math.min((i + 1) * 300L, properties.maxRetryDelaySeconds() * 1000L);
+		if (wait <= 0) {
+			return;
+		}
+		try {
+			Thread.sleep(wait);
+		} catch (InterruptedException ie) {
+			Thread.currentThread().interrupt();
+		}
 	}
 
 	/** 429 백오프 — Retry-After(초)만큼, 단 {@code max-retry-delay-seconds} 상한 내에서 대기한다. */
