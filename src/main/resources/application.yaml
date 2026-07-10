@@ -23,11 +23,26 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics   # metrics: AI 토큰 사용량(modi.ai.tokens/calls) 관측용
+        # prometheus: Alloy 에이전트가 스크랩해 Grafana Cloud로 remote_write.
+        # ⚠️ 앱 포트가 공개(EC2 8080)라 actuator도 공개된다 — metrics와 동일 데이터라 노출 등급은 그대로지만,
+        #    management 포트 분리/역프록시 차단은 별도 하드닝 과제(docs/observability-setup.md 참고).
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      application: modi-backend   # 모든 지표에 앱 라벨(다중 인스턴스 구분용)
+    distribution:
+      # HTTP 요청 지연을 히스토그램(_bucket)으로 노출 → PromQL histogram_quantile로 p50/p95/p99 계산·집계 가능.
+      # (기본은 summary라 _bucket이 없어 percentile 계산 불가) 버킷 상·하한을 두어 카디널리티를 억제한다.
+      percentiles-histogram:
+        "[http.server.requests]": true
+      minimum-expected-value:
+        "[http.server.requests]": 5ms
+      maximum-expected-value:
+        "[http.server.requests]": 3s
 
 server:
   port: 8080

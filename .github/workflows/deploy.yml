@@ -40,13 +40,17 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Grafana Cloud(관측 메트릭). 3개 다 secrets에 등록돼야 obs 프로파일이 켜진다. 미설정이면 앱만 배포.
+          GC_PROM_URL: ${{ secrets.GC_PROM_URL }}
+          GC_PROM_USER: ${{ secrets.GC_PROM_USER }}
+          GC_API_KEY: ${{ secrets.GC_API_KEY }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           command_timeout: 20m
           # GitHub Actions secrets를 원격 SSH 세션 환경변수로 전달
-          envs: KAKAO_CLIENT_SECRET,GOOGLE_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY
+          envs: KAKAO_CLIENT_SECRET,GOOGLE_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY,GC_PROM_URL,GC_PROM_USER,GC_API_KEY
           script: |
             set -e
             cd ~/modi-backend
@@ -68,8 +72,24 @@ jobs:
             # record-AI 감상문을 Gemini로 활성화 (위 GEMINI_API_KEY 시크릿 재사용).
             AI_PROVIDER=gemini
             AI_API_KEY=${GEMINI_API_KEY}
+            # Grafana Cloud(관측) 자격증명 — 비어 있으면 아래에서 obs 프로파일을 켜지 않는다.
+            GC_PROM_URL=${GC_PROM_URL}
+            GC_PROM_USER=${GC_PROM_USER}
+            GC_API_KEY=${GC_API_KEY}
+            # 운영 인스턴스 라벨(로컬과 시계열 분리) — 시크릿 아님.
+            GC_INSTANCE=modi-backend-prod
             EOF
-            sudo docker compose --profile app up -d --build
+
+            # 관측 자격증명(GC_API_KEY)이 있으면 obs 프로파일(Alloy 에이전트)도 함께 기동해 메트릭을 Grafana Cloud로 전송.
+            # 없으면 --profile app만 → 기존 배포와 100% 동일(관측 secrets 등록 전에도 안전).
+            PROFILES="--profile app"
+            if [ -n "${GC_API_KEY}" ]; then
+              PROFILES="$PROFILES --profile obs"
+              echo "🔭 관측(obs) 프로파일 활성화 — Alloy가 Grafana Cloud로 메트릭 전송"
+            else
+              echo "ℹ️  GC_API_KEY 미설정 → 관측 프로파일 생략(앱만 배포)"
+            fi
+            sudo docker compose $PROFILES up -d --build
 
             # 배포 후 헬스체크 검증: UP 될 때까지 최대 150초 폴링, 실패 시 로그 출력하고 배포 실패 처리
             # 운영 호스트 노출 포트 = 8080(.env의 APP_HOST_PORT=8080 → compose가 8080:8080으로 매핑).
@@ -78,13 +98,13 @@ jobs:
             for i in $(seq 1 30); do
               if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
                 echo "✅ Health check passed"
-                sudo docker compose --profile app ps
+                sudo docker compose $PROFILES ps
                 exit 0
               fi
               echo "  ...not ready yet ($i/30)"
               sleep 5
             done
             echo "❌ Health check FAILED after timeout"
-            sudo docker compose --profile app ps
+            sudo docker compose $PROFILES ps
             sudo docker compose --profile app logs --tail=80 app
             exit 1

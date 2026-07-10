@@ -1,0 +1,151 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "Grafana Cloud Prometheus 데이터소스를 선택하세요 (예: grafanacloud-...-prom)",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+  ],
+  "title": "modi-backend · Golden Signals",
+  "description": "요청 처리량·에러율·지연(p50/p95/p99)·자원(DB풀·CPU·Heap). application=modi-backend 기준.",
+  "tags": ["modi", "golden-signals"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0,
+        "label": "Datasource"
+      }
+    ]
+  },
+  "panels": [
+    { "type": "row", "title": "핵심 신호 (Golden Signals)", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "id": 100 },
+
+    {
+      "id": 1, "type": "stat", "title": "처리량 (req/s)",
+      "description": "초당 처리 요청 수. 지금 부하 수준.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 1, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "sum(rate(http_server_requests_seconds_count{application=\"modi-backend\"}[1m]))" } ]
+    },
+    {
+      "id": 2, "type": "stat", "title": "에러율 (%)",
+      "description": "전체 요청 중 4xx/5xx 비율. 1% 미만이면 정상, 5%+면 경고.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 2, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "100 * sum(rate(http_server_requests_seconds_count{application=\"modi-backend\",outcome=~\"SERVER_ERROR|CLIENT_ERROR\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"modi-backend\"}[5m])), 0.001)" } ]
+    },
+    {
+      "id": 3, "type": "stat", "title": "지연 p95 (ms)",
+      "description": "95%의 요청이 이 시간 안에 처리됨. 우리 부하테스트 기준: <250ms 좋음, >1s 경고.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 3, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 0.25 }, { "color": "red", "value": 1 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "targets": [ { "refId": "A", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"modi-backend\"}[5m])) by (le))" } ]
+    },
+    {
+      "id": 4, "type": "stat", "title": "DB 커넥션 (활성/최대)",
+      "description": "Hikari 풀 활성 커넥션. max(기본 10)에 붙으면 대기 발생 = 병목 신호.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area", "textMode": "value_and_name" },
+      "targets": [
+        { "refId": "A", "legendFormat": "active", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max(hikaricp_connections_active{application=\"modi-backend\"})" },
+        { "refId": "B", "legendFormat": "max", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max(hikaricp_connections_max{application=\"modi-backend\"})" }
+      ]
+    },
+
+    {
+      "id": 5, "type": "timeseries", "title": "요청 처리량 (상태별)",
+      "description": "상태(2xx/4xx/5xx)별 초당 요청. 빨강(5xx)이 튀면 장애.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 20, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [ { "refId": "A", "legendFormat": "{{outcome}} ({{status}})", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "sum by (outcome,status) (rate(http_server_requests_seconds_count{application=\"modi-backend\"}[1m]))" } ]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "지연 분위수 (p50/p95/p99)",
+      "description": "전체 요청 지연. p99가 p95보다 크게 벌어지면 꼬리 지연(tail latency) 발생.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "legendFormat": "p50", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=\"modi-backend\"}[5m])) by (le))" },
+        { "refId": "B", "legendFormat": "p95", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"modi-backend\"}[5m])) by (le))" },
+        { "refId": "C", "legendFormat": "p99", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"modi-backend\"}[5m])) by (le))" }
+      ]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "엔드포인트별 p95 지연 (Top)",
+      "description": "어떤 API가 느린지. 특정 uri만 튀면 그 쿼리/로직을 봐야 함.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 14 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 5 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["max"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "legendFormat": "{{method}} {{uri}}", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"modi-backend\",uri!~\"/actuator.*\"}[5m])) by (le, uri, method))" } ]
+    },
+
+    { "type": "row", "title": "자원 (Saturation)", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 }, "id": 101 },
+    {
+      "id": 8, "type": "timeseries", "title": "DB 커넥션 풀 (Hikari)",
+      "description": "active가 max에 붙고 pending>0이면 DB 풀 부족 = 지연 증가 원인.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 23 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "legendFormat": "active", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max(hikaricp_connections_active{application=\"modi-backend\"})" },
+        { "refId": "B", "legendFormat": "idle", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max(hikaricp_connections_idle{application=\"modi-backend\"})" },
+        { "refId": "C", "legendFormat": "pending(대기)", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max(hikaricp_connections_pending{application=\"modi-backend\"})" },
+        { "refId": "D", "legendFormat": "max", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "max(hikaricp_connections_max{application=\"modi-backend\"})" }
+      ]
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "CPU 사용률",
+      "description": "process=앱 자신, system=호스트 전체. 1(=100%)에 붙으면 CPU 병목.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 23 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1, "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "legendFormat": "process(앱)", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "avg(process_cpu_usage{application=\"modi-backend\"})" },
+        { "refId": "B", "legendFormat": "system(호스트)", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "avg(system_cpu_usage{application=\"modi-backend\"})" }
+      ]
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "JVM Heap 사용량",
+      "description": "힙 메모리 사용. 톱니(GC로 내려감)가 정상, 계속 우상향이면 누수 의심.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 23 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "legendFormat": "heap used", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "sum(jvm_memory_used_bytes{application=\"modi-backend\",area=\"heap\"})" },
+        { "refId": "B", "legendFormat": "heap max", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "sum(jvm_memory_max_bytes{application=\"modi-backend\",area=\"heap\"})" }
+      ]
+    }
+  ]
+}

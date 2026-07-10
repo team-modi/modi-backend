@@ -59,5 +59,32 @@ services:
       # 운영(EC2 배포)은 deploy.yml의 .env가 APP_HOST_PORT=8080을 주입해 공개 주소·헬스체크(localhost:8080)와 맞춘다.
       - '${APP_HOST_PORT:-18090}:8080'
 
+  # 관측 에이전트(Grafana Alloy) — 앱 /actuator/prometheus 스크랩 → Grafana Cloud remote_write.
+  # 별도 'obs' 프로파일이라 자격증명(GC_*) 없이도 기존 `--profile app` 실행은 그대로 동작한다.
+  # 사용:  docker compose --profile app --profile obs up -d   (.env에 GC_* 채운 뒤)
+  alloy:
+    image: 'grafana/alloy:latest'
+    container_name: modi-alloy
+    profiles: ['obs']
+    depends_on:
+      - app
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+    volumes:
+      - './observability/config.alloy:/etc/alloy/config.alloy:ro'
+    environment:
+      # Grafana Cloud 자격증명(.env / GitHub Actions secrets). 비어 있으면 remote_write 실패하므로 obs 프로파일을 켜지 말 것.
+      - 'GC_PROM_URL=${GC_PROM_URL:-}'
+      - 'GC_PROM_USER=${GC_PROM_USER:-}'
+      - 'GC_API_KEY=${GC_API_KEY:-}'
+      # 인스턴스 라벨(환경 구분). 로컬은 기본 modi-backend-local, 운영은 deploy.yml이 modi-backend-prod 주입.
+      - 'GC_INSTANCE=${GC_INSTANCE:-}'
+    ports:
+      # Alloy 자체 UI/디버그. 외부 노출 금지 → 루프백에만 바인딩.
+      - '127.0.0.1:12345:12345'
+    restart: unless-stopped
+
 volumes:
   mysql-data:
