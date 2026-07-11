@@ -56,7 +56,13 @@ public final class ExhibitionDto {
 			@Size(max = 2048)
 			@Schema(description = "포스터 이미지 URL. 선택.", example = "https://cdn.modi.app/exhibitions/108/poster.jpg",
 					nullable = true)
-			String posterUrl) {
+			String posterUrl,
+			@Size(max = 50)
+			@Schema(description = "장르 키워드(마스터 10종 중 1개, 와이어프레임 장르 시트). 선택 — 미지정 시 분류기(AI/랜덤)가 자동 부여. "
+					+ "마스터 밖 값은 400 INVALID_INPUT.",
+					example = "사진", allowableValues = { "회화·드로잉", "사진", "미디어아트", "조각·설치", "디자인",
+							"공예", "건축", "공연", "현대미술", "일러스트레이션" }, nullable = true)
+			String genreKeyword) {
 	}
 
 	/** 목록 항목(5.2 content[], 공통 스키마 ExhibitionListItem). */
