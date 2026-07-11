@@ -41,6 +41,7 @@ public class AdminUserFacade {
 	private static final int RECENT_LIMIT = 10;
 	private static final int ACTIVITY_LIMIT = 20;
 	private static final int TOP_PATHS = 10;
+	private static final String PHONE_PROVIDER = "phone"; // 게스트 전화 로그인의 SocialAccount provider(= AuthFacade.PHONE_PROVIDER)
 
 	private final UserJpaRepository userRepository;
 	private final SocialAccountJpaRepository socialAccountRepository;
@@ -60,9 +61,10 @@ public class AdminUserFacade {
 		Map<Long, Long> bookmarkCounts = countMap(ids, bookmarkRepository::countByUserIds);
 		Map<Long, Long> apiCounts = countMap(ids, activityLogRepository::countByUserIds);
 		Map<Long, ZonedDateTime> lastActivity = timeMap(ids, activityLogRepository::lastActivityByUserIds);
+		Map<Long, String> phones = phoneMap(ids);
 
 		return users.map(u -> new AdminUserResult.UserListItem(
-				u.getId(), u.getNickname(), u.getName(), u.getCreatedAt(),
+				u.getId(), u.getNickname(), u.getName(), phones.get(u.getId()), u.getCreatedAt(),
 				recordCounts.getOrDefault(u.getId(), 0L),
 				remindCounts.getOrDefault(u.getId(), 0L),
 				bookmarkCounts.getOrDefault(u.getId(), 0L),
@@ -75,8 +77,11 @@ public class AdminUserFacade {
 		User user = userRepository.findByIdAndDeletedAtIsNull(userId)
 				.orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND));
 
-		String email = socialAccountRepository.findByUserIdAndDeletedAtIsNull(userId).stream()
-				.map(SocialAccount::getEmail).filter(Objects::nonNull).findFirst().orElse(null);
+		List<SocialAccount> accounts = socialAccountRepository.findByUserIdAndDeletedAtIsNull(userId);
+		String email = accounts.stream().map(SocialAccount::getEmail).filter(Objects::nonNull).findFirst().orElse(null);
+		String phoneNumber = accounts.stream()
+				.filter(a -> PHONE_PROVIDER.equals(a.getProvider()))
+				.map(SocialAccount::getProviderUserId).map(AdminUserFacade::formatPhone).findFirst().orElse(null);
 
 		List<Record> records = recordRepository
 				.findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(userId, PageRequest.of(0, RECENT_LIMIT))
@@ -95,7 +100,7 @@ public class AdminUserFacade {
 		ZonedDateTime lastActivityAt = activity.isEmpty() ? null : activity.get(0).getCreatedAt();
 
 		return new AdminUserResult.UserDetail(
-				user.getId(), user.getNickname(), user.getName(), email,
+				user.getId(), user.getNickname(), user.getName(), email, phoneNumber,
 				enumName(user.getAgeGroup()), enumName(user.getResidenceRegion()),
 				user.getBirthYear(), user.isRemindEnabled(), user.getCreatedAt(),
 				recordRepository.countByUserIdAndDeletedAtIsNull(userId),
@@ -185,6 +190,32 @@ public class AdminUserFacade {
 			return l.atZone(java.time.ZoneOffset.UTC);
 		}
 		return null;
+	}
+
+	private Map<Long, String> phoneMap(List<Long> ids) {
+		if (ids.isEmpty()) {
+			return Map.of();
+		}
+		Map<Long, String> map = new HashMap<>();
+		for (SocialAccount account : socialAccountRepository
+				.findByProviderAndUserIdInAndDeletedAtIsNull(PHONE_PROVIDER, ids)) {
+			map.putIfAbsent(account.getUserId(), formatPhone(account.getProviderUserId()));
+		}
+		return map;
+	}
+
+	/** 정규화된 숫자(01012345678)를 010-1234-5678로 표기. 길이가 예상과 다르면 원본 그대로. */
+	private static String formatPhone(String digits) {
+		if (digits == null) {
+			return null;
+		}
+		if (digits.length() == 11) {
+			return digits.substring(0, 3) + "-" + digits.substring(3, 7) + "-" + digits.substring(7);
+		}
+		if (digits.length() == 10) {
+			return digits.substring(0, 3) + "-" + digits.substring(3, 6) + "-" + digits.substring(6);
+		}
+		return digits;
 	}
 
 	private static String enumName(Enum<?> value) {
