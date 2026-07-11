@@ -18,12 +18,12 @@ public final class NotificationResult {
 
 	/** 알림 한 건(목록 항목). type은 문자열, createdAt은 오프셋 포함 ZonedDateTime로 내린다(클라 상대시간 계산용). */
 	public record Item(Long notificationId, String type, String title, String body,
-			Long targetId, boolean read, ZonedDateTime createdAt) {
+			Long targetId, String imageUrl, boolean read, ZonedDateTime createdAt) {
 
 		public static Item from(Notification notification) {
 			return new Item(notification.getId(), notification.getType().name(), notification.getTitle(),
-					notification.getBody(), notification.getTargetId(), notification.isRead(),
-					notification.getCreatedAt());
+					notification.getBody(), notification.getTargetId(), notification.getImageUrl(),
+					notification.isRead(), notification.getCreatedAt());
 		}
 	}
 

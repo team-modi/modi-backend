@@ -39,40 +39,52 @@ public class Notification extends BaseEntity {
 	@Column(name = "target_id")
 	private Long targetId;
 
+	/** 카드 썸네일 이미지 URL(전시 포스터 스냅샷). 없으면 null → FE 플레이스홀더. */
+	@Column(name = "image_url", length = 2048)
+	private String imageUrl;
+
 	/** 읽음 여부. 예약어 회피를 위해 컬럼명은 is_read. */
 	@Column(name = "is_read", nullable = false)
 	private boolean read;
 
-	private Notification(Long userId, NotificationType type, String title, String body, Long targetId) {
+	private Notification(Long userId, NotificationType type, String title, String body, Long targetId,
+			String imageUrl) {
 		this.userId = userId;
 		this.type = type;
 		this.title = title;
 		this.body = body;
 		this.targetId = targetId;
+		this.imageUrl = imageUrl;
 		this.read = false;
 	}
 
-	/** 새 알림 생성 — 읽지 않음 상태로 시작한다. */
+	/** 새 알림 생성 — 읽지 않음 상태로 시작한다. 이미지 없는 알림(공지 등)용. */
 	public static Notification create(Long userId, NotificationType type, String title, String body, Long targetId) {
-		return new Notification(userId, type, title, body, targetId);
+		return new Notification(userId, type, title, body, targetId, null);
 	}
 
 	/**
 	 * 오늘의 여운(리마인드 도착) 알림 — 문구 규칙은 엔티티가 소유한다.
 	 * nickname이 없으면 호칭 없이 "{elapsedLabel} 기록한 전시가 있어요!"로 시작한다.
 	 * (elapsedLabel 예: "1주일 전"·"오늘" — "오늘 기록한 전시가 있어요!"처럼 자연스럽게 읽힌다.)
+	 * imageUrl=회고 대상 전시의 포스터(카드 썸네일).
 	 */
-	public static Notification remind(Long userId, String nickname, String elapsedLabel, Long recordId) {
+	public static Notification remind(Long userId, String nickname, String elapsedLabel, Long recordId,
+			String imageUrl) {
 		String prefix = (nickname == null || nickname.isBlank()) ? "" : nickname + "님, ";
 		return new Notification(userId, NotificationType.REMIND, "오늘의 여운",
-				prefix + elapsedLabel + " 기록한 전시가 있어요!", recordId);
+				prefix + elapsedLabel + " 기록한 전시가 있어요!", recordId, imageUrl);
 	}
 
-	/** 북마크 전시 종료 임박 알림 — daysLeft=0이면 "오늘 종료", n&gt;0이면 "{n}일 뒤 종료". */
-	public static Notification exhibitionEnding(Long userId, String exhibitionTitle, int daysLeft, Long exhibitionId) {
+	/**
+	 * 북마크 전시 종료 임박 알림 — daysLeft=0이면 "오늘 종료", n&gt;0이면 "{n}일 뒤 종료".
+	 * imageUrl=해당 전시 포스터(카드 썸네일).
+	 */
+	public static Notification exhibitionEnding(Long userId, String exhibitionTitle, int daysLeft, Long exhibitionId,
+			String imageUrl) {
 		String when = daysLeft == 0 ? "오늘" : daysLeft + "일 뒤";
 		return new Notification(userId, NotificationType.EXHIBITION, "전시",
-				"'" + exhibitionTitle + "' 전시가 " + when + " 종료 돼요", exhibitionId);
+				"'" + exhibitionTitle + "' 전시가 " + when + " 종료 돼요", exhibitionId, imageUrl);
 	}
 
 	/** 읽음 처리(멱등) — 이미 읽음이어도 결과는 동일하게 읽음. */

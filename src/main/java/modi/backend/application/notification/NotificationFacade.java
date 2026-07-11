@@ -97,7 +97,7 @@ public class NotificationFacade {
 		}
 		String nickname = userRepository.findById(userId).map(User::getNickname).orElse(null);
 		notificationRepository.save(Notification.remind(userId, nickname, candidate.elapsedLabel(),
-				candidate.recordId()));
+				candidate.recordId(), candidate.posterUrl()));
 	}
 
 	/** EXHIBITION — 북마크한 전시 중 KST 오늘 기준 0~3일 뒤 종료하는 전시마다(중복 제외) 생성. */
@@ -123,7 +123,7 @@ public class NotificationFacade {
 				continue;
 			}
 			notificationRepository.save(Notification.exhibitionEnding(
-					userId, exhibition.getTitle(), (int) daysLeft, exhibition.getId()));
+					userId, exhibition.getTitle(), (int) daysLeft, exhibition.getId(), exhibition.getPosterUrl()));
 		}
 	}
 
