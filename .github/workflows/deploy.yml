@@ -43,17 +43,28 @@ jobs:
           # record-AI 감상문/질문 AI = Claude(Anthropic, 유료). 아래 .env의 AI_PROVIDER=claude와 짝을 이룬다.
           #   무료 한도 소진으로 유료 전환(장르 분류는 계속 무료 Gemini). 개인 .env 의존 금지 → 이 시크릿에서만 주입.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Grafana Cloud(관측 메트릭). 3개 다 secrets에 등록돼야 obs 프로파일이 켜진다. 미설정이면 앱만 배포.
+          # Grafana Cloud(관측). GC_API_KEY가 있으면 obs 프로파일이 켜진다(메트릭). 미설정이면 앱만 배포.
           GC_PROM_URL: ${{ secrets.GC_PROM_URL }}
           GC_PROM_USER: ${{ secrets.GC_PROM_USER }}
           GC_API_KEY: ${{ secrets.GC_API_KEY }}
+          # 로그(Loki) — 이 둘까지 등록되면 컨테이너 로그도 함께 전송(Phase 2). 없으면 로그만 스킵.
+          GC_LOKI_URL: ${{ secrets.GC_LOKI_URL }}
+          GC_LOKI_USER: ${{ secrets.GC_LOKI_USER }}
+          # Metabase(사용자 지표) 외부 공개용 Cloudflare Tunnel 토큰(named, 고정 주소·도메인 필요). 있으면 metabase+cloudflared 기동.
+          CF_TUNNEL_TOKEN: ${{ secrets.CF_TUNNEL_TOKEN }}
+          MB_SITE_URL: ${{ secrets.MB_SITE_URL }}
+          # (대안) 도메인 없이 quick tunnel로 metabase 공개. "true"면 활성(URL은 배포 로그/컨테이너 로그에서 확인, 재시작 시 변경).
+          CF_QUICK_TUNNEL: ${{ secrets.CF_QUICK_TUNNEL }}
+          # (대안2) 터널 없이 EC2 Public IP로 Metabase 직접 공개. "true"면 analytics 프로파일을 0.0.0.0:3000으로 노출.
+          #   ⚠️ http 평문 — 반드시 EC2 보안그룹 인바운드 3000을 신뢰 IP로 제한할 것.
+          ENABLE_METABASE: ${{ secrets.ENABLE_METABASE }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           command_timeout: 20m
           # GitHub Actions secrets를 원격 SSH 세션 환경변수로 전달
-          envs: KAKAO_CLIENT_SECRET,GOOGLE_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY,ANTHROPIC_API_KEY,GC_PROM_URL,GC_PROM_USER,GC_API_KEY
+          envs: KAKAO_CLIENT_SECRET,GOOGLE_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY,ANTHROPIC_API_KEY,GC_PROM_URL,GC_PROM_USER,GC_API_KEY,GC_LOKI_URL,GC_LOKI_USER,CF_TUNNEL_TOKEN,MB_SITE_URL,CF_QUICK_TUNNEL,ENABLE_METABASE
           script: |
             set -e
             cd ~/modi-backend
@@ -84,8 +95,13 @@ jobs:
             GC_PROM_URL=${GC_PROM_URL}
             GC_PROM_USER=${GC_PROM_USER}
             GC_API_KEY=${GC_API_KEY}
+            GC_LOKI_URL=${GC_LOKI_URL}
+            GC_LOKI_USER=${GC_LOKI_USER}
             # 운영 인스턴스 라벨(로컬과 시계열 분리) — 시크릿 아님.
             GC_INSTANCE=modi-backend-prod
+            # Metabase 외부 공개(Cloudflare Tunnel). CF_TUNNEL_TOKEN 있으면 아래에서 analytics+tunnel 프로파일 기동.
+            CF_TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+            MB_SITE_URL=${MB_SITE_URL}
             EOF
 
             # 관측 자격증명(GC_API_KEY)이 있으면 obs 프로파일(Alloy 에이전트)도 함께 기동해 메트릭을 Grafana Cloud로 전송.
@@ -97,6 +113,22 @@ jobs:
             else
               echo "ℹ️  GC_API_KEY 미설정 → 관측 프로파일 생략(앱만 배포)"
             fi
+            QUICK_TUNNEL=0
+            if [ -n "${CF_TUNNEL_TOKEN}" ]; then
+              PROFILES="$PROFILES --profile analytics --profile tunnel"
+              echo "📊 Metabase + Cloudflare Tunnel(named, 고정 주소) 활성화"
+            elif [ "${CF_QUICK_TUNNEL}" = "true" ]; then
+              PROFILES="$PROFILES --profile analytics --profile tunnel-quick"
+              QUICK_TUNNEL=1
+              echo "📊 Metabase + Cloudflare quick tunnel 활성화 (URL은 아래 로그에서 확인, 재시작 시 변경)"
+            elif [ "${ENABLE_METABASE}" = "true" ]; then
+              # 터널 없이 EC2 Public IP로 Metabase 직접 노출: 호스트 0.0.0.0:3000 바인딩 + 사이트 URL을 공개 IP로.
+              #   ⚠️ http 평문 — 반드시 EC2 보안그룹 인바운드 3000을 신뢰 IP로 제한할 것.
+              PROFILES="$PROFILES --profile analytics"
+              echo "MB_HOST_PORT=3000" >> .env
+              sed -i 's|^MB_SITE_URL=.*|MB_SITE_URL=http://3.35.111.143:3000|' .env
+              echo "📊 Metabase public 노출 활성화 → http://3.35.111.143:3000 (EC2 보안그룹 인바운드 3000 개방 필요)"
+            fi
             sudo docker compose $PROFILES up -d --build
 
             # 배포 후 헬스체크 검증: UP 될 때까지 최대 150초 폴링, 실패 시 로그 출력하고 배포 실패 처리
@@ -107,6 +139,11 @@ jobs:
               if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
                 echo "✅ Health check passed"
                 sudo docker compose $PROFILES ps
+                if [ "$QUICK_TUNNEL" = "1" ]; then
+                  echo "⏳ quick tunnel URL 대기..."; sleep 12
+                  URL=$(sudo docker logs modi-cloudflared-quick 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1)
+                  echo "🌐 Metabase 공개 URL(임시): ${URL:-'(로그에서 확인: docker logs modi-cloudflared-quick)'}"
+                fi
                 exit 0
               fi
               echo "  ...not ready yet ($i/30)"

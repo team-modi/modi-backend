@@ -48,6 +48,8 @@ dependencies {
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	// Micrometer Prometheus 레지스트리 — /actuator/prometheus 노출(에이전트가 스크랩 → Grafana Cloud)
 	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+	// 운영 구조화(JSON) 로깅 — 로그 수집기(Loki 등)에서 필드 검색 가능하게(prod 프로파일에서만 사용)
+	implementation 'net.logstash.logback:logstash-logback-encoder:8.1'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'

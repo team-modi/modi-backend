@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  운영(prod)은 JSON 한 줄 로그(Loki 등에서 필드 검색) + requestId/서비스 라벨.
+  로컬/그 외 프로파일은 Spring 기본 콘솔(사람이 읽기 좋게)에 requestId만 얹는다.
+  requestId는 RequestIdFilter가 MDC에 넣는다(요청 상관관계).
+-->
+<configuration>
+  <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="modi-backend"/>
+
+  <!-- 운영: JSON(Logstash 인코더) -->
+  <springProfile name="prod">
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+        <includeMdcKeyName>requestId</includeMdcKeyName>
+        <customFields>{"service":"${appName}"}</customFields>
+        <fieldNames>
+          <timestamp>ts</timestamp>
+          <message>msg</message>
+          <logger>logger</logger>
+          <thread>thread</thread>
+          <levelValue>[ignore]</levelValue>
+        </fieldNames>
+      </encoder>
+    </appender>
+    <root level="INFO">
+      <appender-ref ref="JSON"/>
+    </root>
+  </springProfile>
+
+  <!-- 로컬/기타: 기본 콘솔 + requestId 얹기 -->
+  <springProfile name="!prod">
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder>
+        <pattern>%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n</pattern>
+      </encoder>
+    </appender>
+    <root level="INFO">
+      <appender-ref ref="CONSOLE"/>
+    </root>
+  </springProfile>
+</configuration>
