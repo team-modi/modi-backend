@@ -58,6 +58,17 @@ public class AuthV1Controller implements AuthV1ApiSpec {
 		return ResponseEntity.ok(ApiResponse.success(AuthDto.TokenResponse.from(result)));
 	}
 
+	/** 휴대폰 식별 게스트 로그인(베타 전용) — 같은 번호는 재로그인 시 같은 계정으로 이어진다. */
+	@Override
+	@PostMapping("/guest/phone")
+	public ResponseEntity<ApiResponse<AuthDto.TokenResponse>> guestPhoneLogin(
+			@Valid @RequestBody AuthDto.PhoneGuestLoginRequest request,
+			HttpServletResponse response) {
+		AuthResult.Login result = authFacade.guestPhoneLogin(request.phoneNumber());
+		setAuthCookies(response, result);
+		return ResponseEntity.ok(ApiResponse.success(AuthDto.TokenResponse.from(result)));
+	}
+
 	@Override
 	@PostMapping("/refresh")
 	public ResponseEntity<ApiResponse<AuthDto.TokenResponse>> refresh(

@@ -15,6 +15,13 @@ public final class AuthDto {
 	public record LoginRequest(@NotBlank String code, @NotBlank String redirectUri) {
 	}
 
+	/**
+	 * 휴대폰 식별 게스트 로그인 요청(베타 전용). 하이픈·공백 포함 입력 허용 —
+	 * 정규화(숫자만)·형식 규칙(01 시작 10~11자리)은 도메인 VO(PhoneNumber)가 검증한다.
+	 */
+	public record PhoneGuestLoginRequest(@NotBlank String phoneNumber) {
+	}
+
 	/** 로그인/재발급 응답. access·refresh는 HttpOnly 쿠키로 내려가고, accessToken은 비쿠키 클라이언트 호환용으로 본문에도 둔다. */
 	public record TokenResponse(String accessToken, User user) {
 

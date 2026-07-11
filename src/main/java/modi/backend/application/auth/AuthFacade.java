@@ -14,6 +14,7 @@ import modi.backend.domain.auth.Provider;
 import modi.backend.domain.auth.RefreshTokenStore;
 import modi.backend.domain.auth.TokenClaims;
 import modi.backend.domain.auth.TokenProvider;
+import modi.backend.domain.user.PhoneNumber;
 import modi.backend.domain.user.SocialAccount;
 import modi.backend.domain.user.SocialAccountRepository;
 import modi.backend.domain.user.User;
@@ -33,6 +34,9 @@ public class AuthFacade {
 
 	/** 게스트 로그인 시 토큰 provider 클레임 값. 소셜(kakao/google)과 구분한다. */
 	public static final String GUEST_PROVIDER = "guest";
+
+	/** 휴대폰 식별 게스트의 SocialAccount provider 값(베타) — 소셜 provider들과 같은 연결 테이블을 공유한다. */
+	public static final String PHONE_PROVIDER = "phone";
 
 	private final List<OAuthClient> oauthClients; // provider 전략들(주입)
 	private final UserRepository userRepository;
@@ -82,6 +86,31 @@ public class AuthFacade {
 	@Transactional
 	public AuthResult.Login guestLogin() {
 		User user = userRepository.save(User.createGuest());
+		AuthTokens tokens = tokenProvider.issue(user, GUEST_PROVIDER);
+		refreshTokenStore.save(user.getId(), tokens.refreshToken());
+		return AuthResult.Login.of(user, GUEST_PROVIDER, null, tokens);
+	}
+
+	/**
+	 * 휴대폰 번호 식별 게스트 로그인(베타 전용, 기존 로그인 API 무수정 별도 유스케이스).
+	 * 카카오 로그인이 테스트 앱 테스터 계정만 허용되는 베타 기간 동안, 재방문 사용자가 같은 계정을 이어 쓰도록
+	 * 휴대폰 번호로 식별한다 — 소셜 로그인과 동일한 find-or-create: 정규화된 번호를
+	 * (provider={@code phone}, providerUserId=번호)의 {@link SocialAccount}로 연결해
+	 * 있으면 그 사용자, 없으면 게스트 사용자를 새로 만들어 연결한다. 토큰 체계는 게스트와 동일.
+	 */
+	@Transactional
+	public AuthResult.Login guestPhoneLogin(String rawPhoneNumber) {
+		String phone = PhoneNumber.of(rawPhoneNumber).value();
+		User user = socialAccountRepository.findByProviderAndProviderUserId(PHONE_PROVIDER, phone)
+				.map(social -> userRepository.findById(social.getUserId())
+						.orElseThrow(() -> new CoreException(AuthErrorCode.SOCIAL_ACCOUNT_LINK_BROKEN,
+								"연결된 사용자 없음: " + social.getUserId())))
+				.orElseGet(() -> {
+					User created = userRepository.save(User.createGuest());
+					socialAccountRepository.save(
+							SocialAccount.create(created.getId(), PHONE_PROVIDER, phone, null));
+					return created;
+				});
 		AuthTokens tokens = tokenProvider.issue(user, GUEST_PROVIDER);
 		refreshTokenStore.save(user.getId(), tokens.refreshToken());
 		return AuthResult.Login.of(user, GUEST_PROVIDER, null, tokens);

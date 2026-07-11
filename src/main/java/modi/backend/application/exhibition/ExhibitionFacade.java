@@ -211,6 +211,21 @@ public class ExhibitionFacade {
 	}
 
 	/**
+	 * 개인 전시(CUSTOM) 동반 삭제 — 기록 삭제 시, 그 기록이 직접 만든 전시를 더는 어떤 기록도 참조하지 않을 때 호출된다.
+	 * 본인이 등록한 CUSTOM만 soft-delete하고(공용 CATALOG·타인 전시·이미 삭제된 전시는 무시) 멱등하게 동작한다.
+	 * (기록을 지워도 전시가 '내 전시' 목록에 남아 조회되던 고아 전시 문제 방지)
+	 */
+	@Transactional
+	public void deleteCustomOwnedBy(Long exhibitionId, Long ownerId) {
+		exhibitionRepository.findById(exhibitionId)
+				.filter(exhibition -> exhibition.isCustomOwnedBy(ownerId))
+				.ifPresent(exhibition -> {
+					exhibition.delete();
+					exhibitionRepository.save(exhibition);
+				});
+	}
+
+	/**
 	 * 장르 백필 1배치 — 아직 장르가 없는 CATALOG(공공데이터) 전시를 최대 {@code max}건 <b>한 번의 AI 호출(배치)</b>로 분류한다.
 	 * {@link CatalogEnricher}가 이 메서드를 미분류가 소진될 때까지 반복 호출해 전량을 채운다(배치당 1콜 → 273건도 몇 콜로).
 	 * 분류기가 폴백을 보장하므로 개별 실패로 중단되지 않으며, 429로 일부가 랜덤 폴백되어도 다음 주기에 다시 시도한다
@@ -236,15 +251,17 @@ public class ExhibitionFacade {
 	}
 
 	/**
-	 * 외부 전시 API 수집 → DB upsert(externalId 기준). 이미 있으면 카탈로그 필드 갱신, 없으면 신규 적재.
+	 * 외부 전시 API 수집 → DB 적재. <b>신규(externalId 미존재) 전시만 추가</b>하고 기존 행은 건드리지 않는다
+	 * — 장르(AI 분류)·상세 등 보강으로 채운 값이 재적재로 덮이지 않고, 장르 생성도 동기화 직후 신규분에만 수행된다
+	 * (호출부가 {@link CatalogEnricher#enrichGenres()}를 이어서 호출 — 미분류 행 = 방금 추가된 신규 전시).
 	 * 인증키 미설정 시 수집 목록이 비어 0을 반환한다(외부 호출 없음).
 	 *
-	 * @return 이번 동기화로 적재/갱신된 전시 수
+	 * @return 이번 동기화로 새로 적재된 전시 수
 	 */
 	@Transactional
 	public int syncCatalog() {
 		List<CatalogExhibitionData> collected = catalogClient.fetchAll();
-		int upserted = 0;
+		int inserted = 0;
 		int skipped = 0;
 		for (CatalogExhibitionData data : collected) {
 			// 원천 데이터 품질 이슈(예: 종료일<시작일)로 단건이 도메인 불변식을 어겨도 배치 전체가 중단되지 않도록,
@@ -253,27 +270,21 @@ public class ExhibitionFacade {
 				skipped++;
 				continue;
 			}
-			exhibitionRepository.findByExternalId(data.externalId())
-					.ifPresentOrElse(existing -> refresh(existing, data), () -> create(data));
-			upserted++;
+			if (exhibitionRepository.findByExternalId(data.externalId()).isPresent()) {
+				continue; // 이미 적재된 전시 — 신규만 추가(재적재 갱신 없음)
+			}
+			create(data);
+			inserted++;
 		}
 		if (skipped > 0) {
-			log.warn("전시 동기화: 기간 비정상 {}건 스킵(수집 {}건 중 {}건 적재)", skipped, collected.size(), upserted);
+			log.warn("전시 동기화: 기간 비정상 {}건 스킵(수집 {}건 중 신규 {}건 적재)", skipped, collected.size(), inserted);
 		}
-		return upserted;
+		return inserted;
 	}
 
 	/** 원천 데이터 기간 유효성 — 둘 다 있을 때만 시작일 ≤ 종료일. 결측은 관대하게 통과(엔티티 불변식과 동일 기준). */
 	private static boolean hasValidPeriod(CatalogExhibitionData data) {
 		return data.startDate() == null || data.endDate() == null || !data.startDate().isAfter(data.endDate());
-	}
-
-	private void refresh(Exhibition existing, CatalogExhibitionData data) {
-		// 목록 필드만 갱신 — price 등 상세2 필드는 refreshCatalog가 건드리지 않는다(백필로 채운 값 보존).
-		existing.refreshCatalog(data.title(), data.place(), data.startDate(), data.endDate(), data.region(),
-				data.category(), data.posterUrl(), data.detailUrl(), data.serviceName(),
-				data.gpsX(), data.gpsY(), data.sigungu(), data.realmName(), data.areaText());
-		exhibitionRepository.save(existing);
 	}
 
 	/**

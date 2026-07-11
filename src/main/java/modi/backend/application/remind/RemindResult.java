@@ -14,9 +14,9 @@ public final class RemindResult {
 	private RemindResult() {
 	}
 
-	/** 소환 대상(회고할 과거 기록) — 화면 1~3 렌더용. */
+	/** 소환 대상(회고할 과거 기록) — 화면 1~3 렌더용. sceneImageUrl은 기록 첫 미디어(wf "전시 속, 그 장면"), 없으면 null(FE 포스터 폴백). */
 	public record Candidate(Long recordId, int daysAgo, String elapsedLabel, Long exhibitionId,
-			String exhibitionTitle, String artist, String posterUrl, String place, String region,
+			String exhibitionTitle, String artist, String posterUrl, String sceneImageUrl, String place, String region,
 			LocalDate viewedAt, String originalContent, List<String> originalEmotionCodes) {
 	}
 

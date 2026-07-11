@@ -198,7 +198,7 @@ erDiagram
 | 테이블 | 제약조건 | 설명 |
 |---|---|---|
 | social_accounts | UNIQUE(provider, provider_user_id) | 소셜 연결 유일성 — 한 provider 계정은 하나의 연결만 |
-| exhibitions | UNIQUE(external_id) | CATALOG 동기화 upsert 기준키. MySQL unique 인덱스는 다중 NULL을 허용해 CUSTOM(null)과 공존 |
+| exhibitions | UNIQUE(external_id) | CATALOG 동기화의 신규 판별·중복 방지 키(기존 행 갱신 없음). MySQL unique 인덱스는 다중 NULL을 허용해 CUSTOM(null)과 공존 |
 | exhibition_bookmarks | UNIQUE(user_id, exhibition_id) | 한 쌍당 한 행 — 멱등 토글(soft-delete/복원)의 기준 |
 | record_emotions / record_keywords / record_media | FK(record_id) → records | 애그리거트 내부 자식 — 부모와 수명 공유 |
 | remind_emotions | FK(remind_id) → reminds | 애그리거트 내부 자식 — 부모와 수명 공유 |
@@ -243,7 +243,7 @@ erDiagram
 
 | 대상 | 방식 | 이유 |
 |---|---|---|
-| exhibitions 행 갱신 | @DynamicUpdate (변경 컬럼만 UPDATE) | 정기 동기화(목록 필드)와 보강(장르·상세)이 같은 행을 짧은 시간차로 갱신 — 전체-컬럼 UPDATE의 lost update 방지 |
+| exhibitions 행 갱신 | @DynamicUpdate (변경 컬럼만 UPDATE) | 보강(장르·상세)과 조회수 증가 등이 같은 행을 짧은 시간차로 갱신 — 전체-컬럼 UPDATE의 lost update 방지 |
 | exhibitions.our_view_count | 단순 증가 (락 없음) | 인기순 정렬용 참고 카운터 — 정확성보다 낮은 비용 우선(best-effort) |
 | AI 호출 | 사용자당 인메모리 쿨다운(AiRateLimiter) | "다른 질문 보기" 반복 클릭으로 유료 LLM 호출 폭주 방지 (단일 인스턴스 기준, 필요 시 Redis 승격) |
 

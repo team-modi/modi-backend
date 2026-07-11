@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -16,8 +17,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import modi.backend.config.RemindProperties;
 import modi.backend.domain.exhibition.ExhibitionRepository;
 import modi.backend.domain.record.AiStatus;
 import modi.backend.domain.record.ExhibitionSnapshot;
@@ -45,6 +48,10 @@ class RemindFacadeTest {
 
 	@Mock
 	RemindAiSummarizer summarizer;
+
+	// 실제 설정 record를 주입(레코드라 목 대신 실값) — 소환 대기 기본 7d.
+	@Spy
+	RemindProperties remindProperties = new RemindProperties(Duration.ofDays(7));
 
 	@InjectMocks
 	RemindFacade facade;

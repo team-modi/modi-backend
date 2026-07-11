@@ -102,4 +102,43 @@ class AuthFacadeTest {
 				.extracting(e -> ((CoreException) e).errorCode())
 				.isEqualTo(AuthErrorCode.UNSUPPORTED_PROVIDER);
 	}
+
+	@Test
+	@DisplayName("guestPhoneLogin: 처음 보는 번호면 게스트 User 생성 + phone SocialAccount 연결(정규화된 번호)")
+	void 전화게스트_신규번호_가입() {
+		given(socialAccountRepository.findByProviderAndProviderUserId("phone", "01012345678"))
+				.willReturn(Optional.empty());
+		given(userRepository.save(any(User.class))).willAnswer(inv -> inv.getArgument(0));
+		given(socialAccountRepository.save(any(SocialAccount.class))).willAnswer(inv -> inv.getArgument(0));
+
+		AuthResult.Login result = authFacade.guestPhoneLogin("010-1234-5678"); // 하이픈 입력도 정규화
+
+		assertThat(result.provider()).isEqualTo(AuthFacade.GUEST_PROVIDER);
+		assertThat(result.accessToken()).isEqualTo("access");
+		verify(userRepository).save(any(User.class));
+		verify(socialAccountRepository).save(any(SocialAccount.class));
+	}
+
+	@Test
+	@DisplayName("guestPhoneLogin: 이미 연결된 번호면 같은 사용자로 재로그인(신규 가입 없음)")
+	void 전화게스트_재로그인_같은계정() {
+		SocialAccount existing = SocialAccount.create(7L, "phone", "01012345678", null);
+		given(socialAccountRepository.findByProviderAndProviderUserId("phone", "01012345678"))
+				.willReturn(Optional.of(existing));
+		given(userRepository.findById(7L)).willReturn(Optional.of(User.createGuest()));
+
+		AuthResult.Login result = authFacade.guestPhoneLogin("010 1234 5678"); // 공백 입력도 같은 번호로 정규화
+
+		assertThat(result.provider()).isEqualTo(AuthFacade.GUEST_PROVIDER);
+		verify(userRepository, never()).save(any(User.class));
+		verify(socialAccountRepository, never()).save(any(SocialAccount.class));
+	}
+
+	@Test
+	@DisplayName("guestPhoneLogin: 휴대폰 형식이 아니면 INVALID_INPUT(가입/토큰 발급 없음)")
+	void 전화게스트_형식오류_400() {
+		assertThatThrownBy(() -> authFacade.guestPhoneLogin("02-123-4567"))
+				.isInstanceOf(CoreException.class);
+		verify(userRepository, never()).save(any(User.class));
+	}
 }

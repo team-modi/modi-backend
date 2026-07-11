@@ -53,7 +53,6 @@ classDiagram
         LocalDateTime detailSyncedAt
         long ourViewCount
         String genreKeyword
-        +refreshCatalog(...) void
         +applyDetail(CatalogDetailData) void
         +markDetailChecked() void
         +applyGenre(String) void
@@ -230,7 +229,6 @@ classDiagram
 | User | updateNotificationSettings(...) | 리마인드·공지 수신 여부 전체 갱신 |
 | SocialAccount | updateEmail(String) | 재로그인 시 provider 이메일 최신화 |
 | Exhibition | createCustom(...) / createCatalog(...) | 제목 1~100자 필수, 기간 start≤end, SOLO면 artist 필수(정적 팩토리 + guard) |
-| Exhibition | refreshCatalog(...) | 동기화 재적재 — 목록 필드만 갱신, 정체성·상세 전용 필드는 불변 |
 | Exhibition | applyDetail(...) / markDetailChecked() | 상세 지연수집 — 상세를 채우고 detailSyncedAt 기록 / 상세 미보유 확인만 표기 |
 | Exhibition | applyGenre(String) | 유효한(공백 아닌) 값일 때만 장르 반영 |
 | Exhibition | isFree() | "무료" 포함 또는 표기 금액이 0뿐이면 무료. null/공백은 무료 아님 |
@@ -270,11 +268,11 @@ classDiagram
 - **Rich Domain Model**: 비즈니스 로직(불변식·상태 변경)은 엔티티 메서드에 포함한다. Facade는 load·조율·save만 담당한다.
 - **경계 넘는 참조는 ID만**: 다른 애그리거트(User·Exhibition·Record)는 @ManyToOne 대신 ID 값으로 참조한다. FK 제약도 걸지 않는다.
 - **애그리거트 내부는 객체 참조**: RecordEmotion·RecordKeyword·RecordMedia·RemindEmotion은 부모와 수명을 같이하는 내부 엔티티 — @ManyToOne + FK + cascade + orphanRemoval을 사용한다.
-- **전시 단일 테이블**: CATALOG(외부 수집)와 CUSTOM(직접 등록)을 type 판별자로 한 테이블에서 다룬다. externalId는 CATALOG 동기화 upsert 기준키, ownerId는 CUSTOM 노출 제어 키다.
+- **전시 단일 테이블**: CATALOG(외부 수집)와 CUSTOM(직접 등록)을 type 판별자로 한 테이블에서 다룬다. externalId는 CATALOG 동기화의 신규 여부 판별키(존재 시 스킵 — 기존 행 갱신 없음), ownerId는 CUSTOM 노출 제어 키다.
 - **스냅샷 박제**: Record는 전시 표시정보를, Remind는 원본 기록의 전시 카드를 생성 시점에 문자열로 복사한다. 원천 변경·삭제에 영향받지 않는다.
 - **Venue 비영속 참조**: 개인 전시 등록 시 venueId로 전시관을 조회해 장소명·지역만 파생하고, 전시에 venueId를 저장하지 않는다.
 - **알림 targetId 다형 참조**: NotificationType에 따라 targetId의 의미가 달라진다(REMIND=remindId, NOTICE=null). FK 없는 논리 참조라 가능한 설계다.
 - **북마크 soft-delete 복원 패턴**: (user_id, exhibition_id) UNIQUE 한 행을 delete()/restore()로 토글해 유니크 제약과 멱등성을 함께 만족한다.
 - **조회수 비정규화**: 인기순 정렬용 ourViewCount를 Exhibition에 직접 저장하고 상세 진입 시 증가시킨다(외부 API 조회수와 별개).
-- **@DynamicUpdate(Exhibition)**: 정기 동기화(목록 필드)와 보강(장르·상세)이 같은 행을 짧은 시간차로 갱신할 때 서로의 전체-컬럼 UPDATE가 상대 필드를 덮는 lost update를 막는다(@Version 미도입 환경 방어).
+- **@DynamicUpdate(Exhibition)**: 보강(장르·상세)과 조회수 증가 등이 같은 행을 짧은 시간차로 갱신할 때 서로의 전체-컬럼 UPDATE가 상대 필드를 덮는 lost update를 막는다(@Version 미도입 환경 방어).
 - **BaseEntity 공통화**: id·created/updated/deleted_at·guard() 훅을 공통 상속. 단, 애그리거트 내부 자식 4종은 BaseEntity를 상속하지 않는다(교체 시 물리 삭제라 soft delete 불필요).

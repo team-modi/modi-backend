@@ -32,13 +32,13 @@ public final class RemindDto {
 
 	/** 소환 대상(회고할 과거 기록) 응답. */
 	public record CandidateResponse(Long recordId, int daysAgo, String elapsedLabel, Long exhibitionId,
-			String exhibitionTitle, String artist, String posterUrl, String place, String region,
+			String exhibitionTitle, String artist, String posterUrl, String sceneImageUrl, String place, String region,
 			LocalDate viewedAt, String originalContent, List<String> originalEmotionCodes) {
 
 		public static CandidateResponse from(RemindResult.Candidate c) {
 			return new CandidateResponse(c.recordId(), c.daysAgo(), c.elapsedLabel(), c.exhibitionId(),
-					c.exhibitionTitle(), c.artist(), c.posterUrl(), c.place(), c.region(), c.viewedAt(),
-					c.originalContent(), c.originalEmotionCodes());
+					c.exhibitionTitle(), c.artist(), c.posterUrl(), c.sceneImageUrl(), c.place(), c.region(),
+					c.viewedAt(), c.originalContent(), c.originalEmotionCodes());
 		}
 	}
 

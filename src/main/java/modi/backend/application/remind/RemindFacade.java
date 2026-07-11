@@ -3,6 +3,7 @@ package modi.backend.application.remind;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
@@ -18,10 +19,13 @@ import modi.backend.domain.exhibition.ExhibitionRepository;
 import modi.backend.domain.record.Record;
 import modi.backend.domain.record.RecordEmotion;
 import modi.backend.domain.record.RecordErrorCode;
+import modi.backend.domain.record.RecordMedia;
+import modi.backend.domain.record.RecordMediaType;
 import modi.backend.domain.remind.Remind;
 import modi.backend.domain.remind.RemindEmotion;
 import modi.backend.domain.remind.RemindErrorCode;
 import modi.backend.domain.remind.RemindExhibitionSnapshot;
+import modi.backend.config.RemindProperties;
 import modi.backend.infra.record.RecordJpaRepository;
 import modi.backend.infra.remind.RemindJpaRepository;
 import modi.backend.support.error.CoreException;
@@ -36,9 +40,6 @@ import modi.backend.support.time.AppTime;
 @RequiredArgsConstructor
 public class RemindFacade {
 
-	/** 소환 대상이 되기 위한 최소 경과일(작성 후 7일 이상). */
-	private static final int ELIGIBLE_DAYS = 7;
-
 	/** 목록의 소감 미리보기 길이. */
 	private static final int REFLECTION_PREVIEW_LENGTH = 60;
 
@@ -46,11 +47,13 @@ public class RemindFacade {
 	private final RecordJpaRepository recordRepository;
 	private final ExhibitionRepository exhibitionRepository;
 	private final RemindAiSummarizer summarizer;
+	/** 소환 대상 최소 경과 시간(정식 7d, 베타는 env로 1m 등 단축 — {@link RemindProperties}). */
+	private final RemindProperties remindProperties;
 
-	/** 오늘의 소환 대상(7일+ 경과, 아직 회고 안 한 내 기록) 1건. 없으면 null. */
+	/** 오늘의 소환 대상(경과 시간 충족, 아직 회고 안 한 내 기록) 1건. 없으면 null. */
 	@Transactional(readOnly = true)
 	public RemindResult.Candidate candidate(Long userId) {
-		ZonedDateTime createdBefore = ZonedDateTime.now(AppTime.KST).minusDays(ELIGIBLE_DAYS);
+		ZonedDateTime createdBefore = ZonedDateTime.now(AppTime.KST).minus(remindProperties.eligibleAfter());
 		List<Record> found = remindRepository.findRemindCandidates(userId, createdBefore, PageRequest.of(0, 1));
 		if (found.isEmpty()) {
 			return null;
@@ -62,9 +65,16 @@ public class RemindFacade {
 				.filter(a -> a != null && !a.isBlank())
 				.orElse(null);
 		List<String> emotions = record.getEmotions().stream().map(RecordEmotion::getEmotionCode).toList();
+		// "전시 속, 그 장면"(2단계)용 — 기록에 첨부한 첫 사진. 없으면 null(FE가 포스터로 폴백).
+		String sceneImageUrl = record.getMedia().stream()
+				.filter(m -> m.getType() == RecordMediaType.PHOTO)
+				.sorted(Comparator.comparingInt(RecordMedia::getSortOrder))
+				.map(RecordMedia::getUrl)
+				.findFirst()
+				.orElse(null);
 		return new RemindResult.Candidate(record.getId(), daysAgo, elapsedLabel(daysAgo),
 				record.getExhibitionId(), record.getExhibitionTitle(), artist, record.getExhibitionPosterUrl(),
-				record.getExhibitionPlace(), record.getExhibitionRegion(), record.getViewedAt(),
+				sceneImageUrl, record.getExhibitionPlace(), record.getExhibitionRegion(), record.getViewedAt(),
 				record.getContent(), emotions);
 	}
 
@@ -158,6 +168,9 @@ public class RemindFacade {
 	}
 
 	private String elapsedLabel(int daysAgo) {
+		if (daysAgo == 0) {
+			return "오늘"; // 베타(경과 단축) 등 당일 소환 시 "0일 전" 대신 자연스러운 표기
+		}
 		if (daysAgo < 7) {
 			return daysAgo + "일 전";
 		}

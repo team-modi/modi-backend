@@ -37,6 +37,15 @@ public interface AuthV1ApiSpec {
 	ResponseEntity<ApiResponse<AuthDto.TokenResponse>> guestLogin(
 			@Parameter(hidden = true) HttpServletResponse response);
 
+	@Operation(summary = "휴대폰 식별 게스트 로그인 (베타 전용, 가입 겸용)", description = """
+			베타 기간 카카오 로그인 대체용. 휴대폰 번호로 사용자를 식별해 **재로그인 시 같은 계정**을 이어 쓴다.
+			- Body: `phoneNumber` — 하이픈·공백 포함 입력 허용(서버가 숫자만으로 정규화). 01로 시작하는 10~11자리가 아니면 400 INVALID_INPUT.
+			- 같은 번호 최초 호출 시 게스트 사용자를 생성해 번호와 연결하고, 이후 호출부터는 그 사용자로 로그인한다(가입 겸용).
+			- 응답·토큰 체계는 게스트 로그인과 동일(HttpOnly 쿠키 + 본문 accessToken, `provider`=`guest`). 성공은 항상 200.""")
+	ResponseEntity<ApiResponse<AuthDto.TokenResponse>> guestPhoneLogin(
+			AuthDto.PhoneGuestLoginRequest request,
+			@Parameter(hidden = true) HttpServletResponse response);
+
 	@Operation(summary = "토큰 재발급", description = """
 			access 토큰이 만료(401)됐을 때 호출한다. `refresh_token` **쿠키**를 읽어 검증하고 access·refresh를 회전 발급해 두 쿠키를 다시 내려준다.
 			- 별도 요청 body 없음(쿠키만 필요). `credentials: 'include'`로 호출.

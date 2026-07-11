@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import modi.backend.application.exhibition.ExhibitionFacade;
 import modi.backend.application.exhibition.ExhibitionResult;
 import modi.backend.domain.exhibition.ExhibitionErrorCode;
+import modi.backend.domain.record.AiStatus;
+import modi.backend.domain.record.ExhibitionSnapshot;
 import modi.backend.domain.record.Record;
 import modi.backend.domain.record.WriteMode;
 import modi.backend.infra.record.RecordJpaRepository;
@@ -62,6 +65,39 @@ class RecordServiceTest {
 		assertThatThrownBy(() -> service.create(1L, createReq(999L))).isInstanceOf(CoreException.class);
 
 		verify(recordRepository, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("delete — 직접 만든 개인 전시를 이 기록만 참조했다면 전시도 함께 삭제한다")
+	void delete_고아_개인전시_함께삭제() {
+		Record record = record(1L, 20L);
+		given(recordRepository.findByIdAndDeletedAtIsNull(5L)).willReturn(Optional.of(record));
+		given(recordRepository.existsByUserIdAndExhibitionIdAndDeletedAtIsNull(1L, 20L)).willReturn(false);
+
+		service.delete(1L, 5L);
+
+		assertThat(record.getDeletedAt()).isNotNull();
+		verify(exhibitionFacade).deleteCustomOwnedBy(20L, 1L);
+	}
+
+	@Test
+	@DisplayName("delete — 다른 기록이 같은 전시를 참조하면 전시는 삭제하지 않는다")
+	void delete_다른기록참조시_전시유지() {
+		Record record = record(1L, 20L);
+		given(recordRepository.findByIdAndDeletedAtIsNull(5L)).willReturn(Optional.of(record));
+		given(recordRepository.existsByUserIdAndExhibitionIdAndDeletedAtIsNull(1L, 20L)).willReturn(true);
+
+		service.delete(1L, 5L);
+
+		assertThat(record.getDeletedAt()).isNotNull();
+		verify(exhibitionFacade, never()).deleteCustomOwnedBy(any(), any());
+	}
+
+	private Record record(Long userId, Long exhibitionId) {
+		ExhibitionSnapshot snapshot = new ExhibitionSnapshot("내가 만든 전시", "CUSTOM", "http://p", "우리집",
+				"SEOUL", "PAINTING", LocalDate.now(), null);
+		return Record.create(userId, exhibitionId, snapshot, WriteMode.DIRECT, LocalDate.now(), "감상", null, null,
+				null, AiStatus.READY);
 	}
 
 	private RecordCreateRequest createReq(Long exhibitionId) {

@@ -28,7 +28,7 @@ import modi.backend.support.error.ErrorType;
  */
 @Entity
 @Table(name = "exhibitions")
-// 변경된 컬럼만 UPDATE — 정기 동기화(refreshCatalog, 목록 필드)와 보강(장르·상세)이 같은 행을 짧은 시간차로
+// 변경된 컬럼만 UPDATE — 보강(장르·상세)과 조회수 증가 등이 같은 행을 짧은 시간차로
 // 갱신할 때 서로의 전체-컬럼 UPDATE가 상대 필드를 덮어쓰는 lost update를 막는다(@Version 미도입 환경 방어).
 @DynamicUpdate
 @Getter
@@ -213,34 +213,6 @@ public class Exhibition extends BaseEntity {
 		}
 	}
 
-	/**
-	 * CATALOG 동기화 재적재 — 원천 목록에서 다시 받은 값으로 목록 필드를 갱신한다(같은 externalId 재수신 시).
-	 * type·externalId·ownerId 등 정체성 필드는 바꾸지 않는다.
-	 * <p>
-	 * price·description·operatingHours 등 <b>상세2 전용 필드</b>는 목록 응답에 없어 여기서 건드리지 않는다.
-	 * (상세 지연수집/백필로 채워진 값을 매 정기 동기화가 null로 덮어써 무료 판정·상세를 잃던 회귀를 막는다.)
-	 * detailSyncedAt도 유지되어 이미 상세를 채운 행은 백필 대상에서 제외된다.
-	 */
-	public void refreshCatalog(String title, String place, LocalDate startDate, LocalDate endDate,
-			ExhibitionRegion region, ExhibitionCategory category, String posterUrl, String detailUrl,
-			String serviceName, Double gpsX, Double gpsY, String sigungu, String realmName, String areaText) {
-		this.title = requireTitle(title);
-		this.place = place;
-		this.startDate = startDate;
-		this.endDate = endDate;
-		this.region = region;
-		this.category = category;
-		this.posterUrl = posterUrl;
-		this.detailUrl = detailUrl;
-		this.serviceName = serviceName;
-		this.gpsX = gpsX;
-		this.gpsY = gpsY;
-		this.sigungu = sigungu;
-		this.realmName = realmName;
-		this.areaText = areaText;
-		validatePeriod();
-	}
-
 	/** 상세 지연수집(상세 진입 시 1회) — 목록엔 없던 필드를 채우고 동기화 시각을 기록한다. detailUrl은 값이 있을 때만 덮어쓴다. */
 	public void applyDetail(CatalogDetailData d) {
 		this.price = d.price();
@@ -321,6 +293,14 @@ public class Exhibition extends BaseEntity {
 	/** 요청자가 이 전시를 조회할 수 있는가. CATALOG는 공개, CUSTOM은 등록자 본인만. */
 	public boolean isAccessibleBy(Long requesterId) {
 		return isCatalog() || (requesterId != null && requesterId.equals(ownerId));
+	}
+
+	/**
+	 * 요청자가 직접 등록한 개인(CUSTOM) 전시인가 — 기록 삭제 시 동반 삭제 가능 여부 판단용.
+	 * 공용 CATALOG나 타인의 CUSTOM은 삭제 대상이 아니다.
+	 */
+	public boolean isCustomOwnedBy(Long requesterId) {
+		return type == ExhibitionType.CUSTOM && requesterId != null && requesterId.equals(ownerId);
 	}
 
 	private String requireTitle(String value) {
