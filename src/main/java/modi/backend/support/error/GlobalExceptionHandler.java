@@ -10,6 +10,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import modi.backend.support.response.ApiResponse;
 
@@ -44,6 +45,14 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(ErrorType.INVALID_INPUT.getStatus())
 				.body(ApiResponse.failValidation(ErrorType.INVALID_INPUT.code(),
 						ErrorType.INVALID_INPUT.message(), fieldErrors));
+	}
+
+	/** 쿼리/경로 파라미터 타입 변환 실패(enum 미일치 등) → 400 INVALID_INPUT. */
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ResponseEntity<ApiResponse<Object>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+		log.warn("[{}] parameter '{}' rejected value: {}", ErrorType.INVALID_INPUT.code(), e.getName(), e.getValue());
+		return ResponseEntity.status(ErrorType.INVALID_INPUT.getStatus())
+				.body(ApiResponse.fail(ErrorType.INVALID_INPUT.code(), ErrorType.INVALID_INPUT.message()));
 	}
 
 	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)

@@ -124,7 +124,10 @@ class RemindV1ControllerTest {
 						.header("Authorization", bearerUser1))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.content", hasSize(1)))
-				.andExpect(jsonPath("$.data.content[0].exhibitionTitle").value("조용한 호숫가"));
+				.andExpect(jsonPath("$.data.content[0].exhibitionTitle").value("조용한 호숫가"))
+				// 감정 변화(유지/반전) 필터용 — 원본(그때)·회고(지금) 감정을 함께 내린다
+				.andExpect(jsonPath("$.data.content[0].beforeEmotionCodes", hasSize(2)))
+				.andExpect(jsonPath("$.data.content[0].emotionCodes", hasSize(2)));
 	}
 
 	@Test

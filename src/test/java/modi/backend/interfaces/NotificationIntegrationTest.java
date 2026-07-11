@@ -158,6 +158,41 @@ class NotificationIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("GET /notifications?type= — 종류 필터: 해당 type만, totalCount도 필터 기준")
+	void 목록_type필터() throws Exception {
+		// Arrange — 세 종류를 모두 시드
+		String token = loginAndGetAccessToken(9100009L, "필터유저");
+		long userId = userIdOf(token);
+		notificationRepository.save(Notification.create(userId, NotificationType.NOTICE, "공지", "본문", null));
+		notificationRepository.save(Notification.create(userId, NotificationType.REMIND, "리마인드", "본문", 5L));
+		notificationRepository.save(Notification.create(userId, NotificationType.EXHIBITION, "전시", "본문", 7L));
+
+		// Act & Assert — EXHIBITION만
+		mockMvc.perform(get("/api/v1/notifications?type=EXHIBITION").header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content.length()").value(1))
+				.andExpect(jsonPath("$.data.content[0].type").value("EXHIBITION"))
+				.andExpect(jsonPath("$.data.content[0].targetId").value(7))
+				.andExpect(jsonPath("$.data.totalCount").value(1));
+
+		// 미지정이면 전체
+		mockMvc.perform(get("/api/v1/notifications").header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content.length()").value(3))
+				.andExpect(jsonPath("$.data.totalCount").value(3));
+	}
+
+	@Test
+	@DisplayName("GET /notifications?type=잘못된값 → 400 INVALID_INPUT")
+	void 잘못된_type_400() throws Exception {
+		String token = loginAndGetAccessToken(9100010L, "타입유저");
+
+		mockMvc.perform(get("/api/v1/notifications?type=WRONG").header("Authorization", "Bearer " + token))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.meta.errorCode").value("INVALID_INPUT"));
+	}
+
+	@Test
 	@DisplayName("GET /notifications — 손상된 커서 → 400 INVALID_CURSOR")
 	void 손상커서_400() throws Exception {
 		String token = loginAndGetAccessToken(9100004L, "커서유저");

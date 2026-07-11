@@ -136,9 +136,14 @@ public class RemindFacade {
 
 	private RemindResult.ListItem toListItem(Remind remind) {
 		List<String> afterEmotions = remind.getEmotions().stream().map(RemindEmotion::getEmotionCode).toList();
+		// 원본 기록 감정(FE 감정 변화-유지/반전 필터용) — 항목별 단건 조회라 N+1이지만
+		// 페이지 20건·베타 규모라 허용. 원본이 삭제됐으면 빈 리스트.
+		List<String> beforeEmotions = recordRepository.findByIdWithEmotions(remind.getRecordId())
+				.map(record -> record.getEmotions().stream().map(RecordEmotion::getEmotionCode).toList())
+				.orElse(List.of());
 		return new RemindResult.ListItem(remind.getId(), remind.getRecordId(), remind.getCreatedAt(),
 				remind.getExhibitionTitle(), remind.getExhibitionPosterUrl(), remind.getExhibitionPlace(),
-				remind.getRecordViewedAt(), preview(remind.getReflection()), afterEmotions,
+				remind.getRecordViewedAt(), preview(remind.getReflection()), beforeEmotions, afterEmotions,
 				remind.getAiStatus(), remind.getAiSummary() != null);
 	}
 
