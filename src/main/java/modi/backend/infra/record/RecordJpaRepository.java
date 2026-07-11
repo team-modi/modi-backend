@@ -1,6 +1,7 @@
 package modi.backend.infra.record;
 
 import java.time.LocalDate;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -68,4 +69,27 @@ public interface RecordJpaRepository extends JpaRepository<Record, Long> {
 			@Param("fromViewedAt") LocalDate fromViewedAt,
 			@Param("toViewedAt") LocalDate toViewedAt,
 			Pageable pageable);
+
+	// ── 관리자 콘솔 전용 ───────────────────────────────
+
+	/** 전체 기록 수(살아있는). */
+	long countByDeletedAtIsNull();
+
+	/** 일자별 기록 생성 수(created_at UTC 일자). Object[]{date, count}. */
+	@Query("select function('date', r.createdAt), count(r) from Record r "
+			+ "where r.deletedAt is null and r.createdAt >= :from "
+			+ "group by function('date', r.createdAt) order by function('date', r.createdAt)")
+	List<Object[]> countByDaySince(@Param("from") ZonedDateTime from);
+
+	/** 전체 인기 감정 Top-N(emotionCode, 빈도). Pageable로 상위 N개. Object[]{emotionCode, count}. */
+	@Query("select e.emotionCode, count(e) from Record r join r.emotions e "
+			+ "where r.deletedAt is null group by e.emotionCode order by count(e) desc, e.emotionCode asc")
+	List<Object[]> topEmotions(Pageable pageable);
+
+	/** 유저ID들의 기록 수(관리자 목록 벌크). Object[]{userId, count}. */
+	@Query("select r.userId, count(r) from Record r where r.userId in :userIds and r.deletedAt is null group by r.userId")
+	List<Object[]> countByUserIds(@Param("userIds") List<Long> userIds);
+
+	/** 사용자 상세: 최근 기록(페이지). */
+	Page<Record> findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(Long userId, Pageable pageable);
 }

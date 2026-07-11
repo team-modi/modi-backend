@@ -40,4 +40,20 @@ public interface RemindJpaRepository extends JpaRepository<Remind, Long> {
 			@Param("userId") Long userId,
 			@Param("createdBefore") ZonedDateTime createdBefore,
 			Pageable pageable);
+
+	// ── 관리자 콘솔 전용 ───────────────────────────────
+
+	/** 전체 리마인드(회고) 수(살아있는). */
+	long countByDeletedAtIsNull();
+
+	/** 특정 사용자의 리마인드 수(관리자 상세용). */
+	long countByUserIdAndDeletedAtIsNull(Long userId);
+
+	/** 회고된(리마인드가 존재하는) 서로 다른 기록 수 — 전환율 = 이 값 / 전체 기록 수. */
+	@Query("select count(distinct rm.recordId) from Remind rm where rm.deletedAt is null")
+	long countDistinctRemindedRecords();
+
+	/** 유저ID들의 리마인드 수(관리자 목록 벌크). Object[]{userId, count}. */
+	@Query("select rm.userId, count(rm) from Remind rm where rm.userId in :userIds and rm.deletedAt is null group by rm.userId")
+	List<Object[]> countByUserIds(@Param("userIds") List<Long> userIds);
 }

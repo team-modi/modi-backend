@@ -118,6 +118,13 @@ app:
   remind:
     eligible-after: ${REMIND_ELIGIBLE_AFTER:7d}
 
+  # 관리자 콘솔 로그인 자격(이메일 화이트리스트 + 공용 비밀번호). 로그인하면 admin_session 쿠키로 /api-admin/** 접근.
+  #   ⚠️ 레포가 PUBLIC이라 값은 절대 여기 넣지 말 것 → env/Secret으로만 주입. 미설정이면 아무도 로그인 못 함(안전 기본값).
+  #   ADMIN_EMAILS=a@x.com,b@y.com  ·  ADMIN_PASSWORD=<공용비번>
+  admin:
+    emails: ${ADMIN_EMAILS:}
+    password: ${ADMIN_PASSWORD:}
+
   # AI 감상문 생성(질문/compose). provider 교체 가능 — claude(Anthropic) | gemini(Google).
   #   AI_PROVIDER로 어댑터를 전환한다(코드 변경 불필요). 예: AI_PROVIDER=gemini.
   #   api-key 미설정이면 AI 엔드포인트는 503(AI_DISABLED)로 응답하고 나머지 기능은 정상 동작한다.
