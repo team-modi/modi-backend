@@ -39,6 +39,7 @@ public final class ExhibitionCriteria {
 	 * venueId·place는 둘 중 하나 — venueId가 있으면 전시관에서 장소·지역을 파생하고 place는 무시한다.
 	 */
 	public record CustomCreate(Long ownerId, String title, Long venueId, String place, LocalDate startDate,
-			LocalDate endDate, String region, String category, String format, String artist, String posterUrl) {
+			LocalDate endDate, String region, String category, String format, String artist, String posterUrl,
+			String genreKeyword) {
 	}
 }

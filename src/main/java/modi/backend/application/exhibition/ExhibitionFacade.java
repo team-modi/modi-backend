@@ -27,6 +27,7 @@ import modi.backend.domain.exhibition.ExhibitionRepository;
 import modi.backend.domain.exhibition.ExhibitionSection;
 import modi.backend.domain.exhibition.GenreClassification;
 import modi.backend.domain.exhibition.GenreClassifier;
+import modi.backend.domain.exhibition.GenreKeyword;
 import modi.backend.domain.venue.Venue;
 import modi.backend.domain.venue.VenueErrorCode;
 import modi.backend.domain.venue.VenueRepository;
@@ -201,9 +202,18 @@ public class ExhibitionFacade {
 				region = venue.getRegion();
 			}
 		}
-		// 장르는 분류기(랜덤/AI)가 부여한다. 분류기는 실패해도 예외를 던지지 않고 유효 장르를 반환하므로 등록 흐름을 깨지 않는다.
-		String genreKeyword = genreClassifier.classify(new GenreClassification(criteria.title(),
-				category == null ? null : category.name(), null, place, criteria.artist(), null));
+		// 장르: 사용자가 장르 시트에서 직접 고르면 그 값(마스터 검증), 미지정이면 분류기(랜덤/AI)가 부여한다.
+		// 분류기는 실패해도 예외를 던지지 않고 유효 장르를 반환하므로 등록 흐름을 깨지 않는다.
+		String genreKeyword;
+		if (criteria.genreKeyword() != null && !criteria.genreKeyword().isBlank()) {
+			if (!GenreKeyword.contains(criteria.genreKeyword())) {
+				throw new CoreException(ErrorType.INVALID_INPUT, "정의되지 않은 장르 키워드: " + criteria.genreKeyword());
+			}
+			genreKeyword = criteria.genreKeyword();
+		} else {
+			genreKeyword = genreClassifier.classify(new GenreClassification(criteria.title(),
+					category == null ? null : category.name(), null, place, criteria.artist(), null));
+		}
 		Exhibition exhibition = Exhibition.createCustom(criteria.ownerId(), criteria.title(), place,
 				criteria.startDate(), criteria.endDate(), region, category, format, criteria.artist(),
 				criteria.posterUrl(), genreKeyword);
