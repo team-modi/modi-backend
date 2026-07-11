@@ -5,214 +5,335 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>여운 · 관리자 콘솔</title>
 <style>
-  :root { --bg:#0f1115; --panel:#171a21; --line:#262a33; --fg:#e6e8ec; --muted:#9aa2af; --accent:#6ea8fe; --bar:#3b82f6; --err:#f87171; }
-  * { box-sizing:border-box; }
-  body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif; background:var(--bg); color:var(--fg); }
-  header { padding:14px 20px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-  header h1 { font-size:16px; margin:0; margin-right:auto; }
-  header input { background:var(--panel); border:1px solid var(--line); color:var(--fg); border-radius:8px; padding:7px 10px; width:280px; max-width:48vw; }
-  header button, .tab, .btn { background:var(--panel); border:1px solid var(--line); color:var(--fg); border-radius:8px; padding:7px 12px; cursor:pointer; }
-  header button:hover, .tab:hover, .btn:hover { border-color:var(--accent); }
-  nav { display:flex; gap:8px; padding:12px 20px 0; }
-  .tab.active { background:var(--accent); color:#08111f; border-color:var(--accent); font-weight:600; }
-  main { padding:20px; max-width:1100px; }
-  .hidden { display:none; }
-  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
-  .card .k { color:var(--muted); font-size:12px; }
-  .card .v { font-size:22px; font-weight:700; margin-top:4px; }
-  section.block { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:20px; }
-  section.block h2 { font-size:14px; margin:0 0 12px; color:var(--muted); font-weight:600; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
-  th { color:var(--muted); font-weight:600; }
-  tbody tr:hover { background:#1d222c; }
-  .clickable { cursor:pointer; }
-  .num { text-align:right; font-variant-numeric:tabular-nums; }
-  .bars { display:flex; align-items:flex-end; gap:3px; height:90px; overflow-x:auto; }
-  .bars .b { flex:0 0 14px; background:var(--bar); border-radius:3px 3px 0 0; min-height:2px; position:relative; }
-  .bars .b:hover::after { content:attr(data-label); position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:#000; color:#fff; font-size:10px; padding:2px 5px; border-radius:4px; white-space:nowrap; }
-  .pill { display:inline-block; background:#1d222c; border:1px solid var(--line); border-radius:999px; padding:2px 9px; margin:0 5px 5px 0; font-size:12px; }
-  .muted { color:var(--muted); }
-  .err { color:var(--err); }
-  .row { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
-  .backbtn { margin-bottom:12px; }
-  .status2xx{color:#4ade80} .status4xx{color:#fbbf24} .status5xx{color:var(--err)}
-  .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  @media (max-width:720px){ .detail-grid{grid-template-columns:1fr;} }
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --card2:#fafbfc; --line:#e6e8ec; --line2:#eef0f3;
+    --fg:#1c2330; --muted:#6b7280; --faint:#9aa2af;
+    --accent:#4f46e5; --accent-weak:#eef1fe; --accent-fg:#4338ca;
+    --green:#16a34a; --amber:#d97706; --red:#dc2626; --sky:#0ea5e9;
+    --shadow:0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06);
+    --radius:14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0e1116; --card:#161a21; --card2:#12151b; --line:#262b34; --line2:#20242c;
+      --fg:#e7e9ee; --muted:#9aa3b2; --faint:#6b7482;
+      --accent:#818cf8; --accent-weak:#1c2030; --accent-fg:#a5b0ff;
+      --green:#34d399; --amber:#fbbf24; --red:#f87171; --sky:#38bdf8;
+      --shadow:0 1px 2px rgba(0,0,0,.3);
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR","Apple SD Gothic Neo",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--accent-fg);text-decoration:none}
+  .hidden{display:none!important}
+  .muted{color:var(--muted)} .faint{color:var(--faint)}
+  .num{font-variant-numeric:tabular-nums}
+  button{font:inherit;cursor:pointer}
+  .btn{background:var(--card);border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:8px 14px;transition:.15s}
+  .btn:hover{border-color:var(--accent);color:var(--accent-fg)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{filter:brightness(1.05);color:#fff}
+
+  /* top bar */
+  header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;
+    padding:12px 22px;background:color-mix(in srgb,var(--card) 85%,transparent);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-weak)}
+  .spacer{margin-left:auto}
+  .whoami{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}
+  .whoami .av{width:26px;height:26px;border-radius:50%;background:var(--accent-weak);color:var(--accent-fg);
+    display:grid;place-items:center;font-weight:700;font-size:12px}
+  nav.tabs{display:flex;gap:4px;padding:10px 20px 0;max-width:1180px;margin:0 auto;width:100%}
+  .tab{background:transparent;border:0;border-radius:9px;padding:9px 15px;color:var(--muted);font-weight:600}
+  .tab:hover{background:var(--line2);color:var(--fg)}
+  .tab.active{background:var(--accent-weak);color:var(--accent-fg)}
+  main{max-width:1180px;margin:0 auto;padding:20px}
+  #msg{color:var(--red);margin-bottom:12px;font-size:13px}
+
+  /* cards */
+  .grid{display:grid;gap:14px}
+  .kpis{grid-template-columns:repeat(auto-fill,minmax(158px,1fr));margin-bottom:18px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:15px 16px;box-shadow:var(--shadow)}
+  .kpi .k{color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.01em}
+  .kpi .v{font-size:26px;font-weight:750;margin-top:6px;letter-spacing:-.01em}
+  .kpi .s{font-size:12px;color:var(--faint);margin-top:2px}
+  .kpi.hl{background:linear-gradient(135deg,var(--accent),#6366f1);border-color:transparent;color:#fff}
+  .kpi.hl .k,.kpi.hl .s{color:rgba(255,255,255,.82)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .card .hd{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line2)}
+  .card .hd h2{margin:0;font-size:14px;font-weight:700}
+  .card .bd{padding:16px 18px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:820px){.two{grid-template-columns:1fr}}
+  .chart{width:100%;height:auto;display:block}
+  .empty{color:var(--faint);text-align:center;padding:24px;font-size:13px}
+
+  /* emotion bars */
+  .ebar{display:flex;align-items:center;gap:10px;margin:7px 0}
+  .ebar .lab{width:74px;font-size:13px;flex:0 0 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ebar .track{flex:1;height:9px;background:var(--line2);border-radius:6px;overflow:hidden}
+  .ebar .fill{height:100%;background:linear-gradient(90deg,var(--accent),#818cf8);border-radius:6px}
+  .ebar .n{width:34px;text-align:right;font-size:12px;color:var(--muted)}
+
+  /* table */
+  .tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .tbl th,.tbl td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line2);white-space:nowrap}
+  .tbl th{color:var(--muted);font-weight:600;font-size:12px;background:var(--card2);position:sticky;top:0}
+  .tbl tbody tr{transition:.1s}
+  .tbl tbody tr.click{cursor:pointer}
+  .tbl tbody tr.click:hover{background:var(--accent-weak)}
+  .tbl .r{text-align:right}
+  .scroll{overflow-x:auto}
+  .chip{display:inline-block;background:var(--line2);border-radius:999px;padding:2px 9px;font-size:12px;margin:0 5px 5px 0;color:var(--fg)}
+  .chip.soft{background:var(--accent-weak);color:var(--accent-fg)}
+  .pill{padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700}
+  .s2{background:rgba(22,163,74,.12);color:var(--green)} .s4{background:rgba(217,119,6,.14);color:var(--amber)} .s5{background:rgba(220,38,38,.12);color:var(--red)}
+  .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  input.in{background:var(--card);border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:9px 12px;font:inherit}
+  input.in:focus{outline:2px solid var(--accent-weak);border-color:var(--accent)}
+  .pager{display:flex;align-items:center;gap:10px;justify-content:center;padding:14px;color:var(--muted);font-size:13px}
+
+  /* user detail */
+  .profile{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+  .profile .big{width:56px;height:56px;border-radius:16px;background:var(--accent-weak);color:var(--accent-fg);
+    display:grid;place-items:center;font-weight:800;font-size:22px;flex:0 0 auto}
+  .profile .name{font-size:19px;font-weight:750}
+  .kv{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:8px}
+  .kv .item{font-size:13px}
+  .kv .item b{color:var(--muted);font-weight:600;margin-right:6px}
+  .phone{font-size:15px;font-weight:750;color:var(--accent-fg);background:var(--accent-weak);padding:4px 12px;border-radius:10px;display:inline-block}
+  .list .row{padding:9px 0;border-bottom:1px solid var(--line2);font-size:13px}
+  .list .row:last-child{border-bottom:0}
+  .list .row .t{font-weight:600}
+
+  /* login */
+  .login-wrap{min-height:calc(100vh - 60px);display:grid;place-items:center;padding:20px}
+  .login{width:100%;max-width:360px;background:var(--card);border:1px solid var(--line);border-radius:18px;
+    padding:28px;box-shadow:0 10px 40px rgba(16,24,40,.08)}
+  .login .brand{justify-content:center;font-size:17px;margin-bottom:4px}
+  .login p{color:var(--muted);font-size:13px;text-align:center;margin:0 0 18px}
+  .login input{width:100%;margin-bottom:11px}
+  .login .btn{width:100%;justify-content:center}
+  .login .err{color:var(--red);font-size:13px;margin-top:10px;min-height:18px;text-align:center}
 </style>
 </head>
 <body>
-<header>
-  <h1>여운 · 관리자 콘솔</h1>
-  <span id="who" class="muted" style="margin-left:auto"></span>
-  <button id="logout" class="hidden">로그아웃</button>
-</header>
 
-<div id="login" class="hidden" style="max-width:340px;margin:8vh auto;padding:24px;background:var(--panel);border:1px solid var(--line);border-radius:14px">
-  <h2 style="margin:0 0 16px;font-size:16px">관리자 로그인</h2>
-  <form id="loginForm">
-    <input id="email" type="email" placeholder="이메일" autocomplete="username" required
-      style="width:100%;margin-bottom:10px;background:var(--bg);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:10px"/>
-    <input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password" required
-      style="width:100%;margin-bottom:14px;background:var(--bg);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:10px"/>
-    <button type="submit" class="btn" style="width:100%;background:var(--accent);color:#08111f;border-color:var(--accent);font-weight:600">로그인</button>
-    <div id="loginErr" class="err" style="margin-top:10px"></div>
+<div id="login" class="login-wrap hidden">
+  <form class="login" id="loginForm">
+    <div class="brand" style="justify-content:center"><span class="dot"></span>여운 · 관리자 콘솔</div>
+    <p>등록된 이메일과 비밀번호로 로그인하세요.</p>
+    <input class="in" id="email" type="email" placeholder="이메일" autocomplete="username" required/>
+    <input class="in" id="pw" type="password" placeholder="비밀번호" autocomplete="current-password" required/>
+    <button class="btn primary" type="submit">로그인</button>
+    <div class="err" id="loginErr"></div>
   </form>
 </div>
 
 <div id="app" class="hidden">
-<nav>
-  <button class="tab active" data-tab="dashboard">대시보드</button>
-  <button class="tab" data-tab="users">사용자</button>
-  <button class="tab" data-tab="apistats">API 통계</button>
-</nav>
-<main>
-  <div id="msg" class="err" style="margin-bottom:12px"></div>
-  <div id="dashboard"></div>
-  <div id="users" class="hidden"></div>
-  <div id="apistats" class="hidden"></div>
-</main>
+  <header>
+    <div class="brand"><span class="dot"></span>여운 관리자</div>
+    <nav class="tabs" style="padding:0;max-width:none;width:auto">
+      <button class="tab active" data-tab="dashboard">대시보드</button>
+      <button class="tab" data-tab="users">사용자</button>
+      <button class="tab" data-tab="apistats">API 통계</button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="whoami"><span class="av" id="avatar">A</span><span id="who"></span></div>
+    <button class="btn" id="logout">로그아웃</button>
+  </header>
+  <main>
+    <div id="msg"></div>
+    <div id="dashboard"></div>
+    <div id="users" class="hidden"></div>
+    <div id="apistats" class="hidden"></div>
+  </main>
 </div>
 
 <script>
-const $ = (s, r=document) => r.querySelector(s);
-const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const fmtDate = s => s ? String(s).replace('T',' ').slice(0,16) : '-';
-async function api(path, opts={}) {
-  const res = await fetch(path, { credentials: 'include', ...opts });
-  if (res.status === 401) { showLogin(); throw new Error('세션이 만료되었습니다. 다시 로그인하세요.'); }
-  let json;
-  try { json = await res.json(); } catch { throw new Error('HTTP ' + res.status); }
-  if (json.meta && json.meta.result === 'FAIL') throw new Error((json.meta.errorCode||'') + ' ' + (json.meta.message||''));
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  return json.data;
-}
-function setMsg(t){ $('#msg').textContent = t || ''; }
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const nf=n=>(n==null?'-':Number(n).toLocaleString());
+const fdt=s=>s?String(s).replace('T',' ').slice(0,16):'-';
+const fday=s=>s?String(s).replace('T',' ').slice(5,16):'-';
+const setMsg=t=>$('#msg').textContent=t||'';
 
-// ── 세션/로그인 (쿠키 기반 — JS가 토큰 만지지 않음) ──
-function showLogin(){ $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); $('#logout').classList.add('hidden'); $('#who').textContent=''; }
-function showApp(email){ $('#login').classList.add('hidden'); $('#app').classList.remove('hidden'); $('#logout').classList.remove('hidden'); $('#who').textContent = email || '관리자'; render('dashboard'); }
-async function checkSession(){ try { await api('/api-admin/v1/me'); showApp(); } catch { showLogin(); } }
-$('#loginForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  $('#loginErr').textContent = '';
-  const email = $('#email').value.trim();
-  try {
-    const res = await fetch('/api-admin/v1/login', {
-      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ email, password: $('#pw').value })
-    });
-    const json = await res.json().catch(()=>({}));
-    if (!res.ok || (json.meta && json.meta.result === 'FAIL')) { $('#loginErr').textContent = '이메일 또는 비밀번호가 올바르지 않습니다.'; return; }
-    $('#pw').value = ''; showApp(email);
-  } catch { $('#loginErr').textContent = '로그인 요청에 실패했습니다.'; }
-});
-$('#logout').onclick = async () => { try { await fetch('/api-admin/v1/logout', {method:'POST', credentials:'include'}); } catch {} showLogin(); };
-
-let current = 'dashboard';
-document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
-  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x===t));
-  ['dashboard','users','apistats'].forEach(id => $('#'+id).classList.toggle('hidden', id!==t.dataset.tab));
-  current = t.dataset.tab; render(current);
-});
-
-function render(tab){ setMsg(''); if(tab==='dashboard') loadDashboard(); else if(tab==='users') loadUsers(); else loadApiStats(); }
-
-function bars(list){
-  const max = Math.max(1, ...list.map(d=>d.count));
-  return `<div class="bars">${list.map(d=>`<div class="b" style="height:${Math.round(d.count/max*88)}px" data-label="${esc(d.date)}: ${d.count}"></div>`).join('')}</div>`;
+async function api(path,opts={}){
+  const res=await fetch(path,{credentials:'include',...opts});
+  if(res.status===401){showLogin();throw new Error('세션이 만료되었습니다. 다시 로그인하세요.');}
+  let j;try{j=await res.json();}catch{throw new Error('HTTP '+res.status);}
+  if(j.meta&&j.meta.result==='FAIL')throw new Error((j.meta.errorCode||'')+' '+(j.meta.message||''));
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  return j.data;
 }
 
+/* ── auth ── */
+function showLogin(){$('#login').classList.remove('hidden');$('#app').classList.add('hidden');}
+function showApp(email){$('#login').classList.add('hidden');$('#app').classList.remove('hidden');
+  $('#who').textContent=email||'관리자';$('#avatar').textContent=(email||'A').trim()[0].toUpperCase();render('dashboard');}
+async function checkSession(){try{await api('/api-admin/v1/me');showApp(localStorage.getItem('adminEmail'));}catch{showLogin();}}
+$('#loginForm').addEventListener('submit',async e=>{
+  e.preventDefault();$('#loginErr').textContent='';
+  const email=$('#email').value.trim();
+  try{
+    const res=await fetch('/api-admin/v1/login',{method:'POST',credentials:'include',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:$('#pw').value})});
+    const j=await res.json().catch(()=>({}));
+    if(!res.ok||(j.meta&&j.meta.result==='FAIL')){$('#loginErr').textContent='이메일 또는 비밀번호가 올바르지 않습니다.';return;}
+    localStorage.setItem('adminEmail',email);$('#pw').value='';showApp(email);
+  }catch{$('#loginErr').textContent='로그인 요청에 실패했습니다.';}
+});
+$('#logout').onclick=async()=>{try{await fetch('/api-admin/v1/logout',{method:'POST',credentials:'include'});}catch{}
+  localStorage.removeItem('adminEmail');showLogin();};
+
+/* ── tabs ── */
+let current='dashboard';
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
+  ['dashboard','users','apistats'].forEach(id=>$('#'+id).classList.toggle('hidden',id!==t.dataset.tab));
+  current=t.dataset.tab;render(current);
+});
+function render(tab){setMsg('');tab==='dashboard'?loadDashboard():tab==='users'?loadUsers():loadApiStats();}
+
+/* ── charts ── */
+function areaChart(data,color){
+  if(!data||!data.length)return '<div class="empty">데이터 없음</div>';
+  const W=600,H=150,P=10,BASE=H-P,TOP=P+16;
+  const max=Math.max(1,...data.map(d=>d.count)),n=data.length;
+  const x=i=>P+(n===1?(W-2*P)/2:i*(W-2*P)/(n-1));
+  const y=v=>BASE-v/max*(BASE-TOP);
+  const pts=data.map((d,i)=>[x(i),y(d.count)]);
+  const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const area=`M${x(0).toFixed(1)} ${BASE} `+pts.map(p=>'L'+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+` L${x(n-1).toFixed(1)} ${BASE} Z`;
+  const id='g'+color.replace('#','');
+  const dots=pts.map((p,i)=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.6" fill="${color}"><title>${esc(data[i].date)} · ${data[i].count}</title></circle>`).join('');
+  const last=data[data.length-1];
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart">
+    <defs><linearGradient id="${id}" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="${color}" stop-opacity=".22"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+    <line x1="${P}" y1="${BASE}" x2="${W-P}" y2="${BASE}" stroke="var(--line)"/>
+    <path d="${area}" fill="url(#${id})"/><path d="${line}" fill="none" stroke="${color}" stroke-width="2.2"/>${dots}
+    <text x="${W-P}" y="${TOP-4}" text-anchor="end" font-size="11" fill="var(--muted)">최대 ${max} · 최근 ${last.count}</text>
+  </svg>`;
+}
+const kpi=(k,v,s,hl)=>`<div class="kpi${hl?' hl':''}"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>${s?`<div class="s">${esc(s)}</div>`:''}</div>`;
+
+/* ── dashboard ── */
 async function loadDashboard(){
-  const el = $('#dashboard'); el.innerHTML = '<p class="muted">불러오는 중…</p>';
-  try {
-    const d = await api('/api-admin/v1/metrics/dashboard?days=30');
-    el.innerHTML = `
-      <div class="cards">
-        ${card('가입자', d.totalUsers)}${card('기록', d.totalRecords)}${card('리마인드', d.totalReminds)}
-        ${card('리마인드 전환율', (d.remindConversionRate*100).toFixed(1)+'%')}
-        ${card('전시(전체)', d.totalExhibitions)}${card('· CATALOG', d.catalogExhibitions)}${card('· CUSTOM', d.customExhibitions)}
-        ${card('API 호출 누적', d.totalApiCalls)}
+  const el=$('#dashboard');el.innerHTML='<div class="empty">불러오는 중…</div>';
+  try{
+    const d=await api('/api-admin/v1/metrics/dashboard?days=30');
+    el.innerHTML=`
+      <div class="grid kpis">
+        ${kpi('가입자',nf(d.totalUsers))}
+        ${kpi('기록',nf(d.totalRecords))}
+        ${kpi('리마인드',nf(d.totalReminds))}
+        ${kpi('리마인드 전환율',(d.remindConversionRate*100).toFixed(1)+'%','회고한 기록 '+nf(d.remindedRecords)+'개',true)}
+        ${kpi('전시',nf(d.totalExhibitions),'공공 '+nf(d.catalogExhibitions)+' · 개인 '+nf(d.customExhibitions))}
+        ${kpi('API 호출 누적',nf(d.totalApiCalls))}
       </div>
-      <section class="block"><h2>일자별 신규 가입 (최근 30일)</h2>${d.signupsByDay.length?bars(d.signupsByDay):'<p class="muted">데이터 없음</p>'}</section>
-      <section class="block"><h2>일자별 기록 생성 (최근 30일)</h2>${d.recordsByDay.length?bars(d.recordsByDay):'<p class="muted">데이터 없음</p>'}</section>
-      <section class="block"><h2>인기 감정 Top 10</h2>${d.topEmotions.length?d.topEmotions.map(e=>`<span class="pill">${esc(e.emotionCode)} · ${e.count}</span>`).join(''):'<p class="muted">데이터 없음</p>'}</section>`;
-  } catch(e){ el.innerHTML=''; setMsg('대시보드 로드 실패: '+e.message); }
+      <div class="two" style="margin-bottom:14px">
+        <div class="card"><div class="hd"><h2>일자별 신규 가입</h2><span class="faint">최근 30일</span></div><div class="bd">${areaChart(d.signupsByDay,'#4f46e5')}</div></div>
+        <div class="card"><div class="hd"><h2>일자별 기록 생성</h2><span class="faint">최근 30일</span></div><div class="bd">${areaChart(d.recordsByDay,'#0ea5e9')}</div></div>
+      </div>
+      <div class="card"><div class="hd"><h2>인기 감정 Top 10</h2></div><div class="bd">
+        ${d.topEmotions.length?(()=>{const mx=Math.max(...d.topEmotions.map(e=>e.count));
+          return d.topEmotions.map(e=>`<div class="ebar"><div class="lab" title="${esc(e.emotionCode)}">${esc(e.emotionCode)}</div><div class="track"><div class="fill" style="width:${Math.max(4,e.count/mx*100)}%"></div></div><div class="n">${e.count}</div></div>`).join('');})()
+          :'<div class="empty">데이터 없음</div>'}
+      </div></div>`;
+  }catch(e){el.innerHTML='';setMsg('대시보드 로드 실패: '+e.message);}
 }
-const card = (k,v) => `<div class="card"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
 
-let usersState = { q:'', page:0 };
+/* ── users ── */
+let us={q:'',page:0};
 async function loadUsers(){
-  const el = $('#users');
-  el.innerHTML = `<div class="row"><input id="uq" placeholder="닉네임/실명 검색" value="${esc(usersState.q)}" style="background:var(--panel);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:7px 10px"/><button class="btn" id="usearch">검색</button></div><div id="ulist"><p class="muted">불러오는 중…</p></div>`;
-  $('#usearch').onclick = () => { usersState.q = $('#uq').value.trim(); usersState.page = 0; loadUserList(); };
-  $('#uq').addEventListener('keydown', e => { if(e.key==='Enter') $('#usearch').click(); });
+  const el=$('#users');
+  el.innerHTML=`<div class="toolbar">
+      <input class="in" id="uq" placeholder="닉네임·실명 검색" value="${esc(us.q)}" style="min-width:220px"/>
+      <button class="btn" id="usearch">검색</button></div>
+    <div class="card"><div id="ulist"><div class="empty">불러오는 중…</div></div></div>`;
+  $('#usearch').onclick=()=>{us.q=$('#uq').value.trim();us.page=0;loadUserList();};
+  $('#uq').addEventListener('keydown',e=>{if(e.key==='Enter')$('#usearch').click();});
   loadUserList();
 }
 async function loadUserList(){
-  const box = $('#ulist'); box.innerHTML = '<p class="muted">불러오는 중…</p>';
-  try {
-    const p = await api(`/api-admin/v1/users?q=${encodeURIComponent(usersState.q)}&page=${usersState.page}&size=20`);
-    box.innerHTML = `
-      <table><thead><tr><th>ID</th><th>닉네임</th><th>실명</th><th class="num">기록</th><th class="num">리마인드</th><th class="num">북마크</th><th class="num">API호출</th><th>마지막 활동</th><th>가입</th></tr></thead>
-      <tbody>${p.content.map(u=>`<tr class="clickable" data-id="${u.userId}">
-        <td>${u.userId}</td><td>${esc(u.nickname)}</td><td>${esc(u.name)||'-'}</td>
-        <td class="num">${u.recordCount}</td><td class="num">${u.remindCount}</td><td class="num">${u.bookmarkCount}</td><td class="num">${u.apiCallCount}</td>
-        <td class="muted">${fmtDate(u.lastActivityAt)}</td><td class="muted">${fmtDate(u.createdAt)}</td></tr>`).join('')}</tbody></table>
-      <div class="row" style="margin-top:12px">
-        <button class="btn" ${p.page<=0?'disabled':''} id="uprev">이전</button>
-        <span class="muted">${p.page+1} / ${Math.max(1,p.totalPages)} · 총 ${p.totalElements}명</span>
-        <button class="btn" ${!p.hasNext?'disabled':''} id="unext">다음</button>
-      </div>`;
-    box.querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => loadUserDetail(tr.dataset.id));
-    if($('#uprev')) $('#uprev').onclick = () => { usersState.page--; loadUserList(); };
-    if($('#unext')) $('#unext').onclick = () => { usersState.page++; loadUserList(); };
-  } catch(e){ box.innerHTML=''; setMsg('사용자 목록 실패: '+e.message); }
+  const box=$('#ulist');box.innerHTML='<div class="empty">불러오는 중…</div>';
+  try{
+    const p=await api(`/api-admin/v1/users?q=${encodeURIComponent(us.q)}&page=${us.page}&size=20`);
+    box.innerHTML=`<div class="scroll"><table class="tbl"><thead><tr>
+        <th>ID</th><th>닉네임</th><th>실명</th><th>전화번호</th><th class="r">기록</th><th class="r">리마인드</th><th class="r">북마크</th><th class="r">API</th><th>마지막 활동</th><th>가입</th></tr></thead>
+      <tbody>${p.content.map(u=>`<tr class="click" data-id="${u.userId}">
+        <td class="faint">#${u.userId}</td><td><b>${esc(u.nickname)}</b></td><td>${esc(u.name)||'<span class="faint">-</span>'}</td>
+        <td>${u.phoneNumber?'<b>'+esc(u.phoneNumber)+'</b>':'<span class="faint">-</span>'}</td>
+        <td class="r num">${u.recordCount}</td><td class="r num">${u.remindCount}</td><td class="r num">${u.bookmarkCount}</td><td class="r num">${u.apiCallCount}</td>
+        <td class="muted">${fday(u.lastActivityAt)}</td><td class="muted">${fday(u.createdAt)}</td></tr>`).join('')||'<tr><td colspan="10" class="empty">사용자 없음</td></tr>'}</tbody></table></div>
+      <div class="pager">
+        <button class="btn" ${p.page<=0?'disabled':''} id="uprev">← 이전</button>
+        <span>${p.page+1} / ${Math.max(1,p.totalPages)} · 총 ${nf(p.totalElements)}명</span>
+        <button class="btn" ${!p.hasNext?'disabled':''} id="unext">다음 →</button></div>`;
+    box.querySelectorAll('tr[data-id]').forEach(tr=>tr.onclick=()=>loadUserDetail(tr.dataset.id));
+    if($('#uprev'))$('#uprev').onclick=()=>{us.page--;loadUserList();};
+    if($('#unext'))$('#unext').onclick=()=>{us.page++;loadUserList();};
+  }catch(e){box.innerHTML='';setMsg('사용자 목록 실패: '+e.message);}
 }
 async function loadUserDetail(id){
-  const el = $('#users'); el.innerHTML = '<p class="muted">불러오는 중…</p>';
-  try {
-    const d = await api('/api-admin/v1/users/'+id);
-    const statusClass = s => s>=500?'status5xx':s>=400?'status4xx':'status2xx';
-    el.innerHTML = `
-      <button class="btn backbtn" id="uback">← 목록</button>
-      <div class="cards">
-        ${card('기록', d.recordCount)}${card('리마인드', d.remindCount)}${card('북마크', d.bookmarkCount)}
-        ${card('다녀온 전시', d.visitedExhibitionCount)}${card('API 호출', d.apiCallCount)}
+  const el=$('#users');el.innerHTML='<div class="empty">불러오는 중…</div>';
+  try{
+    const d=await api('/api-admin/v1/users/'+id);
+    const sc=s=>s>=500?'s5':s>=400?'s4':'s2';
+    const kvItem=(k,v)=>`<div class="item"><b>${k}</b>${v||'<span class="faint">-</span>'}</div>`;
+    el.innerHTML=`
+      <button class="btn" id="uback" style="margin-bottom:14px">← 목록</button>
+      <div class="card" style="margin-bottom:14px"><div class="bd"><div class="profile">
+        <div class="big">${esc((d.nickname||'?').trim()[0]||'?')}</div>
+        <div style="flex:1;min-width:200px">
+          <div class="name">${esc(d.nickname)} ${d.name?'<span class="faint" style="font-weight:500">· '+esc(d.name)+'</span>':''}</div>
+          <div class="kv" style="margin-top:10px">
+            ${d.phoneNumber?`<div class="item"><span class="phone">📱 ${esc(d.phoneNumber)}</span></div>`:''}
+            ${kvItem('이메일',esc(d.email))}
+            ${kvItem('ID','#'+d.userId)}
+          </div>
+          <div class="kv">
+            ${kvItem('연령',esc(d.ageGroup))}${kvItem('지역',esc(d.residenceRegion))}${kvItem('출생',esc(d.birthYear))}
+            ${kvItem('리마인드',d.remindEnabled?'ON':'OFF')}${kvItem('가입',fdt(d.createdAt))}${kvItem('마지막활동',fdt(d.lastActivityAt))}
+          </div>
+        </div>
+      </div></div></div>
+      <div class="grid kpis">
+        ${kpi('기록',nf(d.recordCount))}${kpi('리마인드',nf(d.remindCount))}${kpi('북마크',nf(d.bookmarkCount))}
+        ${kpi('다녀온 전시',nf(d.visitedExhibitionCount))}${kpi('API 호출',nf(d.apiCallCount))}
       </div>
-      <section class="block"><h2>프로필 · #${d.userId}</h2>
-        <div><b>${esc(d.nickname)}</b> ${esc(d.name)?'('+esc(d.name)+')':''}</div>
-        <div class="muted" style="margin-top:6px">이메일 ${esc(d.email)||'-'} · 연령 ${esc(d.ageGroup)||'-'} · 지역 ${esc(d.residenceRegion)||'-'} · 출생 ${esc(d.birthYear)||'-'} · 리마인드 ${d.remindEnabled?'ON':'OFF'} · 가입 ${fmtDate(d.createdAt)} · 마지막활동 ${fmtDate(d.lastActivityAt)}</div>
-      </section>
-      <div class="detail-grid">
-        <section class="block"><h2>최근 기록</h2>${listOrEmpty(d.recentRecords, r=>`<div style="padding:6px 0;border-bottom:1px solid var(--line)"><b>${esc(r.exhibitionTitle)||'전시#'+r.exhibitionId}</b> <span class="muted">· ${esc(r.representativeEmotion)||'-'} · ${esc(r.aiStatus)} · 관람 ${esc(r.viewedAt)||'-'} · ${fmtDate(r.createdAt)}</span></div>`)}</section>
-        <section class="block"><h2>최근 리마인드(회고)</h2>${listOrEmpty(d.recentReminds, r=>`<div style="padding:6px 0;border-bottom:1px solid var(--line)">"${esc(r.reflection)}" <span class="muted">· 기록#${r.recordId} · ${esc(r.aiStatus)} · ${fmtDate(r.createdAt)}</span></div>`)}</section>
-        <section class="block"><h2>북마크한 전시</h2>${d.recentBookmarks.length?d.recentBookmarks.map(b=>`<span class="pill">${esc(b.title)||'#'+b.exhibitionId} · ${esc(b.type)}</span>`).join(''):'<p class="muted">없음</p>'}</section>
-        <section class="block"><h2>API 호출 (엔드포인트별)</h2>${listOrEmpty(d.apiCallsByPath, a=>`<div style="padding:4px 0"><span class="num" style="display:inline-block;min-width:44px">${a.count}</span> <span class="muted">${esc(a.path)}</span></div>`)}</section>
+      <div class="two" style="margin-bottom:14px">
+        <div class="card"><div class="hd"><h2>최근 기록</h2></div><div class="bd list">${listOr(d.recentRecords,r=>`<div class="row"><span class="t">${esc(r.exhibitionTitle)||'전시 #'+r.exhibitionId}</span> <span class="chip soft">${esc(r.representativeEmotion)||'-'}</span><div class="muted" style="margin-top:3px">${esc(r.aiStatus)} · 관람 ${esc(r.viewedAt)||'-'} · ${fdt(r.createdAt)}</div></div>`)}</div></div>
+        <div class="card"><div class="hd"><h2>최근 리마인드(회고)</h2></div><div class="bd list">${listOr(d.recentReminds,r=>`<div class="row"><span class="t">"${esc(r.reflection)}"</span><div class="muted" style="margin-top:3px">기록 #${r.recordId} · ${esc(r.aiStatus)} · ${fdt(r.createdAt)}</div></div>`)}</div></div>
+        <div class="card"><div class="hd"><h2>북마크한 전시</h2></div><div class="bd">${d.recentBookmarks.length?d.recentBookmarks.map(b=>`<span class="chip">${esc(b.title)||'#'+b.exhibitionId}</span>`).join(''):'<div class="empty">없음</div>'}</div></div>
+        <div class="card"><div class="hd"><h2>API 호출 (엔드포인트별)</h2></div><div class="bd list">${listOr(d.apiCallsByPath,a=>`<div class="row" style="display:flex;justify-content:space-between"><span class="muted" style="overflow:hidden;text-overflow:ellipsis">${esc(a.path)}</span><b class="num">${a.count}</b></div>`)}</div></div>
       </div>
-      <section class="block"><h2>최근 활동 기록</h2>
-        <table><thead><tr><th>시각</th><th>메서드</th><th>경로</th><th class="num">상태</th><th class="num">ms</th></tr></thead>
-        <tbody>${d.recentActivity.map(a=>`<tr><td class="muted">${fmtDate(a.createdAt)}</td><td>${esc(a.method)}</td><td>${esc(a.path)}</td><td class="num ${statusClass(a.status)}">${a.status}</td><td class="num">${a.durationMs}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">활동 없음</td></tr>'}</tbody></table>
-      </section>`;
-    $('#uback').onclick = () => loadUsers();
-  } catch(e){ setMsg('사용자 상세 실패: '+e.message); loadUsers(); }
+      <div class="card"><div class="hd"><h2>최근 활동 기록</h2><span class="faint">${d.recentActivity.length}건</span></div><div class="scroll">
+        <table class="tbl"><thead><tr><th>시각</th><th>메서드</th><th>경로</th><th class="r">상태</th><th class="r">ms</th></tr></thead>
+        <tbody>${d.recentActivity.map(a=>`<tr><td class="muted">${fdt(a.createdAt)}</td><td><b>${esc(a.method)}</b></td><td>${esc(a.path)}</td><td class="r"><span class="pill ${sc(a.status)}">${a.status}</span></td><td class="r num">${a.durationMs}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">활동 없음</td></tr>'}</tbody></table></div></div>`;
+    $('#uback').onclick=()=>loadUsers();
+  }catch(e){setMsg('사용자 상세 실패: '+e.message);loadUsers();}
 }
-const listOrEmpty = (arr, fn) => arr && arr.length ? arr.map(fn).join('') : '<p class="muted">없음</p>';
+const listOr=(a,fn)=>a&&a.length?a.map(fn).join(''):'<div class="empty">없음</div>';
 
+/* ── api stats ── */
 async function loadApiStats(){
-  const el = $('#apistats'); el.innerHTML = '<p class="muted">불러오는 중…</p>';
-  try {
-    const d = await api('/api-admin/v1/metrics/api-stats');
-    el.innerHTML = `
-      <div class="cards">${card('총 호출', d.totalCount)}${card('총 에러', d.totalErrors)}
-        ${card('에러율', d.totalCount?((d.totalErrors/d.totalCount)*100).toFixed(2)+'%':'0%')}</div>
-      <section class="block"><h2>엔드포인트별 (호출 많은 순)</h2>
-        <table><thead><tr><th>메서드</th><th>URI</th><th class="num">호출</th><th class="num">에러</th><th class="num">평균ms</th><th class="num">최대ms</th></tr></thead>
-        <tbody>${d.endpoints.map(e=>`<tr><td>${esc(e.method)}</td><td>${esc(e.uri)}</td><td class="num">${e.count}</td><td class="num ${e.errorCount?'err':''}">${e.errorCount}</td><td class="num">${e.avgMs}</td><td class="num">${e.maxMs}</td></tr>`).join('')||'<tr><td colspan="6" class="muted">데이터 없음</td></tr>'}</tbody></table>
-      </section>
-      <p class="muted">※ 인메모리 메트릭 — 앱 재시작 시 리셋됩니다. 장기 추이는 Grafana Cloud를 참고하세요.</p>`;
-  } catch(e){ el.innerHTML=''; setMsg('API 통계 실패: '+e.message); }
+  const el=$('#apistats');el.innerHTML='<div class="empty">불러오는 중…</div>';
+  try{
+    const d=await api('/api-admin/v1/metrics/api-stats');
+    el.innerHTML=`<div class="grid kpis">
+        ${kpi('총 호출',nf(d.totalCount))}${kpi('총 에러',nf(d.totalErrors))}
+        ${kpi('에러율',d.totalCount?((d.totalErrors/d.totalCount)*100).toFixed(2)+'%':'0%')}</div>
+      <div class="card"><div class="hd"><h2>엔드포인트별 (호출 많은 순)</h2></div><div class="scroll">
+        <table class="tbl"><thead><tr><th>메서드</th><th>URI</th><th class="r">호출</th><th class="r">에러</th><th class="r">평균 ms</th><th class="r">최대 ms</th></tr></thead>
+        <tbody>${d.endpoints.map(e=>`<tr><td><b>${esc(e.method)}</b></td><td>${esc(e.uri)}</td><td class="r num">${nf(e.count)}</td><td class="r num" style="${e.errorCount?'color:var(--red)':''}">${e.errorCount}</td><td class="r num">${e.avgMs}</td><td class="r num">${e.maxMs}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">데이터 없음</td></tr>'}</tbody></table></div></div>
+      <p class="faint" style="font-size:12px;margin-top:12px">※ 인메모리 메트릭 — 앱 재시작 시 리셋됩니다. 장기 추이는 Grafana Cloud 참고.</p>`;
+  }catch(e){el.innerHTML='';setMsg('API 통계 실패: '+e.message);}
 }
 
 checkSession();
