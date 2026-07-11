@@ -105,6 +105,20 @@ class NotificationIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("GET /notifications — 팩토리로 만든 알림은 전시 포스터 imageUrl을 응답에 담는다")
+	void 목록_이미지_포함() throws Exception {
+		String token = loginAndGetAccessToken(9100005L, "이미지유저");
+		long userId = userIdOf(token);
+		notificationRepository.save(
+				Notification.remind(userId, "이미지유저", "오늘", 7L, "https://img/poster-remind.jpg"));
+
+		mockMvc.perform(get("/api/v1/notifications").header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content[0].type").value("REMIND"))
+				.andExpect(jsonPath("$.data.content[0].imageUrl").value("https://img/poster-remind.jpg"));
+	}
+
+	@Test
 	@DisplayName("GET /notifications — 알림 없으면 빈 목록(content [], hasNext false, totalCount 0)")
 	void 목록_빈결과() throws Exception {
 		String token = loginAndGetAccessToken(9100002L, "빈유저");

@@ -73,6 +73,7 @@ class NotificationFacadeTest {
 		assertThat(saved.getTitle()).isEqualTo("오늘의 여운");
 		assertThat(saved.getBody()).isEqualTo("시현님, 1주일 전 기록한 전시가 있어요!");
 		assertThat(saved.getTargetId()).isEqualTo(10L);
+		assertThat(saved.getImageUrl()).isEqualTo("https://img/monet-poster.jpg");
 		assertThat(saved.isRead()).isFalse();
 	}
 
@@ -136,6 +137,7 @@ class NotificationFacadeTest {
 		assertThat(saved.getTitle()).isEqualTo("전시");
 		assertThat(saved.getBody()).isEqualTo("'행복한 인생' 전시가 3일 뒤 종료 돼요");
 		assertThat(saved.getTargetId()).isEqualTo(100L);
+		assertThat(saved.getImageUrl()).isEqualTo("https://img/100-poster.jpg");
 	}
 
 	@Test
@@ -212,7 +214,8 @@ class NotificationFacadeTest {
 	}
 
 	private RemindResult.Candidate candidate(Long recordId, String elapsedLabel) {
-		return new RemindResult.Candidate(recordId, 7, elapsedLabel, 20L, "모네전", null, null, null,
+		return new RemindResult.Candidate(recordId, 7, elapsedLabel, 20L, "모네전", null,
+				"https://img/monet-poster.jpg", null,
 				"예술의전당", "SEOUL", LocalDate.of(2026, 6, 20), "원본 감상", List.of("평화로운"));
 	}
 
@@ -220,7 +223,7 @@ class NotificationFacadeTest {
 	private Exhibition exhibition(Long id, String title, LocalDate endDate) {
 		LocalDate startDate = LocalDate.now(AppTime.KST).minusDays(30);
 		Exhibition exhibition = Exhibition.createCustom(99L, title, "갤러리", startDate, endDate,
-				null, null, null, null, null, null);
+				null, null, null, null, "https://img/" + id + "-poster.jpg", null);
 		ReflectionTestUtils.setField(exhibition, "id", id);
 		return exhibition;
 	}
