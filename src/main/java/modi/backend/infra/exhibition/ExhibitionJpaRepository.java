@@ -33,4 +33,15 @@ public interface ExhibitionJpaRepository
 	List<Exhibition> findByTypeAndStartDateLessThanEqualAndEndDateGreaterThanEqualAndDeletedAtIsNullOrderByOurViewCountDesc(
 			ExhibitionType type, java.time.LocalDate startOnOrBefore, java.time.LocalDate endOnOrAfter,
 			Pageable pageable);
+
+	// ── 관리자 콘솔 전용 ───────────────────────────────
+
+	/** 전체 전시 수(살아있는). */
+	long countByDeletedAtIsNull();
+
+	/** 타입별 전시 수(CATALOG/CUSTOM 구분 — 대시보드용). */
+	long countByTypeAndDeletedAtIsNull(ExhibitionType type);
+
+	/** 여러 전시를 ID로 조회(사용자 상세의 북마크/전시활동 제목 표시용, 살아있는 행만). */
+	List<Exhibition> findByIdInAndDeletedAtIsNull(java.util.Collection<Long> ids);
 }

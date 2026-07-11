@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>여운 · 관리자 콘솔</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#262a33; --fg:#e6e8ec; --muted:#9aa2af; --accent:#6ea8fe; --bar:#3b82f6; --err:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; margin-right:auto; }
+  header input { background:var(--panel); border:1px solid var(--line); color:var(--fg); border-radius:8px; padding:7px 10px; width:280px; max-width:48vw; }
+  header button, .tab, .btn { background:var(--panel); border:1px solid var(--line); color:var(--fg); border-radius:8px; padding:7px 12px; cursor:pointer; }
+  header button:hover, .tab:hover, .btn:hover { border-color:var(--accent); }
+  nav { display:flex; gap:8px; padding:12px 20px 0; }
+  .tab.active { background:var(--accent); color:#08111f; border-color:var(--accent); font-weight:600; }
+  main { padding:20px; max-width:1100px; }
+  .hidden { display:none; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .card .k { color:var(--muted); font-size:12px; }
+  .card .v { font-size:22px; font-weight:700; margin-top:4px; }
+  section.block { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:20px; }
+  section.block h2 { font-size:14px; margin:0 0 12px; color:var(--muted); font-weight:600; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-weight:600; }
+  tbody tr:hover { background:#1d222c; }
+  .clickable { cursor:pointer; }
+  .num { text-align:right; font-variant-numeric:tabular-nums; }
+  .bars { display:flex; align-items:flex-end; gap:3px; height:90px; overflow-x:auto; }
+  .bars .b { flex:0 0 14px; background:var(--bar); border-radius:3px 3px 0 0; min-height:2px; position:relative; }
+  .bars .b:hover::after { content:attr(data-label); position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:#000; color:#fff; font-size:10px; padding:2px 5px; border-radius:4px; white-space:nowrap; }
+  .pill { display:inline-block; background:#1d222c; border:1px solid var(--line); border-radius:999px; padding:2px 9px; margin:0 5px 5px 0; font-size:12px; }
+  .muted { color:var(--muted); }
+  .err { color:var(--err); }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+  .backbtn { margin-bottom:12px; }
+  .status2xx{color:#4ade80} .status4xx{color:#fbbf24} .status5xx{color:var(--err)}
+  .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:720px){ .detail-grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<header>
+  <h1>여운 · 관리자 콘솔</h1>
+  <span id="who" class="muted" style="margin-left:auto"></span>
+  <button id="logout" class="hidden">로그아웃</button>
+</header>
+
+<div id="login" class="hidden" style="max-width:340px;margin:8vh auto;padding:24px;background:var(--panel);border:1px solid var(--line);border-radius:14px">
+  <h2 style="margin:0 0 16px;font-size:16px">관리자 로그인</h2>
+  <form id="loginForm">
+    <input id="email" type="email" placeholder="이메일" autocomplete="username" required
+      style="width:100%;margin-bottom:10px;background:var(--bg);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:10px"/>
+    <input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password" required
+      style="width:100%;margin-bottom:14px;background:var(--bg);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:10px"/>
+    <button type="submit" class="btn" style="width:100%;background:var(--accent);color:#08111f;border-color:var(--accent);font-weight:600">로그인</button>
+    <div id="loginErr" class="err" style="margin-top:10px"></div>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+<nav>
+  <button class="tab active" data-tab="dashboard">대시보드</button>
+  <button class="tab" data-tab="users">사용자</button>
+  <button class="tab" data-tab="apistats">API 통계</button>
+</nav>
+<main>
+  <div id="msg" class="err" style="margin-bottom:12px"></div>
+  <div id="dashboard"></div>
+  <div id="users" class="hidden"></div>
+  <div id="apistats" class="hidden"></div>
+</main>
+</div>
+
+<script>
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtDate = s => s ? String(s).replace('T',' ').slice(0,16) : '-';
+async function api(path, opts={}) {
+  const res = await fetch(path, { credentials: 'include', ...opts });
+  if (res.status === 401) { showLogin(); throw new Error('세션이 만료되었습니다. 다시 로그인하세요.'); }
+  let json;
+  try { json = await res.json(); } catch { throw new Error('HTTP ' + res.status); }
+  if (json.meta && json.meta.result === 'FAIL') throw new Error((json.meta.errorCode||'') + ' ' + (json.meta.message||''));
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return json.data;
+}
+function setMsg(t){ $('#msg').textContent = t || ''; }
+
+// ── 세션/로그인 (쿠키 기반 — JS가 토큰 만지지 않음) ──
+function showLogin(){ $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); $('#logout').classList.add('hidden'); $('#who').textContent=''; }
+function showApp(email){ $('#login').classList.add('hidden'); $('#app').classList.remove('hidden'); $('#logout').classList.remove('hidden'); $('#who').textContent = email || '관리자'; render('dashboard'); }
+async function checkSession(){ try { await api('/api-admin/v1/me'); showApp(); } catch { showLogin(); } }
+$('#loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#loginErr').textContent = '';
+  const email = $('#email').value.trim();
+  try {
+    const res = await fetch('/api-admin/v1/login', {
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email, password: $('#pw').value })
+    });
+    const json = await res.json().catch(()=>({}));
+    if (!res.ok || (json.meta && json.meta.result === 'FAIL')) { $('#loginErr').textContent = '이메일 또는 비밀번호가 올바르지 않습니다.'; return; }
+    $('#pw').value = ''; showApp(email);
+  } catch { $('#loginErr').textContent = '로그인 요청에 실패했습니다.'; }
+});
+$('#logout').onclick = async () => { try { await fetch('/api-admin/v1/logout', {method:'POST', credentials:'include'}); } catch {} showLogin(); };
+
+let current = 'dashboard';
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x===t));
+  ['dashboard','users','apistats'].forEach(id => $('#'+id).classList.toggle('hidden', id!==t.dataset.tab));
+  current = t.dataset.tab; render(current);
+});
+
+function render(tab){ setMsg(''); if(tab==='dashboard') loadDashboard(); else if(tab==='users') loadUsers(); else loadApiStats(); }
+
+function bars(list){
+  const max = Math.max(1, ...list.map(d=>d.count));
+  return `<div class="bars">${list.map(d=>`<div class="b" style="height:${Math.round(d.count/max*88)}px" data-label="${esc(d.date)}: ${d.count}"></div>`).join('')}</div>`;
+}
+
+async function loadDashboard(){
+  const el = $('#dashboard'); el.innerHTML = '<p class="muted">불러오는 중…</p>';
+  try {
+    const d = await api('/api-admin/v1/metrics/dashboard?days=30');
+    el.innerHTML = `
+      <div class="cards">
+        ${card('가입자', d.totalUsers)}${card('기록', d.totalRecords)}${card('리마인드', d.totalReminds)}
+        ${card('리마인드 전환율', (d.remindConversionRate*100).toFixed(1)+'%')}
+        ${card('전시(전체)', d.totalExhibitions)}${card('· CATALOG', d.catalogExhibitions)}${card('· CUSTOM', d.customExhibitions)}
+        ${card('API 호출 누적', d.totalApiCalls)}
+      </div>
+      <section class="block"><h2>일자별 신규 가입 (최근 30일)</h2>${d.signupsByDay.length?bars(d.signupsByDay):'<p class="muted">데이터 없음</p>'}</section>
+      <section class="block"><h2>일자별 기록 생성 (최근 30일)</h2>${d.recordsByDay.length?bars(d.recordsByDay):'<p class="muted">데이터 없음</p>'}</section>
+      <section class="block"><h2>인기 감정 Top 10</h2>${d.topEmotions.length?d.topEmotions.map(e=>`<span class="pill">${esc(e.emotionCode)} · ${e.count}</span>`).join(''):'<p class="muted">데이터 없음</p>'}</section>`;
+  } catch(e){ el.innerHTML=''; setMsg('대시보드 로드 실패: '+e.message); }
+}
+const card = (k,v) => `<div class="card"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`;
+
+let usersState = { q:'', page:0 };
+async function loadUsers(){
+  const el = $('#users');
+  el.innerHTML = `<div class="row"><input id="uq" placeholder="닉네임/실명 검색" value="${esc(usersState.q)}" style="background:var(--panel);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:7px 10px"/><button class="btn" id="usearch">검색</button></div><div id="ulist"><p class="muted">불러오는 중…</p></div>`;
+  $('#usearch').onclick = () => { usersState.q = $('#uq').value.trim(); usersState.page = 0; loadUserList(); };
+  $('#uq').addEventListener('keydown', e => { if(e.key==='Enter') $('#usearch').click(); });
+  loadUserList();
+}
+async function loadUserList(){
+  const box = $('#ulist'); box.innerHTML = '<p class="muted">불러오는 중…</p>';
+  try {
+    const p = await api(`/api-admin/v1/users?q=${encodeURIComponent(usersState.q)}&page=${usersState.page}&size=20`);
+    box.innerHTML = `
+      <table><thead><tr><th>ID</th><th>닉네임</th><th>실명</th><th class="num">기록</th><th class="num">리마인드</th><th class="num">북마크</th><th class="num">API호출</th><th>마지막 활동</th><th>가입</th></tr></thead>
+      <tbody>${p.content.map(u=>`<tr class="clickable" data-id="${u.userId}">
+        <td>${u.userId}</td><td>${esc(u.nickname)}</td><td>${esc(u.name)||'-'}</td>
+        <td class="num">${u.recordCount}</td><td class="num">${u.remindCount}</td><td class="num">${u.bookmarkCount}</td><td class="num">${u.apiCallCount}</td>
+        <td class="muted">${fmtDate(u.lastActivityAt)}</td><td class="muted">${fmtDate(u.createdAt)}</td></tr>`).join('')}</tbody></table>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" ${p.page<=0?'disabled':''} id="uprev">이전</button>
+        <span class="muted">${p.page+1} / ${Math.max(1,p.totalPages)} · 총 ${p.totalElements}명</span>
+        <button class="btn" ${!p.hasNext?'disabled':''} id="unext">다음</button>
+      </div>`;
+    box.querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => loadUserDetail(tr.dataset.id));
+    if($('#uprev')) $('#uprev').onclick = () => { usersState.page--; loadUserList(); };
+    if($('#unext')) $('#unext').onclick = () => { usersState.page++; loadUserList(); };
+  } catch(e){ box.innerHTML=''; setMsg('사용자 목록 실패: '+e.message); }
+}
+async function loadUserDetail(id){
+  const el = $('#users'); el.innerHTML = '<p class="muted">불러오는 중…</p>';
+  try {
+    const d = await api('/api-admin/v1/users/'+id);
+    const statusClass = s => s>=500?'status5xx':s>=400?'status4xx':'status2xx';
+    el.innerHTML = `
+      <button class="btn backbtn" id="uback">← 목록</button>
+      <div class="cards">
+        ${card('기록', d.recordCount)}${card('리마인드', d.remindCount)}${card('북마크', d.bookmarkCount)}
+        ${card('다녀온 전시', d.visitedExhibitionCount)}${card('API 호출', d.apiCallCount)}
+      </div>
+      <section class="block"><h2>프로필 · #${d.userId}</h2>
+        <div><b>${esc(d.nickname)}</b> ${esc(d.name)?'('+esc(d.name)+')':''}</div>
+        <div class="muted" style="margin-top:6px">이메일 ${esc(d.email)||'-'} · 연령 ${esc(d.ageGroup)||'-'} · 지역 ${esc(d.residenceRegion)||'-'} · 출생 ${esc(d.birthYear)||'-'} · 리마인드 ${d.remindEnabled?'ON':'OFF'} · 가입 ${fmtDate(d.createdAt)} · 마지막활동 ${fmtDate(d.lastActivityAt)}</div>
+      </section>
+      <div class="detail-grid">
+        <section class="block"><h2>최근 기록</h2>${listOrEmpty(d.recentRecords, r=>`<div style="padding:6px 0;border-bottom:1px solid var(--line)"><b>${esc(r.exhibitionTitle)||'전시#'+r.exhibitionId}</b> <span class="muted">· ${esc(r.representativeEmotion)||'-'} · ${esc(r.aiStatus)} · 관람 ${esc(r.viewedAt)||'-'} · ${fmtDate(r.createdAt)}</span></div>`)}</section>
+        <section class="block"><h2>최근 리마인드(회고)</h2>${listOrEmpty(d.recentReminds, r=>`<div style="padding:6px 0;border-bottom:1px solid var(--line)">"${esc(r.reflection)}" <span class="muted">· 기록#${r.recordId} · ${esc(r.aiStatus)} · ${fmtDate(r.createdAt)}</span></div>`)}</section>
+        <section class="block"><h2>북마크한 전시</h2>${d.recentBookmarks.length?d.recentBookmarks.map(b=>`<span class="pill">${esc(b.title)||'#'+b.exhibitionId} · ${esc(b.type)}</span>`).join(''):'<p class="muted">없음</p>'}</section>
+        <section class="block"><h2>API 호출 (엔드포인트별)</h2>${listOrEmpty(d.apiCallsByPath, a=>`<div style="padding:4px 0"><span class="num" style="display:inline-block;min-width:44px">${a.count}</span> <span class="muted">${esc(a.path)}</span></div>`)}</section>
+      </div>
+      <section class="block"><h2>최근 활동 기록</h2>
+        <table><thead><tr><th>시각</th><th>메서드</th><th>경로</th><th class="num">상태</th><th class="num">ms</th></tr></thead>
+        <tbody>${d.recentActivity.map(a=>`<tr><td class="muted">${fmtDate(a.createdAt)}</td><td>${esc(a.method)}</td><td>${esc(a.path)}</td><td class="num ${statusClass(a.status)}">${a.status}</td><td class="num">${a.durationMs}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">활동 없음</td></tr>'}</tbody></table>
+      </section>`;
+    $('#uback').onclick = () => loadUsers();
+  } catch(e){ setMsg('사용자 상세 실패: '+e.message); loadUsers(); }
+}
+const listOrEmpty = (arr, fn) => arr && arr.length ? arr.map(fn).join('') : '<p class="muted">없음</p>';
+
+async function loadApiStats(){
+  const el = $('#apistats'); el.innerHTML = '<p class="muted">불러오는 중…</p>';
+  try {
+    const d = await api('/api-admin/v1/metrics/api-stats');
+    el.innerHTML = `
+      <div class="cards">${card('총 호출', d.totalCount)}${card('총 에러', d.totalErrors)}
+        ${card('에러율', d.totalCount?((d.totalErrors/d.totalCount)*100).toFixed(2)+'%':'0%')}</div>
+      <section class="block"><h2>엔드포인트별 (호출 많은 순)</h2>
+        <table><thead><tr><th>메서드</th><th>URI</th><th class="num">호출</th><th class="num">에러</th><th class="num">평균ms</th><th class="num">최대ms</th></tr></thead>
+        <tbody>${d.endpoints.map(e=>`<tr><td>${esc(e.method)}</td><td>${esc(e.uri)}</td><td class="num">${e.count}</td><td class="num ${e.errorCount?'err':''}">${e.errorCount}</td><td class="num">${e.avgMs}</td><td class="num">${e.maxMs}</td></tr>`).join('')||'<tr><td colspan="6" class="muted">데이터 없음</td></tr>'}</tbody></table>
+      </section>
+      <p class="muted">※ 인메모리 메트릭 — 앱 재시작 시 리셋됩니다. 장기 추이는 Grafana Cloud를 참고하세요.</p>`;
+  } catch(e){ el.innerHTML=''; setMsg('API 통계 실패: '+e.message); }
+}
+
+checkSession();
+</script>
+</body>
+</html>
