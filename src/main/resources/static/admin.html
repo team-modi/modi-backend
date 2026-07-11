@@ -45,9 +45,23 @@
 <body>
 <header>
   <h1>여운 · 관리자 콘솔</h1>
-  <input id="token" type="password" placeholder="관리자 access 토큰(선택 — 로그인 쿠키 있으면 불필요)"/>
-  <button id="saveToken">토큰 저장</button>
+  <span id="who" class="muted" style="margin-left:auto"></span>
+  <button id="logout" class="hidden">로그아웃</button>
 </header>
+
+<div id="login" class="hidden" style="max-width:340px;margin:8vh auto;padding:24px;background:var(--panel);border:1px solid var(--line);border-radius:14px">
+  <h2 style="margin:0 0 16px;font-size:16px">관리자 로그인</h2>
+  <form id="loginForm">
+    <input id="email" type="email" placeholder="이메일" autocomplete="username" required
+      style="width:100%;margin-bottom:10px;background:var(--bg);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:10px"/>
+    <input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password" required
+      style="width:100%;margin-bottom:14px;background:var(--bg);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:10px"/>
+    <button type="submit" class="btn" style="width:100%;background:var(--accent);color:#08111f;border-color:var(--accent);font-weight:600">로그인</button>
+    <div id="loginErr" class="err" style="margin-top:10px"></div>
+  </form>
+</div>
+
+<div id="app" class="hidden">
 <nav>
   <button class="tab active" data-tab="dashboard">대시보드</button>
   <button class="tab" data-tab="users">사용자</button>
@@ -59,20 +73,15 @@
   <div id="users" class="hidden"></div>
   <div id="apistats" class="hidden"></div>
 </main>
+</div>
 
 <script>
 const $ = (s, r=document) => r.querySelector(s);
 const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmtDate = s => s ? String(s).replace('T',' ').slice(0,16) : '-';
-const tokenInput = $('#token');
-tokenInput.value = localStorage.getItem('adminToken') || '';
-$('#saveToken').onclick = () => { localStorage.setItem('adminToken', tokenInput.value.trim()); render(current); };
-
-async function api(path) {
-  const token = localStorage.getItem('adminToken');
-  const headers = {};
-  if (token) headers['Authorization'] = 'Bearer ' + token;
-  const res = await fetch(path, { headers, credentials: 'include' });
+async function api(path, opts={}) {
+  const res = await fetch(path, { credentials: 'include', ...opts });
+  if (res.status === 401) { showLogin(); throw new Error('세션이 만료되었습니다. 다시 로그인하세요.'); }
   let json;
   try { json = await res.json(); } catch { throw new Error('HTTP ' + res.status); }
   if (json.meta && json.meta.result === 'FAIL') throw new Error((json.meta.errorCode||'') + ' ' + (json.meta.message||''));
@@ -80,6 +89,26 @@ async function api(path) {
   return json.data;
 }
 function setMsg(t){ $('#msg').textContent = t || ''; }
+
+// ── 세션/로그인 (쿠키 기반 — JS가 토큰 만지지 않음) ──
+function showLogin(){ $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); $('#logout').classList.add('hidden'); $('#who').textContent=''; }
+function showApp(email){ $('#login').classList.add('hidden'); $('#app').classList.remove('hidden'); $('#logout').classList.remove('hidden'); $('#who').textContent = email || '관리자'; render('dashboard'); }
+async function checkSession(){ try { await api('/api-admin/v1/me'); showApp(); } catch { showLogin(); } }
+$('#loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#loginErr').textContent = '';
+  const email = $('#email').value.trim();
+  try {
+    const res = await fetch('/api-admin/v1/login', {
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email, password: $('#pw').value })
+    });
+    const json = await res.json().catch(()=>({}));
+    if (!res.ok || (json.meta && json.meta.result === 'FAIL')) { $('#loginErr').textContent = '이메일 또는 비밀번호가 올바르지 않습니다.'; return; }
+    $('#pw').value = ''; showApp(email);
+  } catch { $('#loginErr').textContent = '로그인 요청에 실패했습니다.'; }
+});
+$('#logout').onclick = async () => { try { await fetch('/api-admin/v1/logout', {method:'POST', credentials:'include'}); } catch {} showLogin(); };
 
 let current = 'dashboard';
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
@@ -186,7 +215,7 @@ async function loadApiStats(){
   } catch(e){ el.innerHTML=''; setMsg('API 통계 실패: '+e.message); }
 }
 
-render('dashboard');
+checkSession();
 </script>
 </body>
 </html>

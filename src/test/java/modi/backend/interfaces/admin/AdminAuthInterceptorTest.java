@@ -5,61 +5,57 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.util.List;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
-import modi.backend.application.auth.AuthFacade;
-import modi.backend.config.AdminProperties;
-import modi.backend.domain.auth.AuthErrorCode;
-import modi.backend.domain.auth.TokenClaims;
+import jakarta.servlet.http.Cookie;
+import modi.backend.config.JwtProperties;
 import modi.backend.support.error.CoreException;
 import modi.backend.support.error.ErrorType;
 
-/** 관리자 게이트 인터셉터 — 토큰/화이트리스트에 따른 통과·401·403 순수 단위 검증(Mockito). */
+/** 관리자 게이트 인터셉터 — admin_session 세션 쿠키 유무/유효성에 따른 통과·401 순수 단위 검증. */
 class AdminAuthInterceptorTest {
 
-	private final AuthFacade authFacade = mock(AuthFacade.class);
-	private final AdminProperties adminProperties = new AdminProperties(List.of(1L));
-	private final AdminAuthInterceptor interceptor = new AdminAuthInterceptor(authFacade, adminProperties);
+	private final AdminSession adminSession = new AdminSession(
+			new JwtProperties("test-secret-please-change-min-32-bytes-xy", 900, 1_209_600));
+	private final AdminAuthInterceptor interceptor = new AdminAuthInterceptor(providerOf(adminSession));
 	private final MockHttpServletResponse response = new MockHttpServletResponse();
 	private final Object handler = new Object();
 
-	private static TokenClaims claims(long userId) {
-		return new TokenClaims(userId, "access", "kakao", "nick", true);
+	@SuppressWarnings("unchecked")
+	private static ObjectProvider<AdminSession> providerOf(AdminSession session) {
+		ObjectProvider<AdminSession> provider = mock(ObjectProvider.class);
+		when(provider.getIfAvailable()).thenReturn(session);
+		return provider;
 	}
 
 	@Test
-	@DisplayName("토큰이 없으면 NO_ACCESS_TOKEN(401)")
-	void 토큰없음() {
+	@DisplayName("유효한 admin_session 쿠키면 통과")
+	void 세션_통과() {
 		MockHttpServletRequest request = new MockHttpServletRequest();
-		assertThatThrownBy(() -> interceptor.preHandle(request, response, handler))
-				.isInstanceOfSatisfying(CoreException.class,
-						e -> assertThat(e.errorCode()).isEqualTo(AuthErrorCode.NO_ACCESS_TOKEN));
-	}
-
-	@Test
-	@DisplayName("관리자 화이트리스트 유저는 통과")
-	void 관리자_통과() {
-		MockHttpServletRequest request = new MockHttpServletRequest();
-		request.addHeader("Authorization", "Bearer good");
-		when(authFacade.requireAccess("good")).thenReturn(claims(1L));
+		request.setCookies(new Cookie(AdminSession.SESSION_COOKIE, adminSession.issue("a@x.com")));
 
 		assertThat(interceptor.preHandle(request, response, handler)).isTrue();
 	}
 
 	@Test
-	@DisplayName("유효 토큰이지만 관리자 아니면 FORBIDDEN(403)")
-	void 비관리자_거부() {
+	@DisplayName("세션 쿠키가 없으면 401")
+	void 세션없음() {
+		assertThatThrownBy(() -> interceptor.preHandle(new MockHttpServletRequest(), response, handler))
+				.isInstanceOfSatisfying(CoreException.class,
+						e -> assertThat(e.errorCode()).isEqualTo(ErrorType.UNAUTHORIZED));
+	}
+
+	@Test
+	@DisplayName("변조된 세션 쿠키면 401")
+	void 변조_거부() {
 		MockHttpServletRequest request = new MockHttpServletRequest();
-		request.addHeader("Authorization", "Bearer good");
-		when(authFacade.requireAccess("good")).thenReturn(claims(999L));
+		request.setCookies(new Cookie(AdminSession.SESSION_COOKIE, "tampered.token"));
 
 		assertThatThrownBy(() -> interceptor.preHandle(request, response, handler))
-				.isInstanceOfSatisfying(CoreException.class,
-						e -> assertThat(e.errorCode()).isEqualTo(ErrorType.FORBIDDEN));
+				.isInstanceOf(CoreException.class);
 	}
 }

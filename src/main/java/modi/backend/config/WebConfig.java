@@ -39,8 +39,10 @@ public class WebConfig implements WebMvcConfigurer {
 
 	@Override
 	public void addInterceptors(InterceptorRegistry registry) {
-		// 관리자 게이트: /api-admin/** 은 화이트리스트 유저만(없으면 401/403).
-		registry.addInterceptor(adminAuthInterceptor).addPathPatterns("/api-admin/**");
+		// 관리자 게이트: /api-admin/** 은 admin_session 세션 필요. 단 로그인 엔드포인트는 제외(그래야 로그인 가능).
+		registry.addInterceptor(adminAuthInterceptor)
+				.addPathPatterns("/api-admin/**")
+				.excludePathPatterns("/api-admin/v1/login");
 		// 활동 로그: 고객 API(/api/v1/**)의 인증 요청만 비동기 기록(actuator·정적·admin 제외).
 		registry.addInterceptor(activityLogInterceptor).addPathPatterns("/api/v1/**");
 	}

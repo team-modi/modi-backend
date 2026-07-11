@@ -58,13 +58,17 @@ jobs:
           # (대안2) 터널 없이 EC2 Public IP로 Metabase 직접 공개. "true"면 analytics 프로파일을 0.0.0.0:3000으로 노출.
           #   ⚠️ http 평문 — 반드시 EC2 보안그룹 인바운드 3000을 신뢰 IP로 제한할 것.
           ENABLE_METABASE: ${{ secrets.ENABLE_METABASE }}
+          # 관리자 콘솔 로그인 자격(이메일 화이트리스트 + 공용 비번). 레포가 PUBLIC이라 값은 시크릿에서만.
+          #   미설정이면 admin 로그인 불가(안전). ADMIN_EMAILS=a@x.com,b@y.com / ADMIN_PASSWORD=<공용비번>
+          ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           command_timeout: 20m
           # GitHub Actions secrets를 원격 SSH 세션 환경변수로 전달
-          envs: KAKAO_CLIENT_SECRET,GOOGLE_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY,ANTHROPIC_API_KEY,GC_PROM_URL,GC_PROM_USER,GC_API_KEY,GC_LOKI_URL,GC_LOKI_USER,CF_TUNNEL_TOKEN,MB_SITE_URL,CF_QUICK_TUNNEL,ENABLE_METABASE
+          envs: KAKAO_CLIENT_SECRET,GOOGLE_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY,ANTHROPIC_API_KEY,GC_PROM_URL,GC_PROM_USER,GC_API_KEY,GC_LOKI_URL,GC_LOKI_USER,CF_TUNNEL_TOKEN,MB_SITE_URL,CF_QUICK_TUNNEL,ENABLE_METABASE,ADMIN_EMAILS,ADMIN_PASSWORD
           script: |
             set -e
             cd ~/modi-backend
@@ -91,6 +95,9 @@ jobs:
             AI_MODEL=claude-sonnet-5
             ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
             AI_API_KEY=${ANTHROPIC_API_KEY}
+            # 관리자 콘솔 로그인(이메일 화이트리스트 + 공용 비번). 시크릿에서만 주입(레포 PUBLIC).
+            ADMIN_EMAILS=${ADMIN_EMAILS}
+            ADMIN_PASSWORD=${ADMIN_PASSWORD}
             # Grafana Cloud(관측) 자격증명 — 비어 있으면 아래에서 obs 프로파일을 켜지 않는다.
             GC_PROM_URL=${GC_PROM_URL}
             GC_PROM_USER=${GC_PROM_USER}
