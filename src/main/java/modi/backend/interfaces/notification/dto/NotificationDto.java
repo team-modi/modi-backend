@@ -1,6 +1,6 @@
 package modi.backend.interfaces.notification.dto;
 
-import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import modi.backend.application.notification.NotificationResult;
@@ -23,7 +23,7 @@ public final class NotificationDto {
 			@Schema(description = "이동 대상 id. REMIND=recordId, EXHIBITION=exhibitionId, NOTICE=null",
 					nullable = true) Long targetId,
 			boolean read,
-			LocalDateTime createdAt) {
+			ZonedDateTime createdAt) {
 
 		public static NotificationItem from(NotificationResult.Item item) {
 			return new NotificationItem(item.notificationId(), item.type(), item.title(), item.body(),
