@@ -14,13 +14,14 @@ public final class NotificationDto {
 	private NotificationDto() {
 	}
 
-	/** 알림 목록 항목(9.1). type: REMIND(targetId=remindId) | NOTICE(targetId=null). */
+	/** 알림 목록 항목(9.1). type: REMIND(targetId=recordId) | EXHIBITION(targetId=exhibitionId) | NOTICE(targetId=null). */
 	public record NotificationItem(
 			Long notificationId,
-			@Schema(description = "알림 종류", allowableValues = {"REMIND", "NOTICE"}) String type,
+			@Schema(description = "알림 종류", allowableValues = {"REMIND", "EXHIBITION", "NOTICE"}) String type,
 			String title,
 			String body,
-			@Schema(description = "이동 대상 id. REMIND=remindId, NOTICE=null", nullable = true) Long targetId,
+			@Schema(description = "이동 대상 id. REMIND=recordId, EXHIBITION=exhibitionId, NOTICE=null",
+					nullable = true) Long targetId,
 			boolean read,
 			LocalDateTime createdAt) {
 

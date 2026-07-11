@@ -28,9 +28,10 @@ public final class RemindResult {
 			RemindAiStatus aiStatus, String aiSummary) {
 	}
 
-	/** 아카이브 '리마인드' 목록 항목. */
+	/** 아카이브 '리마인드' 목록 항목. beforeEmotionCodes=원본 기록의 감정(감정 변화 필터용, 원본 삭제 시 빈 리스트). */
 	public record ListItem(Long remindId, Long recordId, ZonedDateTime createdAt, String exhibitionTitle,
 			String posterUrl, String place, LocalDate viewedAt, String reflectionPreview,
-			List<String> afterEmotionCodes, RemindAiStatus aiStatus, boolean hasAiSummary) {
+			List<String> beforeEmotionCodes, List<String> afterEmotionCodes,
+			RemindAiStatus aiStatus, boolean hasAiSummary) {
 	}
 }
