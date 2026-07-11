@@ -1,7 +1,15 @@
+# 로그 로테이션 기본값 — 컨테이너 로그가 무한정 쌓여 디스크가 차는 것을 방지(각 서비스에 *default-logging 참조).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   mysql:
     image: 'mysql:8.4'
     container_name: modi-mysql
+    logging: *default-logging
     environment:
       - 'MYSQL_DATABASE=mydatabase'
       - 'MYSQL_PASSWORD=secret'
@@ -26,6 +34,7 @@ services:
       context: .
     container_name: modi-backend
     profiles: ['app']
+    logging: *default-logging
     depends_on:
       mysql:
         condition: service_healthy
@@ -59,5 +68,91 @@ services:
       # 운영(EC2 배포)은 deploy.yml의 .env가 APP_HOST_PORT=8080을 주입해 공개 주소·헬스체크(localhost:8080)와 맞춘다.
       - '${APP_HOST_PORT:-18090}:8080'
 
+  # 관측 에이전트(Grafana Alloy) — 앱 /actuator/prometheus 스크랩 → Grafana Cloud remote_write.
+  # 별도 'obs' 프로파일이라 자격증명(GC_*) 없이도 기존 `--profile app` 실행은 그대로 동작한다.
+  # 사용:  docker compose --profile app --profile obs up -d   (.env에 GC_* 채운 뒤)
+  alloy:
+    image: 'grafana/alloy:latest'
+    container_name: modi-alloy
+    profiles: ['obs']
+    depends_on:
+      - app
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+    volumes:
+      - './observability/config.alloy:/etc/alloy/config.alloy:ro'
+      # 컨테이너 로그 수집(Phase 2)용 — 도커 소켓 읽기 전용.
+      - '/var/run/docker.sock:/var/run/docker.sock:ro'
+    environment:
+      # Grafana Cloud 자격증명(.env / GitHub Actions secrets). 비어 있으면 remote_write 실패하므로 obs 프로파일을 켜지 말 것.
+      - 'GC_PROM_URL=${GC_PROM_URL:-}'
+      - 'GC_PROM_USER=${GC_PROM_USER:-}'
+      - 'GC_API_KEY=${GC_API_KEY:-}'
+      # 로그(Loki) 자격증명 — 있으면 컨테이너 로그도 Grafana Cloud로 전송(Phase 2). 없으면 로그 전송만 스킵.
+      - 'GC_LOKI_URL=${GC_LOKI_URL:-}'
+      - 'GC_LOKI_USER=${GC_LOKI_USER:-}'
+      # 인스턴스 라벨(환경 구분). 로컬은 기본 modi-backend-local, 운영은 deploy.yml이 modi-backend-prod 주입.
+      - 'GC_INSTANCE=${GC_INSTANCE:-}'
+    ports:
+      # Alloy 자체 UI/디버그. 외부 노출 금지 → 루프백에만 바인딩.
+      - '127.0.0.1:12345:12345'
+    restart: unless-stopped
+
+  # 사용자 지표(제품 분석) — Metabase가 MySQL(읽기전용)에 붙어 대시보드 제공.
+  # 'analytics' 프로파일이라 필요할 때만: docker compose --profile app --profile analytics up -d
+  # 외부 노출 금지(루프백) → SSH 터널/VPN로 접근. MB 자체 저장소는 볼륨(H2)로 영속화.
+  metabase:
+    image: 'metabase/metabase:latest'
+    container_name: modi-metabase
+    profiles: ['analytics']
+    logging: *default-logging
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # 자체 저장소는 볼륨(H2)에 영속화. 단일 관리자 내부용엔 충분(동시 다수 사용 시 MySQL 앱DB로 분리 권장 — 문서 참고).
+      - 'MB_DB_TYPE=h2'
+      - 'MB_DB_FILE=/metabase-data/metabase.db'
+      # cloudflared 뒤에 있을 때 리다이렉트/쿠키가 https 기준이 되게(운영 hostname은 CF가 HTTPS 종료).
+      - 'MB_SITE_URL=${MB_SITE_URL:-}'
+    volumes:
+      - 'metabase-data:/metabase-data'
+    ports:
+      # 기본은 루프백만(로컬 안전). 운영에서 EC2 Public IP로 직접 공개할 땐 MB_HOST_PORT=3000(=0.0.0.0:3000)으로 오버라이드.
+      #   ⚠️ public 노출은 http 평문 — 보안그룹으로 접근 IP를 제한할 것. HTTPS가 필요하면 cloudflared(터널) 경유.
+      - '${MB_HOST_PORT:-127.0.0.1:3001}:3000'
+    restart: unless-stopped
+
+  # Cloudflare Tunnel — Metabase를 HTTPS 고정 주소로 외부 공개(팀 상시 접속). 도커 소켓/포트 개방 불필요.
+  # 'tunnel' 프로파일 + CF_TUNNEL_TOKEN 있을 때만. 토큰은 Cloudflare Zero Trust에서 터널 생성 시 발급.
+  # 공개 hostname → 서비스는 CF 대시보드에서 http://metabase:3000 으로 지정(같은 compose 네트워크).
+  cloudflared:
+    image: 'cloudflare/cloudflared:latest'
+    container_name: modi-cloudflared
+    profiles: ['tunnel']
+    command: ['tunnel', '--no-autoupdate', 'run']
+    environment:
+      - 'TUNNEL_TOKEN=${CF_TUNNEL_TOKEN:-}'
+    depends_on:
+      - metabase
+    restart: unless-stopped
+    logging: *default-logging
+
+  # (대안) 도메인 없이 quick tunnel — metabase를 임시 HTTPS URL로 공개. named(위)와 택일.
+  # ⚠️ URL이 재시작마다 바뀜 + Cloudflare 운영 비권장. EC2 상시는 되지만 '고정 주소'는 아님.
+  # 'tunnel-quick' 프로파일. 발급 URL은 로그에서:  docker logs modi-cloudflared-quick | grep trycloudflare
+  cloudflared-quick:
+    image: 'cloudflare/cloudflared:latest'
+    container_name: modi-cloudflared-quick
+    profiles: ['tunnel-quick']
+    command: ['tunnel', '--no-autoupdate', '--url', 'http://metabase:3000']
+    depends_on:
+      - metabase
+    restart: unless-stopped
+    logging: *default-logging
+
 volumes:
   mysql-data:
+  metabase-data:

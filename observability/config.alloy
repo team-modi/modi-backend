@@ -1,0 +1,72 @@
+// Grafana Alloy — Phase 1: 앱 메트릭 스크랩 → Grafana Cloud(Prometheus) remote_write
+//
+// 자격증명은 .env로 주입(GC_PROM_URL / GC_PROM_USER / GC_API_KEY).
+// 실행:  docker compose --profile app --profile obs up -d
+// (Phase 2에서 loki.source.docker / loki.write 를 여기에 추가한다 — docs/observability-setup.md)
+
+// 앱은 도커 내부망에서 8080으로 뜬다(호스트 노출 포트와 무관).
+prometheus.scrape "modi_backend" {
+  targets = [{
+    __address__     = "app:8080",
+    __metrics_path__ = "/actuator/prometheus",
+    // 대시보드에서 잡/인스턴스 구분용 라벨.
+    // instance는 환경별로 분리(로컬 vs 운영) — 같은 시계열 충돌(remote_write 중복/순서 거부) 방지.
+    // GC_INSTANCE 미설정이면 "modi-backend-local", 운영 배포는 deploy.yml이 "modi-backend-prod" 주입.
+    job             = "modi-backend",
+    instance        = coalesce(sys.env("GC_INSTANCE"), "modi-backend-local"),
+  }]
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+  scrape_interval = "15s"
+  scrape_timeout  = "10s"
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GC_PROM_URL")
+
+    basic_auth {
+      username = sys.env("GC_PROM_USER")
+      password = sys.env("GC_API_KEY")
+    }
+  }
+}
+
+// ── Phase 2: 로그 ─────────────────────────────────────────────────────────
+// Docker 컨테이너 로그(stdout) 수집 → Grafana Cloud Loki. 앱이 prod에서 JSON으로 찍으므로
+// Loki Explore에서 `{service="modi-backend"} | json | level="ERROR"` 식으로 검색 가능.
+// GC_LOKI_URL / GC_LOKI_USER 자격증명이 있어야 동작(없으면 로그 전송만 실패, 메트릭·앱은 정상).
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+  // 컨테이너 이름을 service 라벨로(예: modi-backend, modi-mysql) + 환경 라벨.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/?(.*)"
+    target_label  = "service"
+  }
+  rule {
+    target_label = "instance"
+    replacement  = coalesce(sys.env("GC_INSTANCE"), "modi-backend-local")
+  }
+}
+
+loki.source.docker "logs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  labels     = { job = "modi-docker" }
+  forward_to = [loki.write.grafana_cloud.receiver]
+}
+
+loki.write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GC_LOKI_URL")
+
+    basic_auth {
+      username = sys.env("GC_LOKI_USER")
+      password = sys.env("GC_API_KEY")
+    }
+  }
+}
