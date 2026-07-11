@@ -1,6 +1,6 @@
 package modi.backend.application.notification;
 
-import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 
 import modi.backend.domain.notification.Notification;
 
@@ -16,14 +16,14 @@ public final class NotificationResult {
 	public record List(java.util.List<Item> content, String nextCursor, boolean hasNext, long totalCount) {
 	}
 
-	/** 알림 한 건(목록 항목). type은 문자열, createdAt은 LocalDateTime로 내린다. */
+	/** 알림 한 건(목록 항목). type은 문자열, createdAt은 오프셋 포함 ZonedDateTime로 내린다(클라 상대시간 계산용). */
 	public record Item(Long notificationId, String type, String title, String body,
-			Long targetId, boolean read, LocalDateTime createdAt) {
+			Long targetId, boolean read, ZonedDateTime createdAt) {
 
 		public static Item from(Notification notification) {
 			return new Item(notification.getId(), notification.getType().name(), notification.getTitle(),
 					notification.getBody(), notification.getTargetId(), notification.isRead(),
-					notification.getCreatedAt().toLocalDateTime());
+					notification.getCreatedAt());
 		}
 	}
 
