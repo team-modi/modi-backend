@@ -30,3 +30,43 @@ prometheus.remote_write "grafana_cloud" {
     }
   }
 }
+
+// ── Phase 2: 로그 ─────────────────────────────────────────────────────────
+// Docker 컨테이너 로그(stdout) 수집 → Grafana Cloud Loki. 앱이 prod에서 JSON으로 찍으므로
+// Loki Explore에서 `{service="modi-backend"} | json | level="ERROR"` 식으로 검색 가능.
+// GC_LOKI_URL / GC_LOKI_USER 자격증명이 있어야 동작(없으면 로그 전송만 실패, 메트릭·앱은 정상).
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+  // 컨테이너 이름을 service 라벨로(예: modi-backend, modi-mysql) + 환경 라벨.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/?(.*)"
+    target_label  = "service"
+  }
+  rule {
+    target_label = "instance"
+    replacement  = coalesce(sys.env("GC_INSTANCE"), "modi-backend-local")
+  }
+}
+
+loki.source.docker "logs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  labels     = { job = "modi-docker" }
+  forward_to = [loki.write.grafana_cloud.receiver]
+}
+
+loki.write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GC_LOKI_URL")
+
+    basic_auth {
+      username = sys.env("GC_LOKI_USER")
+      password = sys.env("GC_API_KEY")
+    }
+  }
+}

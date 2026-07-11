@@ -1,8 +1,13 @@
 # 관측(로그·메트릭·사용자 지표) 세팅 가이드
 
-> 상태: **Phase 1(메트릭) 구현 완료** · Phase 2(로그)·Phase 3(사용자 지표) 미구현 · 갱신 2026-07-08
+> 상태: **Phase 1(메트릭)·Phase 2(로그)·Phase 3(Metabase) 구현 완료** · 알림 가이드 포함 · 갱신 2026-07-11
 > 대상 스택: Spring Boot 4 · EC2 단일 인스턴스 · `docker compose` · MySQL 8.4
 > 방향(확정): **로그·메트릭 = Grafana Cloud(관리형 무료티어)**, **사용자 지표 = Metabase(DB 옆 셀프호스팅)**
+>
+> 자격증명 요약(.env / GitHub secrets):
+> - 메트릭: `GC_PROM_URL`·`GC_PROM_USER`·`GC_API_KEY` — **등록 완료**
+> - 로그(Loki): `GC_LOKI_URL`·`GC_LOKI_USER` — **추가 필요**(Grafana Cloud "Loki → Send Logs"에서 확보, API 키는 `GC_API_KEY` 재사용, scope에 `logs:write`)
+> - 인스턴스 라벨: `GC_INSTANCE`(로컬 기본 `modi-backend-local`, 운영 `modi-backend-prod`)
 
 ## 0. 현재 상태 (관측 공백)
 - 로그: 컨테이너 stdout만 → `docker compose logs`로만 조회, 재배포 시 유실, 검색/보존/알림 없음, 구조화(JSON) 안 됨.
@@ -173,6 +178,64 @@ WHERE rec.deleted_at IS NULL AND rec.created_at <= NOW() - INTERVAL 7 DAY;
 ```
 > 더 본격적인 퍼널·리텐션·프론트 이벤트가 필요해지면 **PostHog**(셀프호스팅/클라우드)로 확장. 그때는 프론트 SDK + 백엔드 도메인 이벤트(기록 작성·리마인드 저장 등) 전송을 설계.
 
+## 4.5 Metabase 접속 (구현 완료)
+1. 읽기전용 DB 계정 1회 생성(비번을 강한 값으로 바꿔서):
+   ```bash
+   docker compose --profile app exec -T mysql mysql -uroot -p'verysecret' < observability/metabase-readonly-user.sql
+   ```
+   (`SELECT` 권한만 — 쓰기 거부 검증됨: DELETE 시 `command denied`)
+2. `docker compose --profile app --profile analytics up -d` → `http://127.0.0.1:3001`(루프백, 외부 노출 금지 → SSH 터널/VPN).
+3. Metabase 최초 세팅에서 데이터베이스 추가:
+   - Type: **MySQL** / Host: **`mysql`**(도커 내부망) / Port: `3306` / DB: `mydatabase`
+   - User: `metabase_ro` / Password: (위에서 설정한 값)
+4. §4의 SQL을 "질문(SQL)"으로 저장 → 대시보드로 묶기.
+> 검증(로컬): Metabase 컨테이너 health `ok`, 읽기전용 계정으로 앱 데이터 조회 성공·쓰기 거부 확인.
+
+## 4.7 Metabase 외부 공개 — Cloudflare Tunnel (EC2 상시)
+노트북 loopback으론 남이 못 본다. EC2에서 Metabase를 **Cloudflare Tunnel**로 HTTPS 공개해 팀이 상시 접속한다. 포트 개방/도메인 인증서 설치 없이 아웃바운드 커넥션만 쓴다(보안그룹 인바운드 불필요).
+
+**코드 배선(완료)**:
+- `compose`: `metabase`(analytics 프로파일) + `cloudflared`(tunnel 프로파일, `TUNNEL_TOKEN`으로 named tunnel 연결).
+- `deploy.yml`: `CF_TUNNEL_TOKEN` 시크릿 있으면 배포 시 `--profile analytics --profile tunnel` 자동 기동(없으면 스킵 → 앱/관측만).
+- `observability/metabase-setup.py`: 새 인스턴스에 관리자·DB연결·대시보드 재현(환경변수 기반, 시크릿 하드코딩 없음).
+
+**사람이 할 일(Cloudflare)**:
+1. Cloudflare 가입(무료) → **Zero Trust → Networks → Tunnels → Create a tunnel**(Cloudflared 방식) → 이름 지정 → **토큰 복사**(`eyJ...`).
+2. 그 터널의 **Public Hostname** 추가:
+   - Subdomain/Domain: 원하는 주소(예: `metabase` + `내도메인`) — ⚠️ **도메인이 Cloudflare에 등록돼 있어야 고정 주소가 됨**(도메인 없으면 §참고).
+   - Service: **`HTTP`** / **`metabase:3000`** (같은 compose 네트워크 이름).
+3. GitHub secret 등록: `CF_TUNNEL_TOKEN`(위 토큰), `MB_SITE_URL`(`https://metabase.내도메인`).
+4. 배포(main) 나가면 EC2에서 `metabase`+`cloudflared` 기동 → 그 hostname으로 접속(관리자 로그인).
+5. 첫 접속 후 `metabase-setup.py`를 EC2에서 1회 실행(또는 UI로 세팅)해 대시보드 생성:
+   ```bash
+   MB_URL=http://localhost:3001 MB_ADMIN_EMAIL=you@ex.com MB_ADMIN_PW='...' MB_RO_PW='...' \
+     python3 observability/metabase-setup.py
+   ```
+
+> **도메인 없으면 (EC2 quick tunnel)**: named tunnel의 고정 hostname엔 도메인이 필요하다. 도메인이 없으면 **quick tunnel을 EC2에서** 돌려 도메인 없이 상시 공개할 수 있다 — GitHub secret `CF_QUICK_TUNNEL=true`로 켜면 `cloudflared-quick`(tunnel-quick 프로파일)이 metabase를 임시 HTTPS URL로 노출한다.
+> - ⚠️ **URL이 재시작마다 바뀐다**(배포·재기동 시 새 주소) + Cloudflare 운영 비권장. "항상 켜짐"은 되지만 "고정 주소"는 아니다.
+> - URL 확인: 배포 로그 마지막 줄, 또는 `docker logs modi-cloudflared-quick | grep trycloudflare`.
+> - **고정 주소가 필요하면** 싼 도메인(~1만원/년)을 Cloudflare에 추가 → `CF_TUNNEL_TOKEN`(named)로 전환.
+> **EC2 리소스**: Metabase는 유휴 시에도 ~1GB 메모리를 쓴다. 앱과 같은 소형 인스턴스면 부하 시 경쟁하니, 트래픽 커지면 분석용 소형 인스턴스로 분리 권장.
+> **저장소**: 단일 관리자면 H2(볼륨)로 충분. 여러 명 동시 사용 시 MySQL 앱DB로 분리(전용 `metabase` DB + 쓰기 계정).
+
+## 4.6 알림(Alerts) — Grafana Cloud UI (권장 5분 세팅)
+메트릭·로그가 흐르면, "문제를 사람이 안 보고 있어도 알려주게" 알림을 건다. Grafana Cloud는 관리형 alerting이라 **UI로 만든다**.
+
+**만드는 곳**: 좌측 **Alerts & IRM → Alert rules → New alert rule**. 데이터소스는 `grafanacloud-...-prom`.
+
+권장 초기 알림 3개(조건 PromQL / 임계 / 의미):
+| 알림 | 조건(PromQL) | 발화 기준 |
+|---|---|---|
+| **DB 커넥션 대기** | `max(hikaricp_connections_pending{application="modi-backend"})` | `> 0` 이 **5분 지속** → 풀 부족(느려짐 원인) |
+| **높은 지연(p95)** | `histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application="modi-backend"}[5m])) by (le))` | `> 1`(초) 5분 지속 |
+| **에러율 급증** | `sum(rate(http_server_requests_seconds_count{application="modi-backend",outcome="SERVER_ERROR"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application="modi-backend"}[5m])),0.001)` | `> 0.05`(5%) 5분 지속 |
+| (앱 다운) | `up{job="modi-backend"}` | `== 0` 2분 지속 |
+
+**단계**: New alert rule → 위 쿼리 입력 → "Expression"에서 임계(예: `IS ABOVE 0`) → "for" = `5m` → **Contact point**(이메일/Slack) 지정 → 저장.
+- Contact point는 **Alerts & IRM → Contact points**에서 이메일/Slack webhook 등록.
+- 로그 기반 알림도 가능(Loki): `count_over_time({service="modi-backend"} | json | level="ERROR" [5m]) > 10`.
+
 ## 5. 보안·운영 주의
 - **actuator/prometheus 공개 금지**: 호스트 공개 포트로 매핑하지 말 것. Alloy가 도커 내부망(`app:8080`)에서만 스크랩. 필요하면 별도 management 포트 + 보안그룹/IP 허용목록.
 - **Metabase/Grafana 접근 제한**: 외부 직접 노출 금지(보안그룹·SSH 터널·VPN). Metabase 관리자 계정 강암호.
@@ -188,17 +251,17 @@ WHERE rec.deleted_at IS NULL AND rec.created_at <= NOW() - INTERVAL 7 DAY;
 **Phase 1 (메트릭)**
 - [x] `micrometer-registry-prometheus` 추가 + `management...include`에 `prometheus` + `application` 라벨
 - [x] `observability/config.alloy` + `compose`에 `alloy` 서비스(`obs` 프로파일)
-- [ ] Grafana Cloud 가입 → Prometheus 엔드포인트·토큰 확보 → `.env`/secrets 등록 ← **사람이 해야 함**
-- [ ] `deploy.yml`에 `GC_*` 주입 + 배포 시 `--profile obs` 활성화
+- [x] Grafana Cloud 가입 → Prometheus 토큰 확보 → `.env`/GitHub secrets 등록 (완료)
+- [x] `deploy.yml`에 `GC_*` 주입 + 배포 시 `--profile obs` 조건부 활성화
 - [ ] Grafana 대시보드 import(JVM 4701 + Spring HTTP) → p95/처리량/에러/AI 토큰 확인
 
 **Phase 2 (로그)**
-- [ ] `logstash-logback-encoder` + `logback-spring.xml`(prod=JSON) + `RequestIdFilter`
-- [ ] Alloy에 `loki.source.docker`/`loki.write` + docker.sock 마운트 → Loki 검색·알림
-- [ ] compose 각 서비스에 로그 로테이션(`max-size`/`max-file`)
+- [x] `logstash-logback-encoder` + `logback-spring.xml`(prod=JSON) + `RequestIdFilter`
+- [x] Alloy에 `loki.source.docker`/`loki.write` + docker.sock 마운트 (Loki 자격증명 `GC_LOKI_*` 추가 시 전송 시작)
+- [x] compose 로그 로테이션(`x-logging` 앵커, max-size 10m/max-file 3)
 
 **Phase 3 (사용자 지표)**
-- [ ] `metabase` 서비스 + MySQL 읽기전용 계정 + 핵심 지표 대시보드
+- [x] `metabase` 서비스 + MySQL 읽기전용 계정(`metabase_ro`) + 핵심 지표 SQL (대시보드는 UI에서)
 
 **하드닝(별도)**
 - [ ] actuator를 `management.server.port`로 분리 + 루프백 바인딩 (deploy 헬스체크·k6·Postman·데모 프록시 동시 수정 필요)
