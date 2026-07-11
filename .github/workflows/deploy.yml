@@ -40,6 +40,9 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # record-AI 감상문/질문 AI = Claude(Anthropic, 유료). 아래 .env의 AI_PROVIDER=claude와 짝을 이룬다.
+          #   무료 한도 소진으로 유료 전환(장르 분류는 계속 무료 Gemini). 개인 .env 의존 금지 → 이 시크릿에서만 주입.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # Grafana Cloud(관측 메트릭). 3개 다 secrets에 등록돼야 obs 프로파일이 켜진다. 미설정이면 앱만 배포.
           GC_PROM_URL: ${{ secrets.GC_PROM_URL }}
           GC_PROM_USER: ${{ secrets.GC_PROM_USER }}
@@ -50,7 +53,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           command_timeout: 20m
           # GitHub Actions secrets를 원격 SSH 세션 환경변수로 전달
-          envs: KAKAO_CLIENT_SECRET,GOOGLE_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY,GC_PROM_URL,GC_PROM_USER,GC_API_KEY
+          envs: KAKAO_CLIENT_SECRET,GOOGLE_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY,ANTHROPIC_API_KEY,GC_PROM_URL,GC_PROM_USER,GC_API_KEY
           script: |
             set -e
             cd ~/modi-backend
@@ -69,9 +72,14 @@ jobs:
             GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
             JWT_SECRET=${JWT_SECRET}
             GEMINI_API_KEY=${GEMINI_API_KEY}
-            # record-AI 감상문을 Gemini로 활성화 (위 GEMINI_API_KEY 시크릿 재사용).
-            AI_PROVIDER=gemini
-            AI_API_KEY=${GEMINI_API_KEY}
+            # record-AI 감상문/질문 = Claude(Anthropic, 유료). 무료 한도 소진으로 gemini→claude 전환.
+            #   장르 분류(app.ai.gemini)는 계속 무료 Gemini(GEMINI_API_KEY)를 쓴다 — 여기서 GEMINI_API_KEY는 그 용도로 유지.
+            #   AI_API_KEY(공통 우선키)에 ANTHROPIC_API_KEY를 매핑한다. 빈 값이면 앱이 AI_DISABLED가 되니 반드시 채운다.
+            AI_PROVIDER=claude
+            # 베타 비용/품질 균형 — Opus(기본) 대신 Sonnet. 필요 시 이 한 줄만 바꿔 즉시 모델 교체(재배포).
+            AI_MODEL=claude-sonnet-5
+            ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+            AI_API_KEY=${ANTHROPIC_API_KEY}
             # Grafana Cloud(관측) 자격증명 — 비어 있으면 아래에서 obs 프로파일을 켜지 않는다.
             GC_PROM_URL=${GC_PROM_URL}
             GC_PROM_USER=${GC_PROM_USER}
