@@ -1,6 +1,6 @@
 package modi.backend.interfaces.notification.dto;
 
-import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import modi.backend.application.notification.NotificationResult;
@@ -22,12 +22,13 @@ public final class NotificationDto {
 			String body,
 			@Schema(description = "이동 대상 id. REMIND=recordId, EXHIBITION=exhibitionId, NOTICE=null",
 					nullable = true) Long targetId,
+			@Schema(description = "카드 썸네일 이미지 URL(전시 포스터). 없으면 null", nullable = true) String imageUrl,
 			boolean read,
-			LocalDateTime createdAt) {
+			ZonedDateTime createdAt) {
 
 		public static NotificationItem from(NotificationResult.Item item) {
 			return new NotificationItem(item.notificationId(), item.type(), item.title(), item.body(),
-					item.targetId(), item.read(), item.createdAt());
+					item.targetId(), item.imageUrl(), item.read(), item.createdAt());
 		}
 	}
 
