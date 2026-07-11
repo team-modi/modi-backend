@@ -63,15 +63,17 @@ public final class RemindDto {
 		}
 	}
 
-	/** 아카이브 '리마인드' 목록 항목. */
+	/** 아카이브 '리마인드' 목록 항목. beforeEmotionCodes=원본 기록의 감정(감정 변화-유지/반전 필터용). */
 	public record ListItemResponse(Long remindId, Long recordId, ZonedDateTime createdAt, String exhibitionTitle,
 			String posterUrl, String place, LocalDate viewedAt, String reflectionPreview,
-			List<String> emotionCodes, RemindAiStatus aiStatus, boolean hasAiSummary) {
+			@Schema(description = "원본 기록의 감정 코드(그때). 원본 삭제 시 빈 리스트") List<String> beforeEmotionCodes,
+			@Schema(description = "회고의 감정 코드(지금)") List<String> emotionCodes,
+			RemindAiStatus aiStatus, boolean hasAiSummary) {
 
 		public static ListItemResponse from(RemindResult.ListItem i) {
 			return new ListItemResponse(i.remindId(), i.recordId(), i.createdAt(), i.exhibitionTitle(),
-					i.posterUrl(), i.place(), i.viewedAt(), i.reflectionPreview(), i.afterEmotionCodes(),
-					i.aiStatus(), i.hasAiSummary());
+					i.posterUrl(), i.place(), i.viewedAt(), i.reflectionPreview(), i.beforeEmotionCodes(),
+					i.afterEmotionCodes(), i.aiStatus(), i.hasAiSummary());
 		}
 	}
 }

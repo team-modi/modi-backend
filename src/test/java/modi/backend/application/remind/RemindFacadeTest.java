@@ -3,6 +3,7 @@ package modi.backend.application.remind;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,6 +20,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import modi.backend.config.RemindProperties;
 import modi.backend.domain.exhibition.ExhibitionRepository;
@@ -132,6 +137,34 @@ class RemindFacadeTest {
 		given(remindRepository.findByIdAndDeletedAtIsNull(5L)).willReturn(Optional.of(remind));
 
 		assertThatThrownBy(() -> facade.get(1L, 5L)).isInstanceOf(CoreException.class);
+	}
+
+	@Test
+	@DisplayName("list — 항목에 원본 기록의 감정(beforeEmotionCodes)을 채운다(감정 변화 필터용)")
+	void list_before감정_채움() {
+		Remind remind = Remind.create(1L, 10L, snapshot(), "소감", List.of("슬픔"), null, RemindAiStatus.SKIPPED);
+		given(remindRepository.findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(eq(1L), any(Pageable.class)))
+				.willReturn(new PageImpl<>(List.of(remind)));
+		given(recordRepository.findByIdWithEmotions(10L)).willReturn(Optional.of(ownedRecord(1L)));
+
+		Page<RemindResult.ListItem> page = facade.list(1L, PageRequest.of(0, 20));
+
+		RemindResult.ListItem item = page.getContent().get(0);
+		assertThat(item.beforeEmotionCodes()).containsExactly("평화로운", "차분한");
+		assertThat(item.afterEmotionCodes()).containsExactly("슬픔");
+	}
+
+	@Test
+	@DisplayName("list — 원본 기록이 삭제됐으면 beforeEmotionCodes는 빈 리스트")
+	void list_원본삭제_before감정_빈리스트() {
+		Remind remind = Remind.create(1L, 10L, snapshot(), "소감", List.of("슬픔"), null, RemindAiStatus.SKIPPED);
+		given(remindRepository.findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(eq(1L), any(Pageable.class)))
+				.willReturn(new PageImpl<>(List.of(remind)));
+		given(recordRepository.findByIdWithEmotions(10L)).willReturn(Optional.empty());
+
+		Page<RemindResult.ListItem> page = facade.list(1L, PageRequest.of(0, 20));
+
+		assertThat(page.getContent().get(0).beforeEmotionCodes()).isEmpty();
 	}
 
 	private Record ownedRecord(Long ownerId) {

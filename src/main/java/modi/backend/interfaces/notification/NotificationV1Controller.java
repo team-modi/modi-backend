@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import modi.backend.application.notification.NotificationCriteria;
 import modi.backend.application.notification.NotificationFacade;
 import modi.backend.application.notification.NotificationResult;
+import modi.backend.domain.notification.NotificationType;
 import modi.backend.interfaces.auth.Authentication;
 import modi.backend.interfaces.auth.LoginUser;
 import modi.backend.interfaces.common.dto.CursorResponse;
@@ -29,15 +30,17 @@ public class NotificationV1Controller implements NotificationV1ApiSpec {
 
 	private final NotificationFacade notificationFacade;
 
-	/** 내 알림 목록(최신순, 커서 페이지네이션). */
+	/** 내 알림 목록(최신순, 커서 페이지네이션). 조회 전에 lazy 생성(refresh)으로 조건 충족 알림을 채워 넣는다. */
 	@Override
 	@GetMapping
 	public ResponseEntity<ApiResponse<CursorResponse<NotificationDto.NotificationItem>>> getNotifications(
 			@Authentication LoginUser user,
+			@RequestParam(required = false) NotificationType type,
 			@RequestParam(required = false) String cursor,
 			@RequestParam(required = false) Integer size) {
+		notificationFacade.refresh(user.userId());
 		NotificationResult.List result = notificationFacade.getNotifications(
-				new NotificationCriteria.List(user.userId(), cursor, size));
+				new NotificationCriteria.List(user.userId(), type, cursor, size));
 		return ResponseEntity.ok(ApiResponse.success(NotificationDto.toCursorResponse(result)));
 	}
 
