@@ -95,6 +95,10 @@ class ExhibitionIntegrationTest {
 						today.plusDays(15), ExhibitionRegion.SEOUL, ExhibitionCategory.PHOTO, null, null,
 						"기관", null, null,
 						null, "사진", "서울")));
+		// syncCatalog가 적재 시점에 상세2까지 함께 채운다 — CAT-MONET만 상세를 준다(나머지는 상세 없음 → 목록 필드만).
+		given(catalogClient.fetchDetail("CAT-MONET")).willReturn(Optional.of(
+				new CatalogDetailData("성인 20,000원", "모네 특별전 설명", "https://detail/monet", "02-1234-5678",
+						"https://img/monet.jpg", "https://place/monet", "서울 어딘가", "PLACE-SEQ-1")));
 		exhibitionFacade.syncCatalog();
 	}
 
@@ -415,12 +419,10 @@ class ExhibitionIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("GET /exhibitions/{id} — CATALOG 상세 진입 시 지연수집 필드 노출, 내부 보존 필드는 비노출")
+	@DisplayName("GET /exhibitions/{id} — 동기화 시 채운 상세 필드 노출, 내부 보존 필드는 비노출")
 	void 상세_지연수집_필드_노출() throws Exception {
+		// CAT-MONET은 seedCatalog의 syncCatalog에서 이미 상세2까지 채워진 완전한 행 — 상세 엔드포인트가 그 필드를 노출한다.
 		Long id = exhibitionRepository.findByExternalId("CAT-MONET").orElseThrow().getId();
-		given(catalogClient.fetchDetail("CAT-MONET")).willReturn(Optional.of(
-				new CatalogDetailData("성인 20,000원", "모네 특별전 설명", "https://detail/monet", "02-1234-5678",
-						"https://img/monet.jpg", "https://place/monet", "서울 어딘가", "PLACE-SEQ-1")));
 
 		mockMvc.perform(get("/api/v1/exhibitions/{id}", id))
 				.andExpect(status().isOk())

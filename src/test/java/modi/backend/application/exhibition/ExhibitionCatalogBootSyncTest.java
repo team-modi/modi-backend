@@ -16,8 +16,8 @@ import modi.backend.domain.exhibition.ExhibitionErrorCode;
 import modi.backend.support.error.CoreException;
 
 /**
- * ExhibitionCatalogBootSync 단위 검증. 데모 플래그와 무관하게 항상 부팅 시 1회 syncCatalog()를 호출하고,
- * 부팅 적재분의 장르 분류는 별도 스레드로 트리거해 기동(readiness)을 막지 않으며,
+ * ExhibitionCatalogBootSync 단위 검증. 데모 플래그와 무관하게 부팅 시 1회 동기화(목록+상세)와 장르 분류를
+ * <b>별도 데몬 스레드</b>에서 수행해 기동(readiness)을 막지 않으며(상세 API 수백 콜·AI 배치가 붙어 있으므로),
  * 실패해도(외부 API 불가·키 미설정 등) 예외를 삼켜 애플리케이션 기동을 막지 않아야 한다.
  */
 class ExhibitionCatalogBootSyncTest {
@@ -34,25 +34,25 @@ class ExhibitionCatalogBootSyncTest {
 	}
 
 	@Test
-	@DisplayName("run: syncCatalog() 1회 호출 후 장르 분류를 별도 스레드로 트리거한다(cold start 방지)")
+	@DisplayName("run: 동기화(목록+상세)와 장르 분류를 별도 데몬 스레드에서 순서대로 수행한다(cold start 방지·readiness 비차단)")
 	void run_동기화후_장르트리거() {
 		given(exhibitionFacade.syncCatalog()).willReturn(2);
 
 		bootSync.run(new DefaultApplicationArguments());
 
-		verify(exhibitionFacade, times(1)).syncCatalog();
-		// 장르 분류는 데몬 스레드에서 수행 — 기동을 막지 않도록 비동기라 timeout으로 대기 검증.
+		// 동기화·장르 분류 모두 데몬 스레드에서 수행 — 비동기라 timeout으로 대기 검증.
+		verify(exhibitionFacade, timeout(2000).times(1)).syncCatalog();
 		verify(catalogEnricher, timeout(2000).times(1)).enrichGenres();
 	}
 
 	@Test
-	@DisplayName("run: facade가 예외를 던져도 삼켜서 부팅을 막지 않는다")
+	@DisplayName("run: 동기화가 예외를 던져도 삼켜서 부팅을 막지 않는다")
 	void run_예외삼킴() {
 		given(exhibitionFacade.syncCatalog())
 				.willThrow(new CoreException(ExhibitionErrorCode.EXTERNAL_API_UNAVAILABLE, "외부 전시 API 호출 실패"));
 
 		assertThatCode(() -> bootSync.run(new DefaultApplicationArguments())).doesNotThrowAnyException();
 
-		verify(exhibitionFacade, times(1)).syncCatalog();
+		verify(exhibitionFacade, timeout(2000).times(1)).syncCatalog();
 	}
 }

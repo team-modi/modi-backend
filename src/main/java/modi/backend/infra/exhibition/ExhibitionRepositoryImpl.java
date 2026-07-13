@@ -73,9 +73,8 @@ public class ExhibitionRepositoryImpl implements ExhibitionRepository {
 	}
 
 	@Override
-	public List<Exhibition> findCatalogWithoutDetail(int limit) {
-		return jpaRepository.findByTypeAndDetailSyncedAtIsNullAndDeletedAtIsNull(
-				ExhibitionType.CATALOG, PageRequest.of(0, Math.max(1, limit)));
+	public List<Exhibition> findCatalogWithDescription() {
+		return jpaRepository.findByTypeAndDescriptionIsNotNullAndDeletedAtIsNull(ExhibitionType.CATALOG);
 	}
 
 	@Override

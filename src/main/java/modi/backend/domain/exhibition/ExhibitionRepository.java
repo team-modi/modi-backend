@@ -36,8 +36,8 @@ public interface ExhibitionRepository {
 	/** 장르 초기화 백필용 — 아직 장르가 없는 CATALOG(공공데이터) 전시를 최대 {@code limit}건 조회(살아있는 행만). */
 	List<Exhibition> findCatalogWithoutGenre(int limit);
 
-	/** 상세 백필용 — 아직 상세(가격 등, detailSyncedAt IS NULL)를 안 채운 CATALOG 전시를 최대 {@code limit}건 조회(살아있는 행만). */
-	List<Exhibition> findCatalogWithoutDetail(int limit);
+	/** 설명 재파싱용 — 설명이 있는 CATALOG 전시를 모두 조회(살아있는 행만). 재파싱 대상 판단은 호출부(멱등). */
+	List<Exhibition> findCatalogWithDescription();
 
 	/**
 	 * 홈 배너용(03_전시.md E-10) — {@code onDate}에 진행 중(startDate ≤ onDate ≤ endDate)인 CATALOG 전시를

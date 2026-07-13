@@ -261,18 +261,25 @@ public class ExhibitionFacade {
 	}
 
 	/**
-	 * 외부 전시 API 수집 → DB 적재. <b>신규(externalId 미존재) 전시만 추가</b>하고 기존 행은 건드리지 않는다
-	 * — 장르(AI 분류)·상세 등 보강으로 채운 값이 재적재로 덮이지 않고, 장르 생성도 동기화 직후 신규분에만 수행된다
-	 * (호출부가 {@link CatalogEnricher#enrichGenres()}를 이어서 호출 — 미분류 행 = 방금 추가된 신규 전시).
+	 * 외부 전시 API 수집 → DB 적재/완성(<b>목록+상세 한 패스</b>). 목록과 상세2를 함께 받아 <b>적재 시점에 곧바로 완전한 행</b>으로 만든다:
+	 * <ul>
+	 *   <li>신규(externalId 미존재): 상세까지 채워 새로 적재한다.</li>
+	 *   <li>기존이나 상세 미완성: 상세만 채워 완성한다(장르 등 다른 보강값은 건드리지 않는다).</li>
+	 *   <li>이미 상세까지 완성: 건너뛴다(외부 상세 호출 없음 → 정상 상태에선 값이 안 바뀐다).</li>
+	 * </ul>
+	 * 별도 상세 백필 잡 없이 이 동기화 하나로 상세까지 채운다. 루프는 트랜잭션 밖에서 돌고 행 단위 save만 각자 트랜잭션으로 커밋해
+	 * 다건 상세 API 호출을 한 트랜잭션에 오래 물지 않는다(커넥션 장기 점유 방지). 장르(AI 분류)는 호출부가
+	 * {@link CatalogEnricher#enrichGenres()}로 이어서 채운다(미분류 행 = 방금 적재된 신규 전시).
 	 * 인증키 미설정 시 수집 목록이 비어 0을 반환한다(외부 호출 없음).
 	 *
-	 * @return 이번 동기화로 새로 적재된 전시 수
+	 * @return 이번 동기화로 새로 적재된 전시 수(기존 행 상세 완성 건은 제외)
 	 */
-	@Transactional
 	public int syncCatalog() {
 		List<CatalogExhibitionData> collected = catalogClient.fetchAll();
 		int inserted = 0;
+		int completed = 0;
 		int skipped = 0;
+		int deferred = 0;
 		for (CatalogExhibitionData data : collected) {
 			// 원천 데이터 품질 이슈(예: 종료일<시작일)로 단건이 도메인 불변식을 어겨도 배치 전체가 중단되지 않도록,
 			// 부적합 레코드는 건너뛰고 계속 적재한다. 엔티티를 건드리기 전에 걸러 dirty-flush도 방지한다.
@@ -280,62 +287,62 @@ public class ExhibitionFacade {
 				skipped++;
 				continue;
 			}
-			if (exhibitionRepository.findByExternalId(data.externalId()).isPresent()) {
-				continue; // 이미 적재된 전시 — 신규만 추가(재적재 갱신 없음)
+			try {
+				switch (syncListedWithDetail(data)) {
+					case INSERTED -> inserted++;
+					case COMPLETED -> completed++;
+					case SKIPPED -> { /* 이미 완성된 행 — 변화 없음 */ }
+				}
+			} catch (RuntimeException e) {
+				// 상세 조회 등 일시 실패는 이번 행만 건너뛰고 다음 주기에 재시도한다(불완전한 행을 적재하지 않는다).
+				deferred++;
+				log.warn("전시 동기화 단건 실패(externalId={}, 다음 주기 재시도): {}", data.externalId(), e.getMessage());
 			}
-			create(data);
-			inserted++;
 		}
-		if (skipped > 0) {
-			log.warn("전시 동기화: 기간 비정상 {}건 스킵(수집 {}건 중 신규 {}건 적재)", skipped, collected.size(), inserted);
+		if (skipped > 0 || completed > 0 || deferred > 0) {
+			log.info("전시 동기화: 수집 {} / 신규적재 {} / 기존상세완성 {} / 기간스킵 {} / 실패연기 {}",
+					collected.size(), inserted, completed, skipped, deferred);
 		}
 		return inserted;
+	}
+
+	private enum SyncOutcome {
+		INSERTED, COMPLETED, SKIPPED
+	}
+
+	/**
+	 * 목록 1건을 상세까지 채워 적재/완성한다. 신규는 상세를 받아 새로 적재하고, 기존 미완성 행은 상세만 채워 완성한다.
+	 * 상세가 원천에 없으면(빈 응답) 목록 필드만으로 적재하되 확인 완료로 표기해 재조회를 막는다.
+	 * 상세 API 일시 실패는 예외로 전파되어 호출부에서 해당 행만 연기한다. save만 트랜잭션(외부 호출은 트랜잭션 밖).
+	 */
+	private SyncOutcome syncListedWithDetail(CatalogExhibitionData data) {
+		Exhibition existing = exhibitionRepository.findByExternalId(data.externalId()).orElse(null);
+		if (existing != null) {
+			if (existing.isDetailSynced()) {
+				return SyncOutcome.SKIPPED; // 이미 상세까지 완성 — 재적재/재호출 없음
+			}
+			applyDetailOrCheck(existing);
+			exhibitionRepository.save(existing);
+			return SyncOutcome.COMPLETED;
+		}
+		Exhibition created = Exhibition.createCatalog(data.externalId(), data.title(), data.place(),
+				data.startDate(), data.endDate(), data.region(), data.category(), data.posterUrl(), null, null,
+				null, data.detailUrl(), data.serviceName(), data.gpsX(), data.gpsY(), data.sigungu(),
+				data.realmName(), data.areaText());
+		applyDetailOrCheck(created);
+		exhibitionRepository.save(created);
+		return SyncOutcome.INSERTED;
+	}
+
+	/** 원천 상세2를 받아 채우거나(있음), 상세 미보유(빈 응답)면 확인 완료만 표기한다. 일시 실패는 예외로 전파된다. */
+	private void applyDetailOrCheck(Exhibition exhibition) {
+		catalogClient.fetchDetail(exhibition.getExternalId())
+				.ifPresentOrElse(exhibition::applyDetail, exhibition::markDetailChecked);
 	}
 
 	/** 원천 데이터 기간 유효성 — 둘 다 있을 때만 시작일 ≤ 종료일. 결측은 관대하게 통과(엔티티 불변식과 동일 기준). */
 	private static boolean hasValidPeriod(CatalogExhibitionData data) {
 		return data.startDate() == null || data.endDate() == null || !data.startDate().isAfter(data.endDate());
-	}
-
-	/**
-	 * 상세 백필 대상 조회 — 아직 상세(가격 등)를 안 채운 CATALOG 전시의 id를 최대 {@code limit}건 반환한다.
-	 * 실제 외부 상세 수집은 {@link #syncCatalogDetail(Long)}가 행 단위(짧은 트랜잭션)로 수행한다
-	 * (다건 외부 호출을 한 트랜잭션에 오래 물지 않도록 조회/수집을 분리).
-	 */
-	@Transactional(readOnly = true)
-	public List<Long> findCatalogIdsWithoutDetail(int limit) {
-		return exhibitionRepository.findCatalogWithoutDetail(limit).stream().map(Exhibition::getId).toList();
-	}
-
-	/**
-	 * CATALOG 상세 1건 지연수집 백필 — 원천 상세2에서 price·description 등을 받아 채운다(상세 진입 없이 선반영).
-	 * 이미 상세를 채웠거나 CATALOG가 아니면 아무 것도 하지 않는다. 외부가 상세를 안 주면 detailSyncedAt이 null로 남아 다음 주기에 재시도된다.
-	 *
-	 * @return 이번 호출로 상세를 채웠으면 true
-	 */
-	@Transactional
-	public boolean syncCatalogDetail(Long exhibitionId) {
-		Exhibition exhibition = exhibitionRepository.findById(exhibitionId).orElse(null);
-		if (exhibition == null || !exhibition.isCatalog() || exhibition.isDetailSynced()) {
-			return false;
-		}
-		return catalogClient.fetchDetail(exhibition.getExternalId()).map(detail -> {
-			exhibition.applyDetail(detail);
-			exhibitionRepository.save(exhibition);
-			return true;
-		}).orElseGet(() -> {
-			// 원천이 상세를 안 줌(항목 없음) — 확인 완료로 표기해 매 주기 재조회를 막는다. 일시 실패는 예외라 여기 안 옴.
-			exhibition.markDetailChecked();
-			exhibitionRepository.save(exhibition);
-			return false;
-		});
-	}
-
-	private void create(CatalogExhibitionData data) {
-		exhibitionRepository.save(Exhibition.createCatalog(data.externalId(), data.title(), data.place(),
-				data.startDate(), data.endDate(), data.region(), data.category(), data.posterUrl(), null, null,
-				null, data.detailUrl(), data.serviceName(), data.gpsX(), data.gpsY(), data.sigungu(),
-				data.realmName(), data.areaText()));
 	}
 
 	/** date 지정 시 그 날짜, 아무 필터(키워드·지역·카테고리·섹션) 없으면 오늘(랜딩 기본), 그 외엔 기간 제한 없음. */

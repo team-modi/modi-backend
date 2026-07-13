@@ -115,7 +115,7 @@ public final class ExhibitionDto {
 					example = "인상주의 거장 모네의 대표작을 만나는 특별전.", nullable = true) String description,
 			@Schema(description = "운영시간. 데이터 없으면 null.", example = "10:00~19:00(월요일 휴관)", nullable = true)
 			String operatingHours,
-			@Schema(description = "관람 가격 안내. 데이터 없으면 null.", example = "성인 20,000원 / 청소년 15,000원", nullable = true)
+			@Schema(description = "관람 가격 안내. 원천에 가격이 없으면 \"관람료 정보 없음\".", example = "성인 20,000원 / 청소년 15,000원")
 			String price,
 			@Schema(description = "참여 작가 목록. 데이터 없으면 빈 배열.", example = "[\"클로드 모네\"]") List<String> artists,
 			@Schema(description = "키워드 목록. 데이터 없으면 빈 배열.", example = "[\"인상주의\", \"회화\"]") List<String> keywords,
@@ -142,11 +142,15 @@ public final class ExhibitionDto {
 			@Schema(description = "요청자가 이 전시에 대한 기록 보유 여부(비로그인 false). true면 '기록하기' 버튼 분기.",
 					example = "false") boolean recorded) {
 
+		/** 원천에 가격이 없을 때 프론트가 그대로 노출할 안내 문구. 값을 지어내지 않고 "정보 없음"을 명시한다. */
+		private static final String PRICE_UNKNOWN = "관람료 정보 없음";
+
 		public static DetailResponse from(ExhibitionResult.Detail result) {
+			String price = result.price() == null || result.price().isBlank() ? PRICE_UNKNOWN : result.price();
 			return new DetailResponse(result.exhibitionId(), result.type(), result.title(), result.posterUrl(),
 					result.startDate(), result.endDate(), result.place(), result.region(), result.category(),
 					result.format(),
-					result.description(), result.operatingHours(), result.price(), result.artists(),
+					result.description(), result.operatingHours(), price, result.artists(),
 					result.keywords(), result.serviceName(), result.detailUrl(), result.gpsX(), result.gpsY(),
 					result.address(), result.imgUrl(), result.phone(), result.viewCount(), result.sigungu(),
 					result.placeUrl(), result.artistSummary(), result.free(), result.bookmarked(),

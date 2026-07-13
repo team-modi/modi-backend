@@ -23,8 +23,8 @@ public interface ExhibitionJpaRepository
 	/** 장르 미부여 CATALOG를 페이지 크기만큼 조회(장르 초기화 백필용, 살아있는 행만). */
 	List<Exhibition> findByTypeAndGenreKeywordIsNullAndDeletedAtIsNull(ExhibitionType type, Pageable pageable);
 
-	/** 상세 미수집(detailSyncedAt IS NULL) CATALOG를 페이지 크기만큼 조회(상세 백필용, 살아있는 행만). */
-	List<Exhibition> findByTypeAndDetailSyncedAtIsNullAndDeletedAtIsNull(ExhibitionType type, Pageable pageable);
+	/** 설명이 있는 CATALOG 전체 조회(설명 재파싱 대상, 살아있는 행만). */
+	List<Exhibition> findByTypeAndDescriptionIsNotNullAndDeletedAtIsNull(ExhibitionType type);
 
 	/**
 	 * 홈 배너용 — 진행 중(startDate ≤ onDate ≤ endDate)인 CATALOG를 조회수 내림차순으로 페이지 크기만큼 조회(살아있는 행만).

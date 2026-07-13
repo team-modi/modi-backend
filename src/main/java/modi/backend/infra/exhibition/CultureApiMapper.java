@@ -2,7 +2,6 @@ package modi.backend.infra.exhibition;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.HtmlUtils;
@@ -15,6 +14,7 @@ import modi.backend.domain.exhibition.ExhibitionCategory;
 import modi.backend.domain.exhibition.ExhibitionErrorCode;
 import modi.backend.domain.exhibition.ExhibitionRegion;
 import modi.backend.support.error.CoreException;
+import modi.backend.support.text.HtmlTextExtractor;
 
 /**
  * 한눈에보는문화정보(15138937) realm2/detail2 XML 파싱 + 도메인 매핑 전담(SRP).
@@ -26,7 +26,6 @@ public class CultureApiMapper {
 
 	private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.ofPattern("yyyyMMdd");
 	private static final XmlMapper xmlMapper = new XmlMapper();
-	private static final Pattern BR_TAG = Pattern.compile("(?i)<br\\s*/?>");
 
 	/** XML을 파싱하고, 파싱 실패·비정상 응답(resultCode != 00)이면 {@link ExhibitionErrorCode#EXTERNAL_API_UNAVAILABLE}. */
 	public CultureApiResponse parse(String xml) {
@@ -83,13 +82,12 @@ public class CultureApiMapper {
 		return value == null ? null : HtmlUtils.htmlUnescape(value);
 	}
 
-	/** contents1(설명)은 엔티티 디코딩 후 {@code <br/>} 계열 태그를 줄바꿈으로 정리해 읽기 좋게 만든다. */
+	/**
+	 * contents1(설명)은 원천이 워드프레스 블록/HTML(예: {@code <!-- wp:paragraph --><p style="…">…</p>})로 내려주므로
+	 * {@link HtmlTextExtractor}로 태그를 벗겨 <b>읽기 좋은 평문</b>으로 만든다(최초 수집 파싱과 기존 데이터 재파싱이 같은 규칙 공유).
+	 */
 	private static String decodeDescription(String value) {
-		String decoded = decode(value);
-		if (decoded == null) {
-			return null;
-		}
-		return BR_TAG.matcher(decoded).replaceAll("\n");
+		return HtmlTextExtractor.toPlainText(value);
 	}
 
 	/** YYYYMMDD 8자리만 파싱, 그 외/결측은 null. */

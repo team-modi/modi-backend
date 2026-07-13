@@ -16,8 +16,9 @@ import modi.backend.domain.exhibition.ExhibitionErrorCode;
 import modi.backend.support.error.CoreException;
 
 /**
- * ExhibitionSyncScheduler 단위 검증. 매일 자정 트리거 시 동기화(신규 적재) → 장르 분류(신규분) → 상세 보강을
+ * ExhibitionSyncScheduler 단위 검증. 매일 자정 트리거 시 동기화(목록+상세 한 패스) → 장르 분류(신규분)를
  * 순서대로 호출하고, 실패(외부 API 불가 등)해도 예외를 삼켜 스케줄러 스레드가 죽지 않아야 한다(다음 주기 재시도).
+ * 상세(가격 등)는 syncCatalog가 적재 시점에 함께 채우므로 별도 상세 보강 호출이 없다.
  * 장르는 별도 주기 없이 동기화 직후에만 생성된다(신규 전시 = 미분류 행만 대상이라 멱등).
  */
 class ExhibitionSyncSchedulerTest {
@@ -34,8 +35,8 @@ class ExhibitionSyncSchedulerTest {
 	}
 
 	@Test
-	@DisplayName("syncDaily: 동기화 → 장르 분류(신규분) → 상세 보강을 순서대로 호출한다")
-	void syncDaily_동기화후_장르_상세_순서호출() {
+	@DisplayName("syncDaily: 동기화(목록+상세) → 장르 분류(신규분)를 순서대로 호출한다")
+	void syncDaily_동기화후_장르_순서호출() {
 		given(exhibitionFacade.syncCatalog()).willReturn(3);
 
 		scheduler.syncDaily();
@@ -43,7 +44,6 @@ class ExhibitionSyncSchedulerTest {
 		InOrder order = inOrder(exhibitionFacade, catalogEnricher);
 		order.verify(exhibitionFacade, times(1)).syncCatalog();
 		order.verify(catalogEnricher, times(1)).enrichGenres();
-		order.verify(catalogEnricher, times(1)).enrichDetails();
 	}
 
 	@Test

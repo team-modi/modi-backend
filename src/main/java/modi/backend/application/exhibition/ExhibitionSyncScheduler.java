@@ -11,11 +11,11 @@ import lombok.RequiredArgsConstructor;
 /**
  * 공공데이터 전시 카탈로그 정기 동기화 스케줄러.
  * <p>
- * 매일 자정: 목록 동기화({@link ExhibitionFacade#syncCatalog()}, <b>신규 전시만 추가</b>) →
- * 장르 분류({@link CatalogEnricher#enrichGenres()}, 방금 추가된 미분류 행만) →
- * 상세 보강({@link CatalogEnricher#enrichDetails()}).
+ * 매일 자정: 목록+상세 동기화({@link ExhibitionFacade#syncCatalog()}, <b>목록과 상세를 한 패스로 채워 완전한 행으로 적재</b>) →
+ * 장르 분류({@link CatalogEnricher#enrichGenres()}, 방금 추가된 미분류 행만).
  * <p>
- * 장르 키워드는 이렇게 <b>동기화 직후에만</b> 생성된다 — 별도 주기 백필 없음. 대상이 "미분류 행"이라 멱등이고,
+ * 상세(가격 등)는 syncCatalog가 적재 시점에 함께 채우므로 별도 상세 백필 잡이 없다.
+ * 장르 키워드는 <b>동기화 직후에만</b> 생성된다 — 별도 주기 백필 없음. 대상이 "미분류 행"이라 멱등이고,
  * 신규가 없으면 빈 조회로 끝나 AI 호출을 태우지 않는다. 부팅 시 1회 동기화·장르 분류는
  * {@link ExhibitionCatalogBootSync}가 담당한다. 인증키 미설정이면 syncCatalog 내부에서 스킵되어 외부 호출 없이 끝난다.
  */
@@ -29,13 +29,12 @@ public class ExhibitionSyncScheduler {
 	private final ExhibitionFacade exhibitionFacade;
 	private final CatalogEnricher catalogEnricher;
 
-	/** 매일 자정: 신규 전시 적재 → 신규분 장르 분류 → 상세(가격 등) 보강. 실패해도 다음 주기에 재시도. */
+	/** 매일 자정: 목록+상세를 한 패스로 적재/완성 → 신규분 장르 분류. 실패해도 다음 주기에 재시도. */
 	@Scheduled(cron = "${app.exhibition.sync.cron:0 0 0 * * *}")
 	public void syncDaily() {
 		try {
 			log.info("전시 정기 동기화 신규 {}건", exhibitionFacade.syncCatalog());
 			catalogEnricher.enrichGenres();
-			catalogEnricher.enrichDetails();
 		} catch (RuntimeException e) {
 			log.warn("전시 정기 동기화/보강 실패(다음 주기 재시도): {}", e.getMessage());
 		}

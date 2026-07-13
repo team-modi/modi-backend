@@ -243,6 +243,14 @@ public class Exhibition extends BaseEntity {
 		}
 	}
 
+	/**
+	 * 저장된 설명을 재파싱한 평문으로 교체한다(기존 수집분 데이터 정리용 — 관리자 재파싱 API에서 호출).
+	 * 설명 필드만 갱신하고 다른 값(장르·상세 등)은 건드리지 않는다. 실질 변경이 없으면 호출부에서 걸러 저장을 아낀다.
+	 */
+	public void reparseDescription(String cleanedDescription) {
+		this.description = cleanedDescription;
+	}
+
 	/** 우리 앱 내 조회 1회 발생 시 호출(인기순 정렬용 카운터). */
 	public void increaseView() {
 		this.ourViewCount += 1;

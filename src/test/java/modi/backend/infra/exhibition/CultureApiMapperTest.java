@@ -52,6 +52,23 @@ class CultureApiMapperTest {
 			+ "<placeAddr>부산광역시 사하구 낙동남로 1191</placeAddr><placeSeq>P1</placeSeq></item>"
 			+ "</items></body></response>";
 
+	// 실제 원천 표본: 워드프레스 블록 주석 + <p>/<span style> 태그로 감싼 본문(단일 이스케이프). 배민정 전시 실데이터 축약.
+	private static final String DETAIL2_WORDPRESS_XML = "<response><header><resultCode>00</resultCode><resultMsg>정상입니다.</resultMsg></header>"
+			+ "<body><totalCount>1</totalCount><items>"
+			+ "<item><seq>319007</seq><title>TRACE</title><price>무료</price>"
+			+ "<contents1>&lt;!-- wp:paragraph --&gt;&lt;p&gt;배민정 작가는 자신의 일상에서 떠오른 감성적 주제를 AI에 입력한다.&lt;/p&gt;&lt;!-- /wp:paragraph --&gt;"
+			+ "&lt;!-- wp:paragraph --&gt;&lt;p&gt;이번 전시 [ TRACE : 생성 과정의 잔여 ]에서는 &lt;span style=&quot;font-size: 10pt;&quot;&gt;잔여&lt;/span&gt;에 주목한다.&lt;/p&gt;&lt;!-- /wp:paragraph --&gt;</contents1>"
+			+ "<url>http://detail/319007</url></item>"
+			+ "</items></body></response>";
+
+	// 이중 이스케이프 표본(&amp;lt;p&amp;gt;) — XML 파싱 1단계 + 재해제 1단계로 태그까지 벗겨져야 한다.
+	private static final String DETAIL2_DOUBLE_ESCAPED_XML = "<response><header><resultCode>00</resultCode><resultMsg>정상입니다.</resultMsg></header>"
+			+ "<body><totalCount>1</totalCount><items>"
+			+ "<item><seq>319008</seq><title>이중</title><price>무료</price>"
+			+ "<contents1>&amp;lt;p style=&amp;quot;line-height:1.8;&amp;quot;&amp;gt;소장품 이야기&amp;lt;/p&amp;gt;</contents1>"
+			+ "<url>http://detail/319008</url></item>"
+			+ "</items></body></response>";
+
 	private final CultureApiMapper mapper = new CultureApiMapper();
 
 	@Test
@@ -123,5 +140,32 @@ class CultureApiMapperTest {
 		CatalogDetailData detail = mapper.toDetail(item);
 
 		assertThat(detail.description()).isEqualTo("첫째 줄입니다.\n둘째 줄입니다.");
+	}
+
+	@Test
+	@DisplayName("toDetail — 워드프레스 블록 주석·<p>·<span> 태그를 벗겨 읽기 좋은 평문으로 만든다")
+	void toDetail_워드프레스_태그제거() {
+		CultureApiResponse.Item item = mapper.parse(DETAIL2_WORDPRESS_XML).items().get(0);
+
+		CatalogDetailData detail = mapper.toDetail(item);
+
+		String desc = detail.description();
+		// 태그·주석·이스케이프 잔재가 남지 않아야 한다
+		assertThat(desc).doesNotContain("<").doesNotContain("&lt;").doesNotContain("wp:paragraph")
+				.doesNotContain("style=");
+		// 본문 텍스트는 보존되고 문단은 개행으로 구분된다
+		assertThat(desc).contains("배민정 작가는").contains("TRACE : 생성 과정의 잔여").contains("잔여에 주목한다");
+		assertThat(desc).isEqualTo("배민정 작가는 자신의 일상에서 떠오른 감성적 주제를 AI에 입력한다.\n"
+				+ "이번 전시 [ TRACE : 생성 과정의 잔여 ]에서는 잔여에 주목한다.");
+	}
+
+	@Test
+	@DisplayName("toDetail — 이중 이스케이프(&lt;p&gt;)된 본문도 태그까지 완전히 벗겨낸다")
+	void toDetail_이중이스케이프_태그제거() {
+		CultureApiResponse.Item item = mapper.parse(DETAIL2_DOUBLE_ESCAPED_XML).items().get(0);
+
+		CatalogDetailData detail = mapper.toDetail(item);
+
+		assertThat(detail.description()).isEqualTo("소장품 이야기");
 	}
 }
