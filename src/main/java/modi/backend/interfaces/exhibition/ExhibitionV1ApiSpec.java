@@ -150,6 +150,36 @@ public interface ExhibitionV1ApiSpec {
 					}"""))))
 	ResponseEntity<modi.backend.support.response.ApiResponse<ExhibitionDto.BannersResponse>> banners();
 
+	@Operation(summary = "지역 필터 그룹 조회", description = """
+			전시탐색 필터 시트의 지역 칩 목록(디자인 병합 그룹)을 조회한다. 공개 API(인증 불필요).
+			칩 1개 = 그룹 1개이며, 목록 검색 시 선택한 그룹들의 regions를 콤마로 이어
+			GET /exhibitions의 region 파라미터에 그대로 넣는다(예: region=GYEONGGI,INCHEON).
+			그룹 구성은 서버가 단일 소스로 관리한다 — 클라이언트는 이 응답을 그대로 렌더링한다.""")
+	@ApiResponses(@ApiResponse(responseCode = "200", description = "조회 성공", content = @Content(
+			mediaType = MediaType.APPLICATION_JSON_VALUE,
+			schema = @Schema(implementation = ExhibitionDto.RegionGroupsResponse.class),
+			examples = @ExampleObject(name = "지역 그룹 조회 성공", value = """
+					{
+					  "meta": { "result": "SUCCESS", "errorCode": null, "message": null },
+					  "data": {
+					    "groups": [
+					      { "code": "SEOUL", "label": "서울", "regions": ["SEOUL"] },
+					      { "code": "GYEONGGI_INCHEON", "label": "경기·인천", "regions": ["GYEONGGI", "INCHEON"] },
+					      { "code": "GANGWON", "label": "강원", "regions": ["GANGWON"] },
+					      { "code": "DAEJEON_SEJONG_CHUNGCHEONG", "label": "대전·세종·충청",
+					        "regions": ["DAEJEON", "SEJONG", "CHUNGNAM", "CHUNGBUK"] },
+					      { "code": "GWANGJU_JEOLLA", "label": "광주·전라",
+					        "regions": ["GWANGJU", "JEONNAM", "JEONBUK"] },
+					      { "code": "DAEGU_GYEONGBUK", "label": "대구·경북", "regions": ["DAEGU", "GYEONGBUK"] },
+					      { "code": "BUSAN_ULSAN_GYEONGNAM", "label": "부산·울산·경남",
+					        "regions": ["BUSAN", "ULSAN", "GYEONGNAM"] },
+					      { "code": "JEJU", "label": "제주", "regions": ["JEJU"] },
+					      { "code": "ETC", "label": "기타", "regions": ["ETC"] }
+					    ]
+					  }
+					}"""))))
+	ResponseEntity<modi.backend.support.response.ApiResponse<ExhibitionDto.RegionGroupsResponse>> regionGroups();
+
 	@Operation(summary = "전시 상세", description = """
 			CATALOG는 공개, CUSTOM은 등록자 본인만 조회 가능. 인증은 선택(Optional) —
 			비로그인·무효 토큰이어도 CATALOG 전시는 정상 조회된다. 로그인 시 bookmarked·recorded 개인화 필드를 채운다.""")
