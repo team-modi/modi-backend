@@ -40,6 +40,8 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # 전시 영업시간(구글 Places New). 운영만 실호출(.env의 PLACE_HOURS_PROVIDER=google과 짝). 미설정이면 앱이 mock로 폴백.
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           # record-AI 감상문/질문 AI = Claude(Anthropic, 유료). 아래 .env의 AI_PROVIDER=claude와 짝을 이룬다.
           #   무료 한도 소진으로 유료 전환(장르 분류는 계속 무료 Gemini). 개인 .env 의존 금지 → 이 시크릿에서만 주입.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -68,7 +70,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           command_timeout: 20m
           # GitHub Actions secrets를 원격 SSH 세션 환경변수로 전달
-          envs: KAKAO_CLIENT_SECRET,GOOGLE_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY,ANTHROPIC_API_KEY,GC_PROM_URL,GC_PROM_USER,GC_API_KEY,GC_LOKI_URL,GC_LOKI_USER,CF_TUNNEL_TOKEN,MB_SITE_URL,CF_QUICK_TUNNEL,ENABLE_METABASE,ADMIN_EMAILS,ADMIN_PASSWORD
+          envs: KAKAO_CLIENT_SECRET,GOOGLE_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY,GOOGLE_MAPS_API_KEY,ANTHROPIC_API_KEY,GC_PROM_URL,GC_PROM_USER,GC_API_KEY,GC_LOKI_URL,GC_LOKI_USER,CF_TUNNEL_TOKEN,MB_SITE_URL,CF_QUICK_TUNNEL,ENABLE_METABASE,ADMIN_EMAILS,ADMIN_PASSWORD
           script: |
             set -e
             cd ~/modi-backend
@@ -87,6 +89,9 @@ jobs:
             GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
             JWT_SECRET=${JWT_SECRET}
             GEMINI_API_KEY=${GEMINI_API_KEY}
+            # 전시 영업시간 = 운영만 구글 Places 실호출. GOOGLE_MAPS_API_KEY 없으면 앱이 mock로 폴백(과금 0).
+            PLACE_HOURS_PROVIDER=google
+            GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
             # record-AI 감상문/질문 = Claude(Anthropic, 유료). 무료 한도 소진으로 gemini→claude 전환.
             #   장르 분류(app.ai.gemini)는 계속 무료 Gemini(GEMINI_API_KEY)를 쓴다 — 여기서 GEMINI_API_KEY는 그 용도로 유지.
             #   AI_API_KEY(공통 우선키)에 ANTHROPIC_API_KEY를 매핑한다. 빈 값이면 앱이 AI_DISABLED가 되니 반드시 채운다.

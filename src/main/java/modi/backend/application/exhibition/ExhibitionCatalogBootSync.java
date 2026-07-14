@@ -29,6 +29,7 @@ public class ExhibitionCatalogBootSync implements ApplicationRunner {
 
 	private final ExhibitionFacade exhibitionFacade;
 	private final CatalogEnricher catalogEnricher;
+	private final PlaceHoursEnricher placeHoursEnricher;
 
 	@Override
 	public void run(ApplicationArguments args) {
@@ -44,6 +45,11 @@ public class ExhibitionCatalogBootSync implements ApplicationRunner {
 				catalogEnricher.enrichGenres();
 			} catch (RuntimeException e) {
 				log.warn("부팅 시 장르 분류 실패(자정 동기화에서 재시도): {}", e.getMessage());
+			}
+			try {
+				placeHoursEnricher.enrichPlaceHours();
+			} catch (RuntimeException e) {
+				log.warn("부팅 시 영업시간 보강 실패(자정 동기화에서 재시도): {}", e.getMessage());
 			}
 		}, "catalog-boot-sync");
 		bootSync.setDaemon(true);

@@ -23,6 +23,20 @@ public interface ExhibitionJpaRepository
 	/** 장르 미부여 CATALOG를 페이지 크기만큼 조회(장르 초기화 백필용, 살아있는 행만). */
 	List<Exhibition> findByTypeAndGenreKeywordIsNullAndDeletedAtIsNull(ExhibitionType type, Pageable pageable);
 
+	/**
+	 * 영업시간 보강 대상 — placeAddr 있고 미조회(operatingHoursSyncedAt IS NULL) 또는 staleBefore 이전 조회된 CATALOG(살아있는 행만).
+	 * "IS NULL OR <" 조건이라 파생 쿼리로 표현이 어려워 JPQL로 명시한다. placeAddr·id 순 정렬(같은 장소 그룹화 용이).
+	 */
+	@org.springframework.data.jpa.repository.Query("""
+			select e from Exhibition e
+			where e.type = :type and e.deletedAt is null and e.placeAddr is not null
+			  and (e.operatingHoursSyncedAt is null or e.operatingHoursSyncedAt < :staleBefore)
+			order by e.placeAddr asc, e.id asc""")
+	List<Exhibition> findCatalogNeedingOperatingHours(
+			@org.springframework.data.repository.query.Param("type") ExhibitionType type,
+			@org.springframework.data.repository.query.Param("staleBefore") java.time.LocalDateTime staleBefore,
+			Pageable pageable);
+
 	/** 설명이 있는 CATALOG 전체 조회(설명 재파싱 대상, 살아있는 행만). */
 	List<Exhibition> findByTypeAndDescriptionIsNotNullAndDeletedAtIsNull(ExhibitionType type);
 

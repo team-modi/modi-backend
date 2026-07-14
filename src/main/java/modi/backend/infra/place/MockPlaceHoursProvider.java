@@ -1,0 +1,44 @@
+package modi.backend.infra.place;
+
+import java.time.DayOfWeek;
+import java.time.LocalTime;
+import java.util.Optional;
+
+import org.springframework.stereotype.Component;
+
+import modi.backend.domain.exhibition.PlaceHoursData;
+import modi.backend.domain.exhibition.PlaceHoursProvider;
+import modi.backend.domain.exhibition.WeeklyOpeningHours;
+
+/**
+ * 외부 호출 없는 mock 영업시간 조회기(기본 provider). 로컬·CI·develop에서 유료 구글 호출을 <b>0</b>으로 막고,
+ * 데모/개발 화면에도 영업시간이 뜨도록 고정 샘플을 반환한다.
+ * <p>
+ * 샘플(전형적 미술관): 화~일 10:00~18:00, 월 휴무 → 표시 규칙 적용 시 {@code 매일 10:00 ~ 18:00} + {@code 월 휴무}.
+ * 실호출({@link GooglePlaceHoursProvider})과 함께 빈으로 공존하며, {@code app.exhibition.place-hours.provider=google}이고
+ * 키가 있을 때만 실호출기가 @Primary로 선택된다.
+ */
+@Component
+public class MockPlaceHoursProvider implements PlaceHoursProvider {
+
+	private static final LocalTime OPEN = LocalTime.of(10, 0);
+	private static final LocalTime CLOSE = LocalTime.of(18, 0);
+
+	@Override
+	public Optional<PlaceHoursData> fetch(String placeName, String placeAddr) {
+		WeeklyOpeningHours.Builder builder = WeeklyOpeningHours.builder();
+		// 월요일(MONDAY)은 넣지 않아 휴무. 화~일 동일 시간.
+		for (DayOfWeek day : new DayOfWeek[] { DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,
+				DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY }) {
+			builder.add(day, OPEN, CLOSE);
+		}
+		PlaceHoursData data = new PlaceHoursData(mockPlaceId(placeAddr), placeName, placeAddr,
+				builder.build(), "{\"mock\":true}", "MOCK");
+		return Optional.of(data);
+	}
+
+	/** 주소별로 안정적인 합성 place_id(스테이징에서 장소 구분용). */
+	private String mockPlaceId(String placeAddr) {
+		return "mock-" + (placeAddr == null ? "unknown" : Integer.toHexString(placeAddr.hashCode()));
+	}
+}

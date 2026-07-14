@@ -25,13 +25,15 @@ class ExhibitionSyncSchedulerTest {
 
 	private ExhibitionFacade exhibitionFacade;
 	private CatalogEnricher catalogEnricher;
+	private PlaceHoursEnricher placeHoursEnricher;
 	private ExhibitionSyncScheduler scheduler;
 
 	@BeforeEach
 	void setUp() {
 		exhibitionFacade = mock(ExhibitionFacade.class);
 		catalogEnricher = mock(CatalogEnricher.class);
-		scheduler = new ExhibitionSyncScheduler(exhibitionFacade, catalogEnricher);
+		placeHoursEnricher = mock(PlaceHoursEnricher.class);
+		scheduler = new ExhibitionSyncScheduler(exhibitionFacade, catalogEnricher, placeHoursEnricher);
 	}
 
 	@Test

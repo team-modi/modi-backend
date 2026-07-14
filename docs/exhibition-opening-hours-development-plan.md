@@ -166,15 +166,18 @@ PlaceHoursProvider placeHoursProvider(PlaceHoursProperties p,
 - provider=google + 키 없음 → mock 폴백 + 起動 warn(Gemini 동형).
 - 영업시간은 **부가 기능**: 어떤 실패도 syncCatalog/장르 백필/등록 흐름을 깨지 않는다.
 
-## 9. 테스트 계획
-| 대상 | 방식 | 핵심 케이스 |
-|---|---|---|
-| `OpeningHoursFormatter` | 순수 단위(TDD) | 매일 축약 · 다중그룹 · 비연속 묶기 · 휴무 맨아래 · 전영업 · 정보없음(null) · 점심브레이크 · 단일요일 |
-| 구글 응답 매퍼 | 순수 단위 | periods(day 0=일) → 월~일 매핑 · weekdayDescriptions 무시하고 periods 우선 |
-| `MockPlaceHoursProvider` | 순수 단위 | D3 고정 샘플 · 0콜 |
-| provider 선택 | @SpringBootTest 슬라이스 | 기본 mock · provider=google+키 → google · google+키없음 → mock |
-| `PlaceHoursEnricher`/Facade | Mockito 단위 | truncate 호출 · 장소 그룹 1콜 · 파생 저장 · 실패 장소 스킵 |
-| Exhibition | 순수 단위 | `applyOpeningHours` 상태·synced_at |
+## 9. 테스트 계획 (통합테스트만 — 2026-07-14 확정)
+
+단위 테스트는 두지 않는다. **@SpringBootTest 통합테스트**로 mock provider를 태워 전 경로(truncate → 장소 그룹 호출 → 원본 적재 → 파싱 → 포맷 → 전시 저장)를 실제 컴포넌트·실 DB(Testcontainers-MySQL)로 검증한다. 포맷 규칙 엣지는 mock provider가 반환하는 주간 패턴을 케이스별로 바꿔 통합 경로로 커버.
+
+| 통합테스트 | 검증 |
+|---|---|
+| `PlaceHoursEnricher` 전 경로(mock) | 장소당 1콜 · `google_place_hours` 적재 · `exhibitions.opening_hours`/`synced_at` 저장 · 같은 place_addr 전시 동시 반영 |
+| 포맷 규칙 케이스 | mock 반환 패턴 바꿔가며: 매일 축약 · 다중그룹 · 비연속 묶기 · 휴무 맨아래 · 전영업 · 정보없음(null) |
+| 대상 선별 | `opening_hours` 있고 최신인 전시는 재호출 제외 · run당 장소 상한 |
+| provider 선택 | 기본 mock · `provider=google`+키없음 → mock 폴백(실호출 0) |
+
+- 상세 조회 응답(`GET /exhibitions/{id}`)에 `openingHours`가 실리는지는 컨트롤러 통합 경로로 함께 확인.
 
 ## 10. 오픈 이슈 / 비고
 - 24시간·자정 넘김·전요일 휴무 표기는 P1(현재 null 또는 단순 처리).

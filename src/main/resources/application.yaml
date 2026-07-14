@@ -111,6 +111,19 @@ app:
     enrich:
       genre-batch-size: ${ENRICH_GENRE_BATCH_SIZE:20}  # 60s 타임아웃 안에서 검증된 크기(키우면 ReadTimeout→랜덤 폴백 위험)
       genre-max-batches-per-run: ${ENRICH_GENRE_MAX_BATCHES:3}  # 회당 소량 → 무료 RPM 안 넘김(대량 백로그는 다음 동기화가 이어서 소진)
+    # 전시 영업시간(운영시간) — 구글 Places(New)로 place_addr를 조회해 exhibitions.operating_hours를 채운다.
+    #   provider: 유료호출 게이팅. 기본 mock(로컬·CI·develop 0콜, 고정 샘플). 운영(main)만 google + GOOGLE_MAPS_API_KEY 주입.
+    #     google이라도 api-key가 비면 mock로 폴백(안전 기본값). 원본은 google_place_hours(매 실행 초기화 스테이징).
+    #   대상 선별: 주소 있고 미조회거나 refresh-after-days보다 오래된 전시만 → 매일 돌아도 스테디 상태 호출 ≈ 0(신규/만료만).
+    place-hours:
+      provider: ${PLACE_HOURS_PROVIDER:mock}
+      base-url: ${GOOGLE_MAPS_BASE_URL:https://places.googleapis.com}
+      api-key: ${GOOGLE_MAPS_API_KEY:}
+      language-code: ko
+      region-code: KR
+      timeout-seconds: ${GOOGLE_MAPS_TIMEOUT_SECONDS:10}      # 무응답 stall 시 스레드·커넥션 장기 점유 방지
+      refresh-after-days: ${PLACE_HOURS_REFRESH_AFTER_DAYS:30} # 이보다 오래 전에 조회된 장소만 재호출
+      max-venues-per-run: ${PLACE_HOURS_MAX_VENUES_PER_RUN:100} # 실행당 장소 호출 상한(일 과금 캡)
 
   # 리마인드(오늘의 여운) — 기록 작성 후 소환 대상이 되기까지의 경과 시간. 스케줄 발송이 아니라 조회 시점 판정(pull)이라
   #   이 값만 바꾸면 즉시 반영된다. 정식 기본 7d(운영 베타 한정 단축은 prod 프로파일 참고).

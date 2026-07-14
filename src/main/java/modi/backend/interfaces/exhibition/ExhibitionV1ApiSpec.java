@@ -171,7 +171,7 @@ public interface ExhibitionV1ApiSpec {
 							    "region": "SEOUL",
 							    "category": "PAINTING",
 							    "description": "인상주의 거장 모네의 대표작을 만나는 특별전.",
-							    "operatingHours": "10:00~19:00(월요일 휴관)",
+							    "operatingHours": "매일 10:00 ~ 18:00",
 							    "price": "무료",
 							    "artists": ["클로드 모네"],
 							    "keywords": ["인상주의", "회화"],

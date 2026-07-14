@@ -28,8 +28,9 @@ public class ExhibitionSyncScheduler {
 
 	private final ExhibitionFacade exhibitionFacade;
 	private final CatalogEnricher catalogEnricher;
+	private final PlaceHoursEnricher placeHoursEnricher;
 
-	/** 매일 자정: 목록+상세를 한 패스로 적재/완성 → 신규분 장르 분류. 실패해도 다음 주기에 재시도. */
+	/** 매일 자정: 목록+상세를 한 패스로 적재/완성 → 신규분 장르 분류 → 신규/만료 장소 영업시간 보강. 실패해도 다음 주기에 재시도. */
 	@Scheduled(cron = "${app.exhibition.sync.cron:0 0 0 * * *}")
 	public void syncDaily() {
 		try {
@@ -37,6 +38,12 @@ public class ExhibitionSyncScheduler {
 			catalogEnricher.enrichGenres();
 		} catch (RuntimeException e) {
 			log.warn("전시 정기 동기화/보강 실패(다음 주기 재시도): {}", e.getMessage());
+		}
+		try {
+			placeHoursEnricher.enrichPlaceHours();
+		} catch (RuntimeException e) {
+			// 영업시간은 부가 기능 — 실패해도 동기화/장르 결과에 영향 없음(다음 주기 재시도).
+			log.warn("전시 영업시간 보강 실패(다음 주기 재시도): {}", e.getMessage());
 		}
 	}
 }

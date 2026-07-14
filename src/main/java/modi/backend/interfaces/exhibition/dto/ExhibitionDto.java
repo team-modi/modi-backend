@@ -113,7 +113,7 @@ public final class ExhibitionDto {
 					example = "SOLO", nullable = true) String format,
 			@Schema(description = "전시 설명. 데이터 없으면 null.",
 					example = "인상주의 거장 모네의 대표작을 만나는 특별전.", nullable = true) String description,
-			@Schema(description = "운영시간. 데이터 없으면 null.", example = "10:00~19:00(월요일 휴관)", nullable = true)
+			@Schema(description = "운영시간(구글 지도 기준, 여러 줄은 \\n 구분). 데이터 없으면 null.", example = "매일 10:00 ~ 18:00", nullable = true)
 			String operatingHours,
 			@Schema(description = "관람 가격 안내. 원천에 가격이 없으면 \"관람료 정보 없음\".", example = "성인 20,000원 / 청소년 15,000원")
 			String price,

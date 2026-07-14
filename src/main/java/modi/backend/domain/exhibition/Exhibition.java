@@ -137,6 +137,13 @@ public class Exhibition extends BaseEntity {
 	@Column(name = "detail_synced_at")
 	private LocalDateTime detailSyncedAt;
 
+	/**
+	 * 영업시간({@code operatingHours})을 구글 Places로 마지막으로 조회 시도한 시각. null이면 아직 미조회.
+	 * 대상 선별(미조회·만료)과 실패 조회 백오프(미발견도 시각을 남겨 매일 재조회하지 않음)에 쓴다. {@code operatingHours} 값 자체와는 별개.
+	 */
+	@Column(name = "operating_hours_synced_at")
+	private LocalDateTime operatingHoursSyncedAt;
+
 	/** 우리 앱 내 조회수(인기순 정렬용). 외부 API의 조회수와 별개. */
 	@Column(name = "our_view_count", nullable = false)
 	private long ourViewCount = 0;
@@ -230,6 +237,16 @@ public class Exhibition extends BaseEntity {
 
 	public boolean isDetailSynced() {
 		return detailSyncedAt != null;
+	}
+
+	/**
+	 * 구글 Places로 조회한 영업시간을 우리 표시 규칙 문자열로 반영한다(운영시간 보강). {@code operatingHours} 컬럼을 재사용한다
+	 * (공공데이터엔 영업시간이 없어 비어 있던 컬럼). 조회 시각({@code operatingHoursSyncedAt})은 결과 유무와 무관하게 항상 기록해
+	 * 재조회 대상에서 빠지게 한다 — 미발견/영업시간 없음이면 {@code formatted=null}로 값은 비우되 시각만 남긴다(실패 조회 백오프).
+	 */
+	public void applyOperatingHours(String formatted, LocalDateTime syncedAt) {
+		this.operatingHours = (formatted == null || formatted.isBlank()) ? null : formatted;
+		this.operatingHoursSyncedAt = syncedAt;
 	}
 
 	/**

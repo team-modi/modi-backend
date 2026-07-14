@@ -24,13 +24,15 @@ class ExhibitionCatalogBootSyncTest {
 
 	private ExhibitionFacade exhibitionFacade;
 	private CatalogEnricher catalogEnricher;
+	private PlaceHoursEnricher placeHoursEnricher;
 	private ExhibitionCatalogBootSync bootSync;
 
 	@BeforeEach
 	void setUp() {
 		exhibitionFacade = mock(ExhibitionFacade.class);
 		catalogEnricher = mock(CatalogEnricher.class);
-		bootSync = new ExhibitionCatalogBootSync(exhibitionFacade, catalogEnricher);
+		placeHoursEnricher = mock(PlaceHoursEnricher.class);
+		bootSync = new ExhibitionCatalogBootSync(exhibitionFacade, catalogEnricher, placeHoursEnricher);
 	}
 
 	@Test

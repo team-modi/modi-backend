@@ -28,6 +28,9 @@ import modi.backend.domain.exhibition.ExhibitionSection;
 import modi.backend.domain.exhibition.GenreClassification;
 import modi.backend.domain.exhibition.GenreClassifier;
 import modi.backend.domain.exhibition.GenreKeyword;
+import modi.backend.domain.exhibition.PlaceHoursData;
+import modi.backend.domain.exhibition.PlaceHoursSnapshot;
+import modi.backend.domain.exhibition.PlaceHoursSnapshotRepository;
 import modi.backend.domain.venue.Venue;
 import modi.backend.domain.venue.VenueErrorCode;
 import modi.backend.domain.venue.VenueRepository;
@@ -51,6 +54,8 @@ public class ExhibitionFacade {
 	private static final int MAX_SIZE = 50;
 	private static final int ENDING_SOON_DAYS = 7;
 	private static final int BANNER_LIMIT = 3;
+	// 영업시간 보강 1회 실행에서 스캔하는 전시 상한(장소 그룹화 대상). 실제 외부 호출은 장소 수(maxVenuesPerRun)로 별도 제한된다.
+	private static final int PLACE_HOURS_SCAN_LIMIT = 3000;
 
 	private final ExhibitionRepository exhibitionRepository;
 	private final ExhibitionCatalogClient catalogClient;
@@ -58,6 +63,7 @@ public class ExhibitionFacade {
 	private final VenueRepository venueRepository;
 	// 크로스 도메인 실용 조회: 상세의 recorded 계산을 위해 record의 Spring Data 리포지토리를 직접 읽는다(전용 포트 미도입).
 	private final RecordJpaRepository recordJpaRepository;
+	private final PlaceHoursSnapshotRepository placeHoursSnapshotRepository;
 	/** 장르 분류 전략(랜덤/AI) — 주입되는 구현은 {@code app.exhibition.genre.classifier}로 선택된다(@Primary). */
 	private final GenreClassifier genreClassifier;
 
@@ -258,6 +264,55 @@ public class ExhibitionFacade {
 			exhibitionRepository.save(exhibition);
 		}
 		return targets.size();
+	}
+
+	/** 영업시간 보강 시작 시 구글 응답 스테이징 전체를 비운다("호출 시 초기화"). */
+	@Transactional
+	public void resetPlaceHoursSnapshots() {
+		placeHoursSnapshotRepository.deleteAllSnapshots();
+	}
+
+	/**
+	 * 영업시간 조회 대상을 <b>장소(placeAddr) 단위</b>로 묶어 최대 {@code maxVenues}개 반환한다 — 같은 장소 전시는 1콜로 처리하기 위함.
+	 * 대상 전시는 {@code staleBefore} 이전 조회분·미조회분(주소 있는 CATALOG)이며, 스캔 상한 내에서 등장한 장소들을 앞에서부터 채택한다.
+	 */
+	@Transactional(readOnly = true)
+	public List<PlaceHoursTarget> findVenuesNeedingHours(java.time.LocalDateTime staleBefore, int maxVenues) {
+		List<Exhibition> candidates = exhibitionRepository.findCatalogNeedingOperatingHours(
+				staleBefore, PLACE_HOURS_SCAN_LIMIT);
+		// placeAddr → (대표 장소명 + 전시 id들). 등장 순서(placeAddr asc) 보존 + 장소 수 상한.
+		java.util.LinkedHashMap<String, java.util.List<Long>> idsByAddr = new java.util.LinkedHashMap<>();
+		java.util.Map<String, String> nameByAddr = new java.util.HashMap<>();
+		for (Exhibition e : candidates) {
+			String addr = e.getPlaceAddr();
+			if (addr == null || addr.isBlank()) {
+				continue;
+			}
+			if (!idsByAddr.containsKey(addr) && idsByAddr.size() >= Math.max(1, maxVenues)) {
+				continue; // 장소 상한 도달 — 새 장소는 다음 주기에
+			}
+			idsByAddr.computeIfAbsent(addr, k -> new java.util.ArrayList<>()).add(e.getId());
+			nameByAddr.putIfAbsent(addr, e.getPlace());
+		}
+		return idsByAddr.entrySet().stream()
+				.map(en -> new PlaceHoursTarget(nameByAddr.get(en.getKey()), en.getKey(), en.getValue()))
+				.toList();
+	}
+
+	/**
+	 * 한 장소의 조회 결과를 반영한다(장소 단위 트랜잭션): 원본 스테이징 적재 + 그 장소 전시들에 표시값 저장.
+	 * {@code data}가 null(미발견)이면 스테이징은 남기지 않고, 전시엔 {@code formatted=null}로 값은 비우되 조회 시각만 남긴다(재조회 백오프).
+	 */
+	@Transactional
+	public void applyVenueHours(PlaceHoursTarget target, PlaceHoursData data, String formatted,
+			java.time.LocalDateTime now) {
+		if (data != null) {
+			placeHoursSnapshotRepository.save(PlaceHoursSnapshot.of(data, target.placeAddr(), now));
+		}
+		for (Exhibition e : exhibitionRepository.findAllActiveByIds(target.exhibitionIds())) {
+			e.applyOperatingHours(formatted, now);
+			exhibitionRepository.save(e);
+		}
 	}
 
 	/**
