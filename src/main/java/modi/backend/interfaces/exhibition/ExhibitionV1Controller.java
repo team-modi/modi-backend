@@ -72,6 +72,14 @@ public class ExhibitionV1Controller implements ExhibitionV1ApiSpec {
 				ExhibitionDto.BannersResponse.from(exhibitionFacade.banners())));
 	}
 
+	/** 지역 필터 그룹(전시탐색 필터 시트 칩). 정적 메타데이터. 공개(인증 불필요). */
+	@Override
+	@GetMapping("/region-groups")
+	public ResponseEntity<ApiResponse<ExhibitionDto.RegionGroupsResponse>> regionGroups() {
+		return ResponseEntity.ok(ApiResponse.success(
+				ExhibitionDto.RegionGroupsResponse.from(exhibitionFacade.getRegionGroups())));
+	}
+
 	/** 상세. CATALOG 공개 / CUSTOM은 등록자 본인만(타인 접근 403). */
 	@Override
 	@GetMapping("/{exhibitionId}")

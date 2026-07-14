@@ -10,8 +10,8 @@ import modi.backend.support.error.ErrorType;
  * 클라이언트 코드({@link #from})와 외부 API의 자유 텍스트 area({@link #fromAreaText})를 각각 받아들인다.
  */
 public enum ExhibitionRegion {
-	SEOUL, GYEONGGI, INCHEON, DAEGU, GYEONGBUK, BUSAN, ULSAN, GYEONGNAM, SEJONG, JEONNAM, JEONBUK, JEJU, CHUNGNAM,
-	CHUNGBUK, ETC;
+	SEOUL, GYEONGGI, INCHEON, GANGWON, DAEJEON, SEJONG, CHUNGNAM, CHUNGBUK, GWANGJU, JEONNAM, JEONBUK, DAEGU,
+	GYEONGBUK, BUSAN, ULSAN, GYEONGNAM, JEJU, ETC;
 
 	/** 클라이언트가 보낸 지역 코드 → enum. 미정의 코드는 {@link ErrorType#INVALID_INPUT}. */
 	public static ExhibitionRegion from(String code) {
@@ -24,7 +24,7 @@ public enum ExhibitionRegion {
 
 	/**
 	 * 외부 전시 API의 area 자유 텍스트(예: "서울", "경기") → enum. 매핑 실패/공백은 {@link #ETC}.
-	 * (지역 매핑 규칙은 실제 데이터 확정 전 임시 — 04_전시_구현.md 오픈 질문 참고. 광주·대전·강원은 칩에 없어 {@link #ETC})
+	 * (지역 매핑 규칙은 실제 데이터 확정 전 임시 — 04_전시_구현.md 오픈 질문 참고)
 	 */
 	public static ExhibitionRegion fromAreaText(String area) {
 		String text = Optional.ofNullable(area).map(String::trim).orElse("");
@@ -36,6 +36,15 @@ public enum ExhibitionRegion {
 		}
 		if (text.startsWith("인천")) {
 			return INCHEON;
+		}
+		if (text.startsWith("강원")) {
+			return GANGWON;
+		}
+		if (text.startsWith("대전")) {
+			return DAEJEON;
+		}
+		if (text.startsWith("광주")) {
+			return GWANGJU;
 		}
 		if (text.startsWith("대구")) {
 			return DAEGU;

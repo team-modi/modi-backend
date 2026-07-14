@@ -159,6 +159,19 @@ class ExhibitionIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("GET /exhibitions/region-groups — 필터 칩용 지역 그룹 목록(공개)")
+	void 지역_그룹_조회() throws Exception {
+		mockMvc.perform(get("/api/v1/exhibitions/region-groups"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.groups[0].code").value("SEOUL"))
+				.andExpect(jsonPath("$.data.groups[1].code").value("GYEONGGI_INCHEON"))
+				.andExpect(jsonPath("$.data.groups[1].label").value("경기·인천"))
+				.andExpect(jsonPath("$.data.groups[1].regions[0]").value("GYEONGGI"))
+				.andExpect(jsonPath("$.data.groups[1].regions[1]").value("INCHEON"))
+				.andExpect(jsonPath("$.data.groups.length()").value(9));
+	}
+
+	@Test
 	@DisplayName("GET /exhibitions?region=SEOUL,GYEONGGI — 콤마 다중 지역 필터(BUSAN 제외)")
 	void 목록_다중지역_필터() throws Exception {
 		LocalDate today = LocalDate.now();

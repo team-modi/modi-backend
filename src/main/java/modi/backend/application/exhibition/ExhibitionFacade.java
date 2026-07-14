@@ -23,6 +23,7 @@ import modi.backend.domain.exhibition.ExhibitionErrorCode;
 import modi.backend.domain.exhibition.ExhibitionFormat;
 import modi.backend.domain.exhibition.ExhibitionQuery;
 import modi.backend.domain.exhibition.ExhibitionRegion;
+import modi.backend.domain.exhibition.ExhibitionRegionGroup;
 import modi.backend.domain.exhibition.ExhibitionRepository;
 import modi.backend.domain.exhibition.ExhibitionSection;
 import modi.backend.domain.exhibition.GenreClassification;
@@ -60,6 +61,11 @@ public class ExhibitionFacade {
 	private final RecordJpaRepository recordJpaRepository;
 	/** 장르 분류 전략(랜덤/AI) — 주입되는 구현은 {@code app.exhibition.genre.classifier}로 선택된다(@Primary). */
 	private final GenreClassifier genreClassifier;
+
+	/** 지역 필터 그룹 목록(디자인 병합 칩). 정적 enum 메타데이터라 조회 없이 변환만 한다. */
+	public List<ExhibitionResult.RegionGroup> getRegionGroups() {
+		return ExhibitionRegionGroup.all().stream().map(ExhibitionResult.RegionGroup::from).toList();
+	}
 
 	/**
 	 * 목록/탐색(5.2). 필터 미지정 시 오늘 진행 중인 전시를 기본 노출한다. 비로그인은 CATALOG만.

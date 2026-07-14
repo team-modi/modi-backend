@@ -7,6 +7,7 @@ import modi.backend.domain.exhibition.Exhibition;
 import modi.backend.domain.exhibition.ExhibitionCategory;
 import modi.backend.domain.exhibition.ExhibitionFormat;
 import modi.backend.domain.exhibition.ExhibitionRegion;
+import modi.backend.domain.exhibition.ExhibitionRegionGroup;
 
 /**
  * 전시 유스케이스 출력 모음. (Facade는 Result까지만)
@@ -20,6 +21,15 @@ public final class ExhibitionResult {
 
 	/** 목록 한 페이지 결과 — 커서 페이지네이션 shape(content·nextCursor·hasNext·totalCount). */
 	public record ListPage(List<ListItem> content, String nextCursor, boolean hasNext, long totalCount) {
+	}
+
+	/** 지역 필터 그룹(디자인 병합 칩) — code=그룹 식별자, regions=검색 region 파라미터로 펼칠 코드들. */
+	public record RegionGroup(String code, String label, List<String> regions) {
+
+		public static RegionGroup from(ExhibitionRegionGroup group) {
+			return new RegionGroup(group.name(), group.label(),
+				group.regions().stream().map(Enum::name).toList());
+		}
 	}
 
 	/**

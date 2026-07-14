@@ -183,6 +183,27 @@ public final class ExhibitionDto {
 		}
 	}
 
+	/** 지역 필터 그룹 목록(전시탐색 필터 시트의 병합 칩). data.groups 배열. */
+	public record RegionGroupsResponse(
+			@Schema(description = "지역 필터 그룹 목록(디자인 칩 순서 그대로).") List<RegionGroupResponse> groups) {
+
+		public static RegionGroupsResponse from(List<ExhibitionResult.RegionGroup> groups) {
+			return new RegionGroupsResponse(groups.stream().map(RegionGroupResponse::from).toList());
+		}
+	}
+
+	/** 지역 필터 그룹 1개 — 칩 1개. 검색 시 regions를 콤마로 이어 region 파라미터에 그대로 넣는다. */
+	public record RegionGroupResponse(
+			@Schema(description = "그룹 코드", example = "GYEONGGI_INCHEON") String code,
+			@Schema(description = "칩 라벨", example = "경기·인천") String label,
+			@Schema(description = "그룹에 속한 지역 코드(목록 검색 region 파라미터 값)",
+					example = "[\"GYEONGGI\",\"INCHEON\"]") List<String> regions) {
+
+		public static RegionGroupResponse from(ExhibitionResult.RegionGroup result) {
+			return new RegionGroupResponse(result.code(), result.label(), result.regions());
+		}
+	}
+
 	/** 개인 전시 등록 결과(3.3.3). */
 	public record CreatedResponse(
 			@Schema(description = "등록된 전시 ID", example = "108") Long exhibitionId,
