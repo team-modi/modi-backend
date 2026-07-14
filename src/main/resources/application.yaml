@@ -192,10 +192,10 @@ app:
     # 운영에서만 실제 AI(gemini) 장르 분류를 쓴다. develop·로컬(기본 프로파일)은 random(무비용). 필요 시 env로 override.
     genre:
       classifier: ${GENRE_CLASSIFIER:gemini}
-  # ⚠️ 베타 한정: 리마인드 소환 대기를 1분으로 단축(2~3일 베타에서 즉시 검증용, 리마인드는 조회 시점 판정이라 값만 줄이면 됨).
+  # ⚠️ 베타 한정: 리마인드 소환 대기를 3초로 단축(2~3일 베타에서 즉시 검증용, 리마인드는 조회 시점 판정이라 값만 줄이면 됨).
   #   베타 종료 후 REMIND_ELIGIBLE_AFTER=7d 주입(또는 이 줄 제거로 기본 7d 복귀).
   remind:
-    eligible-after: ${REMIND_ELIGIBLE_AFTER:1m}
+    eligible-after: ${REMIND_ELIGIBLE_AFTER:3s}
   cors:
     allowed-origin-patterns:
       - https://yeowun.vercel.app      # 여운 Vercel 운영 도메인

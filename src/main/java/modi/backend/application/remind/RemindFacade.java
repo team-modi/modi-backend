@@ -47,13 +47,13 @@ public class RemindFacade {
 	private final RecordJpaRepository recordRepository;
 	private final ExhibitionRepository exhibitionRepository;
 	private final RemindAiSummarizer summarizer;
-	/** 소환 대상 최소 경과 시간(정식 7d, 베타는 env로 1m 등 단축 — {@link RemindProperties}). */
-	private final RemindProperties remindProperties;
+	/** 소환 대상 최소 경과 시간(정식 7d, 베타는 env로 단축 — 시작값 {@link RemindProperties}, 런타임 오버라이드 {@link RemindRuntimeConfig}). */
+	private final RemindRuntimeConfig remindRuntimeConfig;
 
 	/** 오늘의 소환 대상(경과 시간 충족, 아직 회고 안 한 내 기록) 1건. 없으면 null. */
 	@Transactional(readOnly = true)
 	public RemindResult.Candidate candidate(Long userId) {
-		ZonedDateTime createdBefore = ZonedDateTime.now(AppTime.KST).minus(remindProperties.eligibleAfter());
+		ZonedDateTime createdBefore = ZonedDateTime.now(AppTime.KST).minus(remindRuntimeConfig.eligibleAfter());
 		List<Record> found = remindRepository.findRemindCandidates(userId, createdBefore, PageRequest.of(0, 1));
 		if (found.isEmpty()) {
 			return null;
