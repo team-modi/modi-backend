@@ -152,6 +152,13 @@ jobs:
               echo "⚠️ reset_db=true → mysql-data 볼륨 삭제(DB 완전 초기화)"
               sudo docker compose $PROFILES down -v
             fi
+
+            # 디스크 정리 — 배포마다 쌓이는 빌드 레이어/구 이미지로 'No space left on device' 재발 방지(run 29329247179).
+            # 실행 중 컨테이너의 이미지·사용 중 볼륨(DB)은 prune 대상이 아니다.
+            sudo docker image prune -af || true
+            sudo docker builder prune -af || true
+            echo "디스크 상태: $(df -h / | tail -1)"
+
             sudo docker compose $PROFILES up -d --build
 
             # 배포 후 헬스체크 검증: UP 될 때까지 최대 150초 폴링, 실패 시 로그 출력하고 배포 실패 처리
