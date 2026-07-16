@@ -31,7 +31,7 @@ class CultureApiLiveE2ETest {
 	@Test
 	@DisplayName("실제 API 호출 — 전시 수집 데이터가 비어 있지 않고 필수 필드(id·title)를 갖는다")
 	void 실제_수집() {
-		List<CatalogExhibitionData> data = catalogClient.fetchAll();
+		List<CatalogExhibitionData> data = catalogClient.fetchAll().items();
 
 		assertThat(data).isNotEmpty();
 		assertThat(data).allMatch(CatalogExhibitionData::isPersistable);

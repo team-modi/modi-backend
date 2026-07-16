@@ -39,6 +39,7 @@ class ExhibitionDtoPriceTest {
 		Exhibition exhibition = Exhibition.createCatalog("CAT-PRICE", "제목", "장소", today.minusDays(1),
 				today.plusDays(10), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, "설명", null,
 				price, null, "기관", null, null, null, "전시", "서울");
-		return ExhibitionResult.Detail.from(exhibition, false, false);
+		// 장르·영업시간(정준층)은 이 테스트의 관심사가 아니다 — price 폴백만 본다.
+		return ExhibitionResult.Detail.from(exhibition, null, null, false, false);
 	}
 }

@@ -37,6 +37,7 @@ import modi.backend.application.exhibition.ExhibitionFacade;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.exhibition.CatalogDetailData;
 import modi.backend.domain.exhibition.CatalogExhibitionData;
+import modi.backend.domain.exhibition.CatalogListData;
 import modi.backend.domain.exhibition.Exhibition;
 import modi.backend.domain.exhibition.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.ExhibitionCategory;
@@ -82,24 +83,32 @@ class ExhibitionIntegrationTest {
 	@BeforeEach
 	void seedCatalog() {
 		LocalDate today = LocalDate.now();
-		given(catalogClient.fetchAll()).willReturn(List.of(
+		given(catalogClient.fetchAll()).willReturn(listData(List.of(
 				new CatalogExhibitionData("CAT-MONET", MONET, "예술의전당", today.minusDays(10), today.plusDays(30),
 						ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, "https://poster/monet.jpg",
 						"https://culture.go.kr/monet", "한국문화정보원", 126.980781, 37.578608,
-						"종로구", "전시", "서울"),
+						"종로구", "전시", "서울", null),
 				new CatalogExhibitionData("CAT-PICASSO", PICASSO, "시립미술관", today.minusDays(100),
 						today.minusDays(50), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, null,
 						"기관", null, null,
-						null, "전시", "서울"),
+						null, "전시", "서울", null),
 				new CatalogExhibitionData("CAT-PHOTO", PHOTO_SHOW, "성수 갤러리", today.minusDays(5),
 						today.plusDays(15), ExhibitionRegion.SEOUL, ExhibitionCategory.PHOTO, null, null,
 						"기관", null, null,
-						null, "사진", "서울")));
+						null, "사진", "서울", null))));
 		// syncCatalog가 적재 시점에 상세2까지 함께 채운다 — CAT-MONET만 상세를 준다(나머지는 상세 없음 → 목록 필드만).
 		given(catalogClient.fetchDetail("CAT-MONET")).willReturn(Optional.of(
 				new CatalogDetailData("성인 20,000원", "모네 특별전 설명", "https://detail/monet", "02-1234-5678",
-						"https://img/monet.jpg", "https://place/monet", "서울 어딘가", "PLACE-SEQ-1")));
+						"https://img/monet.jpg", "https://place/monet", "서울 어딘가", "PLACE-SEQ-1", null)));
 		exhibitionFacade.syncCatalog();
+	}
+
+	/**
+	 * 목록 수집 결과 래퍼 — 포트가 이제 "원천이 말한 총 건수·절단 여부"까지 돌려준다(이관 5단계, sync_run이 채울 값).
+	 * 이 테스트들의 관심사가 아니라 아이템만 담고 totalCount는 수집 수와 같게 둔다(= 절단 없음).
+	 */
+	private static CatalogListData listData(java.util.List<CatalogExhibitionData> items) {
+		return new CatalogListData(items, items.size(), false);
 	}
 
 	/** 표본 CATALOG를 리포지토리로 직접 적재(가격·좌표·기간 제어). 기본 startDate는 과거로 둬 최신순 상단을 침범하지 않게 한다. */

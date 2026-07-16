@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.exhibition.CatalogDetailData;
 import modi.backend.domain.exhibition.CatalogExhibitionData;
+import modi.backend.domain.exhibition.CatalogListData;
 import modi.backend.domain.exhibition.Exhibition;
 import modi.backend.domain.exhibition.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.ExhibitionCategory;
@@ -62,9 +63,9 @@ class ExhibitionCatalogSyncTest {
 		Exhibition existing = Exhibition.createCatalog("CAT-OLD", "기존 전시", "장소", today.minusDays(3),
 				today.plusDays(3), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, null, null, null,
 				null, "기관", null, null, null, "전시", "서울");
-		given(catalogClient.fetchAll()).willReturn(List.of(
+		given(catalogClient.fetchAll()).willReturn(listData(List.of(
 				data("CAT-OLD", "기존 전시(원천 갱신본)"),
-				data("CAT-NEW", "신규 전시")));
+				data("CAT-NEW", "신규 전시"))));
 		given(exhibitionRepository.findByExternalId("CAT-OLD")).willReturn(Optional.of(existing));
 		given(exhibitionRepository.findByExternalId("CAT-NEW")).willReturn(Optional.empty());
 		// 기존(상세 미완성)은 상세만 채워 완성, 신규는 상세까지 받아 적재.
@@ -96,7 +97,7 @@ class ExhibitionCatalogSyncTest {
 				today.plusDays(5), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, null, null, null,
 				null, "기관", null, null, null, "전시", "서울");
 		synced.applyDetail(detail("무료")); // detailSyncedAt 세팅 → 완성 상태
-		given(catalogClient.fetchAll()).willReturn(List.of(data("CAT-DONE", "완성 전시")));
+		given(catalogClient.fetchAll()).willReturn(listData(List.of(data("CAT-DONE", "완성 전시"))));
 		given(exhibitionRepository.findByExternalId("CAT-DONE")).willReturn(Optional.of(synced));
 
 		int inserted = facade.syncCatalog();
@@ -112,8 +113,8 @@ class ExhibitionCatalogSyncTest {
 		LocalDate today = LocalDate.now();
 		CatalogExhibitionData invalid = new CatalogExhibitionData("CAT-BAD", "역전 기간", "장소", today,
 				today.minusDays(1), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, null, "기관",
-				null, null, null, "전시", "서울");
-		given(catalogClient.fetchAll()).willReturn(List.of(invalid, data("CAT-OK", "정상 전시")));
+				null, null, null, "전시", "서울", null);
+		given(catalogClient.fetchAll()).willReturn(listData(List.of(invalid, data("CAT-OK", "정상 전시"))));
 		given(exhibitionRepository.findByExternalId("CAT-OK")).willReturn(Optional.empty());
 		given(catalogClient.fetchDetail("CAT-OK")).willReturn(Optional.empty()); // 원천 상세 없음 → 목록만으로 적재
 
@@ -123,14 +124,23 @@ class ExhibitionCatalogSyncTest {
 		verify(exhibitionRepository, times(1)).save(any());
 	}
 
+	/**
+	 * 목록 수집 결과 래퍼 — 포트가 이제 "원천이 말한 총 건수·절단 여부"까지 돌려준다(이관 5단계, sync_run이 채울 값).
+	 * 이 테스트들의 관심사가 아니라 아이템만 담고 totalCount는 수집 수와 같게 둔다(= 절단 없음).
+	 */
+	private static CatalogListData listData(java.util.List<CatalogExhibitionData> items) {
+		return new CatalogListData(items, items.size(), false);
+	}
+
 	private CatalogExhibitionData data(String externalId, String title) {
 		LocalDate today = LocalDate.now();
 		return new CatalogExhibitionData(externalId, title, "장소", today.minusDays(1), today.plusDays(10),
-				ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, null, "기관", null, null, null, "전시", "서울");
+				ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, null, "기관", null, null, null, "전시", "서울",
+				null);
 	}
 
 	private CatalogDetailData detail(String price) {
 		return new CatalogDetailData(price, "전시 소개", "https://example.com/detail", "02-000-0000",
-				"https://example.com/img.jpg", "https://example.com/place", "서울시 종로구", "PLACE-1");
+				"https://example.com/img.jpg", "https://example.com/place", "서울시 종로구", "PLACE-1", null);
 	}
 }
