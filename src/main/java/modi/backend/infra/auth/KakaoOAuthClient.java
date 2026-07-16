@@ -31,7 +31,7 @@ public class KakaoOAuthClient extends AbstractOAuthClient {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public OAuthUserInfo fetchUserInfo(String code, String redirectUri) {
+	public OAuthUserInfo fetchUserInfo(String code, String redirectUri, String state) {
 		Map<String, Object> token = kakaoApi.getToken(
 				tokenForm(props.clientId(), props.clientSecret(), redirectUri, code));
 		Map<String, Object> body = kakaoApi.getUserInfo("Bearer " + extractAccessToken(token));

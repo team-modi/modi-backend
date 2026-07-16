@@ -18,13 +18,13 @@ public interface AuthV1ApiSpec {
 
 	@Operation(summary = "소셜 로그인 (가입 겸용)", description = """
 			FE 주도 플로우. FE가 소셜 인가를 마친 뒤 콜백에서 받은 authorization code를 그대로 보낸다.
-			- Path `provider`: `kakao` | `google` (소문자).
-			- Body: `code`(소셜 인가 코드), `redirectUri`(소셜 콘솔·서버 화이트리스트에 등록된 값과 정확히 일치해야 함. 불일치 시 400 INVALID_REDIRECT_URI).
+			- Path `provider`: `kakao` | `google` | `naver` (소문자).
+			- Body: `code`(소셜 인가 코드), `redirectUri`(소셜 콘솔·서버 화이트리스트에 등록된 값과 정확히 일치해야 함. 불일치 시 400 INVALID_REDIRECT_URI), `state`(네이버 전용 — 네이버 토큰 교환에 필요. 카카오/구글은 생략).
 			- 최초 로그인이면 회원을 자동 생성(가입 겸용), 이후엔 기존 회원으로 로그인.
 			- 응답: `access`·`refresh` 토큰을 **HttpOnly 쿠키**로 내려준다. 브라우저 클라이언트는 이후 요청에 `credentials: 'include'`만 하면 되고 토큰을 직접 저장할 필요가 없다. 비쿠키 클라이언트(모바일 등) 호환을 위해 `accessToken`은 응답 본문에도 함께 반환한다.
 			- 성공은 항상 200(프로젝트 컨벤션).""")
 	ResponseEntity<ApiResponse<AuthDto.TokenResponse>> login(
-			@Parameter(in = ParameterIn.PATH, description = "소셜 provider — kakao | google", example = "kakao") String provider,
+			@Parameter(in = ParameterIn.PATH, description = "소셜 provider — kakao | google | naver", example = "kakao") String provider,
 			AuthDto.LoginRequest request,
 			@Parameter(hidden = true) HttpServletResponse response);
 

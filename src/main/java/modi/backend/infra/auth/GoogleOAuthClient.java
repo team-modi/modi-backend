@@ -30,7 +30,7 @@ public class GoogleOAuthClient extends AbstractOAuthClient {
 	}
 
 	@Override
-	public OAuthUserInfo fetchUserInfo(String code, String redirectUri) {
+	public OAuthUserInfo fetchUserInfo(String code, String redirectUri, String state) {
 		Map<String, Object> token = googleApi.getToken(
 				tokenForm(props.clientId(), props.clientSecret(), redirectUri, code));
 		Map<String, Object> body = googleApi.getUserInfo("Bearer " + extractAccessToken(token));
