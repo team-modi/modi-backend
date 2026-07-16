@@ -30,7 +30,7 @@ class AdminExhibitionFacadeTest {
 		Exhibition markup = catalog("<!-- wp:paragraph --><p style=\"line-height:1.8;\"><span>배민정 작가는 AI에 입력한다.</span></p>");
 		Exhibition already = catalog("이미 깨끗한 설명이에요.");
 		given(repo.findCatalogWithDescription()).willReturn(List.of(markup, already));
-		AdminExhibitionFacade facade = new AdminExhibitionFacade(repo);
+		AdminExhibitionFacade facade = new AdminExhibitionFacade(repo, mock(modi.backend.domain.exhibition.ExhibitionHistoryRepository.class));
 
 		AdminExhibitionResult.DescriptionReparse result = facade.reparseDescriptions();
 
