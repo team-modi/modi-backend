@@ -45,6 +45,42 @@ public enum AgeGroup {
 		};
 	}
 
+	/**
+	 * 네이버 {@code age}(연령대, 하이픈 범위 예: {@code "20-29"}, 최상단은 열린 구간 {@code "60-"})를 연령대로 매핑한다.
+	 * 카카오와 달리 구간 상한이 고정돼 있지 않아(0-9/10-19/…/50-59/60-) 범위 앞 정수만 뽑아 임계값으로 매핑한다.
+	 * 10대 미만·미동의·파싱 불가는 {@link #UNSPECIFIED}, 50 이상은 모두 {@link #FIFTIES_PLUS}.
+	 * (외부 코드→도메인 enum 변환은 실패 아님 — 알 수 없으면 예외 대신 UNSPECIFIED로 흡수)
+	 */
+	public static AgeGroup fromNaverAge(String age) {
+		if (age == null || age.isBlank()) {
+			return UNSPECIFIED;
+		}
+		int dash = age.indexOf('-');
+		String lower = (dash >= 0 ? age.substring(0, dash) : age).trim();
+		int start;
+		try {
+			start = Integer.parseInt(lower);
+		} catch (NumberFormatException e) {
+			return UNSPECIFIED;
+		}
+		if (start < 10) {
+			return UNSPECIFIED; // "0-9"(10대 미만)
+		}
+		if (start < 20) {
+			return TEENS;
+		}
+		if (start < 30) {
+			return TWENTIES;
+		}
+		if (start < 40) {
+			return THIRTIES;
+		}
+		if (start < 50) {
+			return FORTIES;
+		}
+		return FIFTIES_PLUS; // "50-59", "60-" 등 50 이상 전부
+	}
+
 	/** 미지정(선택 안 함) 여부 — 응답에서 null 처리 판단용. */
 	public boolean isUnspecified() {
 		return this == UNSPECIFIED;

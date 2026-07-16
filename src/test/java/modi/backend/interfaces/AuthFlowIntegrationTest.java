@@ -28,8 +28,8 @@ import com.jayway.jsonpath.JsonPath;
 
 import jakarta.servlet.http.Cookie;
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.infra.auth.GoogleApi;
 import modi.backend.infra.auth.KakaoApi;
+import modi.backend.infra.auth.NaverApi;
 
 /**
  * 프론트 → 백엔드 요청/응답 정상 동작 end-to-end 검증.
@@ -50,7 +50,7 @@ class AuthFlowIntegrationTest {
 	KakaoApi kakaoApi;
 
 	@MockitoBean
-	GoogleApi googleApi;
+	NaverApi naverApi;
 
 	@Test
 	@DisplayName("로그인 → /me → /refresh → 온보딩까지 정상 응답")
@@ -243,13 +243,52 @@ class AuthFlowIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("A4 지원하지 않는 provider(naver) → 400 UNSUPPORTED_PROVIDER")
+	@DisplayName("A4 지원하지 않는 provider(facebook) → 400 UNSUPPORTED_PROVIDER")
 	void A4_미지원_provider() throws Exception {
-		mockMvc.perform(post("/api/v1/auth/login/naver")
+		mockMvc.perform(post("/api/v1/auth/login/facebook")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"code\":\"c\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.meta.errorCode").value("UNSUPPORTED_PROVIDER"));
+	}
+
+	@Test
+	@DisplayName("A9 네이버 provider 로그인(response 중첩 구조 + state) → 200 + provider=naver, 연령대·출생연도 반영")
+	void A9_네이버_로그인() throws Exception {
+		given(naverApi.getToken(any())).willReturn(Map.of("access_token", "naver-access-token"));
+		given(naverApi.getUserInfo(anyString())).willReturn(Map.of(
+				"resultcode", "00",
+				"message", "success",
+				"response", Map.of(
+						"id", "naver-sub-1",
+						"email", "user@naver.com",
+						"name", "네이버유저",
+						"nickname", "네이버닉",
+						"age", "20-29",
+						"birthyear", "1998")));
+		mockMvc.perform(post("/api/v1/auth/login/naver")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"code\":\"ncode\",\"redirectUri\":\"" + REDIRECT_URI + "\",\"state\":\"nstate\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.user.provider").value("naver"))
+				.andExpect(jsonPath("$.data.user.email").value("user@naver.com"))
+				.andExpect(jsonPath("$.data.user.name").value("네이버유저"))
+				.andExpect(jsonPath("$.data.user.ageGroup").value("TWENTIES"))
+				.andExpect(jsonPath("$.data.user.birthYear").value(1998))
+				.andExpect(jsonPath("$.data.accessToken").isNotEmpty());
+	}
+
+	@Test
+	@DisplayName("A10 네이버 프로필 조회 실패(resultcode!=00, HTTP 200) → 502 OAUTH_COMMUNICATION_FAILED")
+	void A10_네이버_프로필실패() throws Exception {
+		given(naverApi.getToken(any())).willReturn(Map.of("access_token", "naver-access-token"));
+		given(naverApi.getUserInfo(anyString())).willReturn(Map.of(
+				"resultcode", "024", "message", "Authentication failed"));
+		mockMvc.perform(post("/api/v1/auth/login/naver")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"code\":\"ncode\",\"redirectUri\":\"" + REDIRECT_URI + "\",\"state\":\"nstate\"}"))
+				.andExpect(status().isBadGateway())
+				.andExpect(jsonPath("$.meta.errorCode").value("OAUTH_COMMUNICATION_FAILED"));
 	}
 
 	@Test
@@ -261,21 +300,6 @@ class AuthFlowIntegrationTest {
 						.content("{\"code\":\"c\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
 				.andExpect(status().isBadGateway())
 				.andExpect(jsonPath("$.meta.errorCode").value("OAUTH_COMMUNICATION_FAILED"));
-	}
-
-	@Test
-	@DisplayName("A8 구글 provider 로그인(플랫 응답 구조) → 200 + provider=google")
-	void A8_구글_로그인() throws Exception {
-		given(googleApi.getToken(any())).willReturn(Map.of("access_token", "google-access-token"));
-		given(googleApi.getUserInfo(anyString())).willReturn(Map.of(
-				"id", "google-sub-1", "email", "user@gmail.com", "name", "구글유저"));
-		mockMvc.perform(post("/api/v1/auth/login/google")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"code\":\"gcode\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.user.provider").value("google"))
-				.andExpect(jsonPath("$.data.user.email").value("user@gmail.com"))
-				.andExpect(jsonPath("$.data.accessToken").isNotEmpty());
 	}
 
 	@Test

@@ -11,8 +11,11 @@ public final class AuthDto {
 	private AuthDto() {
 	}
 
-	/** 로그인/연동 요청: FE가 provider 콜백에서 받은 code와 사용한 redirectUri. */
-	public record LoginRequest(@NotBlank String code, @NotBlank String redirectUri) {
+	/**
+	 * 로그인/연동 요청: FE가 provider 콜백에서 받은 code와 사용한 redirectUri.
+	 * state는 네이버 로그인에서만 필요(네이버 토큰 교환이 요구) — 카카오/구글은 보내지 않으므로 nullable.
+	 */
+	public record LoginRequest(@NotBlank String code, @NotBlank String redirectUri, String state) {
 	}
 
 	/**
