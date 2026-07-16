@@ -28,7 +28,6 @@ import com.jayway.jsonpath.JsonPath;
 
 import jakarta.servlet.http.Cookie;
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.infra.auth.GoogleApi;
 import modi.backend.infra.auth.KakaoApi;
 import modi.backend.infra.auth.NaverApi;
 
@@ -49,9 +48,6 @@ class AuthFlowIntegrationTest {
 
 	@MockitoBean
 	KakaoApi kakaoApi;
-
-	@MockitoBean
-	GoogleApi googleApi;
 
 	@MockitoBean
 	NaverApi naverApi;
@@ -304,21 +300,6 @@ class AuthFlowIntegrationTest {
 						.content("{\"code\":\"c\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
 				.andExpect(status().isBadGateway())
 				.andExpect(jsonPath("$.meta.errorCode").value("OAUTH_COMMUNICATION_FAILED"));
-	}
-
-	@Test
-	@DisplayName("A8 구글 provider 로그인(플랫 응답 구조) → 200 + provider=google")
-	void A8_구글_로그인() throws Exception {
-		given(googleApi.getToken(any())).willReturn(Map.of("access_token", "google-access-token"));
-		given(googleApi.getUserInfo(anyString())).willReturn(Map.of(
-				"id", "google-sub-1", "email", "user@gmail.com", "name", "구글유저"));
-		mockMvc.perform(post("/api/v1/auth/login/google")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("{\"code\":\"gcode\",\"redirectUri\":\"" + REDIRECT_URI + "\"}"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.user.provider").value("google"))
-				.andExpect(jsonPath("$.data.user.email").value("user@gmail.com"))
-				.andExpect(jsonPath("$.data.accessToken").isNotEmpty());
 	}
 
 	@Test

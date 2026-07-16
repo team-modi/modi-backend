@@ -9,7 +9,6 @@ import modi.backend.support.error.CoreException;
 public enum Provider {
 
 	KAKAO("kakao"),
-	GOOGLE("google"),
 	NAVER("naver");
 
 	private final String code;

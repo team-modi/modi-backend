@@ -12,7 +12,6 @@ import org.springframework.web.reactive.function.client.support.WebClientAdapter
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
 import modi.backend.config.PublicDataProperties;
-import modi.backend.infra.auth.GoogleApi;
 import modi.backend.infra.auth.KakaoApi;
 import modi.backend.infra.auth.NaverApi;
 import modi.backend.infra.exhibition.CultureApi;
@@ -29,11 +28,6 @@ public class HttpClientConfig {
 	@Bean
 	public KakaoApi kakaoApi() {
 		return createClient(KakaoApi.class);
-	}
-
-	@Bean
-	public GoogleApi googleApi() {
-		return createClient(GoogleApi.class);
 	}
 
 	@Bean

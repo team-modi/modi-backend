@@ -6,7 +6,7 @@ package modi.backend.domain.auth;
  */
 public interface OAuthClient {
 
-	/** 이 클라이언트가 담당하는 provider (KAKAO | GOOGLE | NAVER). */
+	/** 이 클라이언트가 담당하는 provider (KAKAO | NAVER). */
 	Provider provider();
 
 	/**
