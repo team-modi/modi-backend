@@ -1,6 +1,5 @@
 package modi.backend.domain.exhibition;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -11,11 +10,11 @@ public interface ExhibitionCatalogClient {
 
 	/**
 	 * 설정된 페이지 범위를 순회하며 적재 가능한 전시 수집 데이터를 모두 가져온다.
-	 * 인증키 미설정 시 외부 호출 없이 빈 목록을 반환한다(데모는 시드 데이터로 동작).
+	 * 인증키 미설정 시 외부 호출 없이 {@link CatalogListData#none()}을 반환한다(데모는 시드 데이터로 동작).
 	 *
-	 * @return 정규화·검증된 수집 데이터(결과 없으면 빈 목록)
+	 * @return 수집 데이터 + 원천이 말한 총 건수·절단 여부(호출부가 sync_run에 남긴다)
 	 */
-	List<CatalogExhibitionData> fetchAll();
+	CatalogListData fetchAll();
 
 	/**
 	 * 단건 상세(detail2)를 지연 조회한다. 인증키 미설정/결과 없음은 빈 Optional.
