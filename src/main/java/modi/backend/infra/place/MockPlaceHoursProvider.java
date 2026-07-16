@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import modi.backend.domain.exhibition.PlaceHoursData;
 import modi.backend.domain.exhibition.PlaceHoursProvider;
+import modi.backend.domain.exhibition.PlaceHoursVendor;
 import modi.backend.domain.exhibition.WeeklyOpeningHours;
 
 /**
@@ -32,13 +33,15 @@ public class MockPlaceHoursProvider implements PlaceHoursProvider {
 				DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY }) {
 			builder.add(day, OPEN, CLOSE);
 		}
-		PlaceHoursData data = new PlaceHoursData(mockPlaceId(placeAddr), placeName, placeAddr,
-				builder.build(), "{\"mock\":true}", "MOCK");
-		return Optional.of(data);
+		return Optional.of(new PlaceHoursData(builder.build(), "{\"mock\":true}"));
 	}
 
-	/** 주소별로 안정적인 합성 place_id(스테이징에서 장소 구분용). */
-	private String mockPlaceId(String placeAddr) {
-		return "mock-" + (placeAddr == null ? "unknown" : Integer.toHexString(placeAddr.hashCode()));
+	/**
+	 * mock이 만든 값은 정준층에 {@code provider=MOCK}으로 남아 실호출 결과와 구분된다 —
+	 * 로컬·develop 기본이 mock이라 이 구분이 없으면 "진짜 영업시간"과 "가짜"가 DB에서 섞인다.
+	 */
+	@Override
+	public PlaceHoursVendor vendor() {
+		return PlaceHoursVendor.MOCK;
 	}
 }
