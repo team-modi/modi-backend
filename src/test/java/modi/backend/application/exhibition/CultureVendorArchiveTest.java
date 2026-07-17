@@ -21,8 +21,11 @@ import modi.backend.domain.exhibition.CatalogExhibitionData;
 import modi.backend.domain.exhibition.CatalogListData;
 import modi.backend.domain.exhibition.CultureDetailResponse;
 import modi.backend.domain.exhibition.CultureDetailResponseRepository;
-import modi.backend.domain.exhibition.CultureDetailStatus;
 import modi.backend.domain.exhibition.CultureListResponse;
+import modi.backend.domain.exhibition.EnrichmentJob;
+import modi.backend.domain.exhibition.EnrichmentJobRepository;
+import modi.backend.domain.exhibition.JobStatus;
+import modi.backend.domain.exhibition.JobType;
 import modi.backend.domain.exhibition.CultureListResponseRepository;
 import modi.backend.domain.exhibition.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.ExhibitionCategory;
@@ -58,6 +61,9 @@ class CultureVendorArchiveTest {
 
 	@Autowired
 	CultureDetailResponseRepository cultureDetailResponseRepository;
+
+	@Autowired
+	EnrichmentJobRepository enrichmentJobRepository;
 
 	@MockitoBean
 	ExhibitionCatalogClient exhibitionCatalogClient;
@@ -144,8 +150,8 @@ class CultureVendorArchiveTest {
 	}
 
 	@Test
-	@DisplayName("상세 있음 — 상태 SUCCEEDED로 원본과 함께 기록된다")
-	void syncCatalog_상세있음_SUCCEEDED() {
+	@DisplayName("상세 있음 — 원본(payload)만 벤더층에 보관된다(순수 원본 보관소로 회귀)")
+	void syncCatalog_상세있음_원본보관() {
 		String externalId = nextId();
 		String detailPayload = detailPayload(externalId, "무료");
 		given(exhibitionCatalogClient.fetchAll())
@@ -154,17 +160,14 @@ class CultureVendorArchiveTest {
 
 		exhibitionFacade.syncCatalog();
 
+		// 상태머신(status/attempt/next_attempt)은 enrichment_job으로 이관됐다 — 벤더 테이블엔 무손실 원본만 남는다.
 		CultureDetailResponse row = detailRow(externalId);
-		assertThat(row.getStatus()).isEqualTo(CultureDetailStatus.SUCCEEDED);
 		assertThat(row.getPayload()).isEqualTo(detailPayload);
-		assertThat(row.getAttemptCount()).isEqualTo(1);
-		// 백오프 정책은 이 테이블이 대상 선별을 맡는 단계의 몫 — 지금 값을 지어내지 않는다.
-		assertThat(row.getNextAttemptAt()).isNull();
 	}
 
 	@Test
-	@DisplayName("원천에 상세 없음 — NO_DATA로 기록된다(현행 detail_synced_at만으론 SUCCEEDED와 구분 불가하던 상태)")
-	void syncCatalog_상세없음_NO_DATA() {
+	@DisplayName("원천에 상세 없음 — 남길 원본이 없어 벤더 행을 만들지 않는다(그 사실은 detail_synced_at이 안다)")
+	void syncCatalog_상세없음_행없음() {
 		String externalId = nextId();
 		given(exhibitionCatalogClient.fetchAll())
 				.willReturn(listData(List.of(listData(externalId, "상세 없는 전시", listPayload(externalId, "상세 없는 전시")))));
@@ -172,16 +175,14 @@ class CultureVendorArchiveTest {
 
 		exhibitionFacade.syncCatalog();
 
-		CultureDetailResponse row = detailRow(externalId);
-		assertThat(row.getStatus()).isEqualTo(CultureDetailStatus.NO_DATA);
-		assertThat(row.getPayload()).isNull();
-		// 도메인은 기존대로 "확인 완료"만 표기해 재조회를 막는다.
+		// 빈 응답은 보관할 원본이 없다 — 벤더 행 없음. 도메인은 기존대로 "확인 완료"만 표기해 재조회를 막는다.
+		assertThat(cultureDetailResponseRepository.findByExternalId(externalId)).isEmpty();
 		assertThat(exhibitionRepository.findByExternalId(externalId).orElseThrow().isDetailSynced()).isTrue();
 	}
 
 	@Test
-	@DisplayName("상세 호출 실패 — FAILED로 기록하고, 그 행만 연기하는 기존 동작은 그대로다")
-	void syncCatalog_상세실패_FAILED_기존동작보존() {
+	@DisplayName("상세 호출 실패 — DETAIL_SYNC 작업으로 재시도가 남고(현행 최대 갭 해소), 그 행만 연기하는 기존 동작은 그대로다")
+	void syncCatalog_상세실패_작업enqueue_기존동작보존() {
 		String externalId = nextId();
 		given(exhibitionCatalogClient.fetchAll())
 				.willReturn(listData(List.of(listData(externalId, "상세 실패 전시", listPayload(externalId, "상세 실패 전시")))));
@@ -193,10 +194,11 @@ class CultureVendorArchiveTest {
 		// 기존 동작: 불완전한 행을 적재하지 않고 이 행만 다음 주기로 연기한다.
 		assertThat(inserted).isZero();
 		assertThat(exhibitionRepository.findByExternalId(externalId)).isEmpty();
-		// 벤더층엔 "시도했고 실패했다"가 남는다 — 현행 스키마가 표현하지 못하던 사실이다.
-		CultureDetailResponse row = detailRow(externalId);
-		assertThat(row.getStatus()).isEqualTo(CultureDetailStatus.FAILED);
-		assertThat(row.getAttemptCount()).isEqualTo(1);
+		// 진행 상태·재시도는 이제 통합 작업큐가 안다 — 벤더 테이블엔 실패 원본을 남기지 않는다(순수 원본 보관소).
+		EnrichmentJob job = enrichmentJobRepository.findByJobTypeAndTargetKey(JobType.DETAIL_SYNC, externalId)
+				.orElseThrow();
+		assertThat(job.getStatus()).isEqualTo(JobStatus.PENDING);
+		assertThat(cultureDetailResponseRepository.findByExternalId(externalId)).isEmpty();
 		// 목록 원본은 상세 실패와 무관하게 남는다(상세보다 먼저 기록하므로).
 		assertThat(listRow(externalId)).isNotNull();
 	}

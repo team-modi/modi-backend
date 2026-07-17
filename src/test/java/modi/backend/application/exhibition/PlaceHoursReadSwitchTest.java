@@ -67,7 +67,7 @@ class PlaceHoursReadSwitchTest {
 		e.applyOperatingHours("레거시 09:00 ~ 17:00", LocalDateTime.now()); // exhibitions.operating_hours
 		exhibitionRepository.save(e);
 		placeHoursRepository.save(PlaceHours.first(e.getPlaceKey(), "매일 10:00 ~ 18:00\n월 휴무", // 정준층 = 진실 원천
-				PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.GOOGLE));
+				PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.GOOGLE, java.time.LocalDateTime.now()));
 
 		ExhibitionResult.Detail detail = exhibitionFacade.getDetail(
 				new ExhibitionCriteria.Detail(e.getId(), null));
@@ -97,7 +97,7 @@ class PlaceHoursReadSwitchTest {
 		Exhibition a = seedCatalogWithAddr(addr);
 		Exhibition b = seedCatalogWithAddr(addr);
 		placeHoursRepository.save(PlaceHours.first(a.getPlaceKey(), "매일 11:00 ~ 19:00",
-				PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.GOOGLE));
+				PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.GOOGLE, java.time.LocalDateTime.now()));
 
 		assertThat(detailOf(a).operatingHours()).isEqualTo("매일 11:00 ~ 19:00");
 		assertThat(detailOf(b).operatingHours()).isEqualTo("매일 11:00 ~ 19:00");
@@ -110,7 +110,7 @@ class PlaceHoursReadSwitchTest {
 		e.applyOperatingHours("레거시 값", LocalDateTime.now());
 		exhibitionRepository.save(e);
 		placeHoursRepository.save(PlaceHours.first(e.getPlaceKey(), "정준 값",
-				PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.UNKNOWN));
+				PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.UNKNOWN, java.time.LocalDateTime.now()));
 
 		ExhibitionResult.Detail detail = exhibitionFacade.getForSnapshot(e.getId(), null);
 
@@ -161,7 +161,7 @@ class PlaceHoursReadSwitchTest {
 		exhibitionRepository.save(e);
 		// 쓰기 이중화가 이미 계보와 함께 채워둔 행 — 백필이 이걸 UNKNOWN으로 덮으면 계보를 잃는다.
 		placeHoursRepository.save(PlaceHours.first(e.getPlaceKey(), "실호출 값",
-				PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.GOOGLE));
+				PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.GOOGLE, java.time.LocalDateTime.now()));
 
 		runV23();
 		runV23(); // 재실행해도 결과가 같아야 한다

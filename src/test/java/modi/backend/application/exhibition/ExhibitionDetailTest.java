@@ -53,7 +53,8 @@ class ExhibitionDetailTest {
 				mock(modi.backend.domain.exhibition.ExhibitionGenreRepository.class),
 				mock(modi.backend.domain.exhibition.CultureListResponseRepository.class),
 				mock(modi.backend.domain.exhibition.CultureDetailResponseRepository.class),
-				mock(modi.backend.domain.exhibition.SyncRunRepository.class));
+				mock(modi.backend.domain.exhibition.SyncRunRepository.class),
+				mock(EnrichmentJobFacade.class));
 		given(exhibitionRepository.save(any(Exhibition.class))).willAnswer(invocation -> invocation.getArgument(0));
 	}
 
