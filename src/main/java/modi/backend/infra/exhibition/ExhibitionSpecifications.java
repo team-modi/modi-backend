@@ -6,8 +6,14 @@ import java.util.List;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import modi.backend.domain.exhibition.Exhibition;
+import modi.backend.domain.exhibition.ExhibitionDetail;
+import modi.backend.domain.exhibition.ExhibitionPlace;
 import modi.backend.domain.exhibition.ExhibitionQuery;
 import modi.backend.domain.exhibition.ExhibitionType;
 
@@ -23,13 +29,13 @@ final class ExhibitionSpecifications {
 
 	/** 필터만(정렬·커서 경계 제외) — count·거리순 후보 조회용. */
 	static Specification<Exhibition> filter(ExhibitionQuery query) {
-		return (root, cq, cb) -> cb.and(filterPredicates(query, root, cb).toArray(Predicate[]::new));
+		return (root, cq, cb) -> cb.and(filterPredicates(query, root, cq, cb).toArray(Predicate[]::new));
 	}
 
 	/** 필터 + 키셋 경계 — 키셋 정렬(latest/ending/popular) 슬라이스 조회용. */
 	static Specification<Exhibition> slice(ExhibitionQuery query) {
 		return (root, cq, cb) -> {
-			List<Predicate> predicates = filterPredicates(query, root, cb);
+			List<Predicate> predicates = filterPredicates(query, root, cq, cb);
 			Predicate keyset = keyset(query, root, cb);
 			if (keyset != null) {
 				predicates.add(keyset);
@@ -38,8 +44,8 @@ final class ExhibitionSpecifications {
 		};
 	}
 
-	private static List<Predicate> filterPredicates(ExhibitionQuery query,
-			jakarta.persistence.criteria.Root<Exhibition> root, jakarta.persistence.criteria.CriteriaBuilder cb) {
+	private static List<Predicate> filterPredicates(ExhibitionQuery query, Root<Exhibition> root,
+			CriteriaQuery<?> cq, CriteriaBuilder cb) {
 		List<Predicate> predicates = new ArrayList<>();
 
 		// soft delete 제외
@@ -49,12 +55,16 @@ final class ExhibitionSpecifications {
 		// 탐색 목록에 노출하지 않는다 — 개인 전시는 내 기록/아카이브(및 상세 직접 접근)로만 다룬다.
 		predicates.add(cb.equal(root.get("type"), ExhibitionType.CATALOG));
 
-		// keyword: 전시명·전시장명 부분 일치(대소문자 무시). (작가명은 원천 미보유 — 04_전시_구현.md 참고)
+		// keyword: 전시명 부분 일치 또는 전시장명 부분 일치(대소문자 무시). 전시장명은 exhibition_place로 이동해
+		// 서브쿼리(exhibition_place_id in ...)로 잇는다(경계 넘는 조인 대신 ID 참조 유지).
 		if (query.keyword() != null && !query.keyword().isBlank()) {
 			String like = "%" + query.keyword().trim().toLowerCase() + "%";
+			Subquery<Long> placeSub = cq.subquery(Long.class);
+			Root<ExhibitionPlace> p = placeSub.from(ExhibitionPlace.class);
+			placeSub.select(p.get("id")).where(cb.like(cb.lower(p.get("name")), like));
 			predicates.add(cb.or(
 					cb.like(cb.lower(root.get("title")), like),
-					cb.like(cb.lower(cb.coalesce(root.get("place"), "")), like)));
+					root.get("exhibitionPlaceId").in(placeSub)));
 		}
 
 		// ongoingOn: 해당 날짜 진행 중. 시작/종료일이 없으면 각각 "이미 시작"/"아직 진행"으로 관대하게 취급.
@@ -67,21 +77,25 @@ final class ExhibitionSpecifications {
 					cb.greaterThanOrEqualTo(root.get("endDate"), query.ongoingOn())));
 		}
 
+		// region: 전시가 아니라 전시장의 속성으로 이동 → exhibition_place 서브쿼리로 필터한다.
 		if (query.regions() != null && !query.regions().isEmpty()) {
-			predicates.add(root.get("region").in(query.regions()));
+			Subquery<Long> regionSub = cq.subquery(Long.class);
+			Root<ExhibitionPlace> p = regionSub.from(ExhibitionPlace.class);
+			regionSub.select(p.get("id")).where(p.get("region").in(query.regions()));
+			predicates.add(root.get("exhibitionPlaceId").in(regionSub));
 		}
 		if (query.categories() != null && !query.categories().isEmpty()) {
 			predicates.add(root.get("category").in(query.categories()));
 		}
 
-		addSectionPredicate(query, root, cb, predicates);
+		addSectionPredicate(query, root, cq, cb, predicates);
 
 		return predicates;
 	}
 
 	/** 섹션 필터 — ending-soon(종료일 창)·opening-this-month(시작일 창)·free(무료 근사 규칙). */
-	private static void addSectionPredicate(ExhibitionQuery query, jakarta.persistence.criteria.Root<Exhibition> root,
-			jakarta.persistence.criteria.CriteriaBuilder cb, List<Predicate> predicates) {
+	private static void addSectionPredicate(ExhibitionQuery query, Root<Exhibition> root,
+			CriteriaQuery<?> cq, CriteriaBuilder cb, List<Predicate> predicates) {
 		if (query.section() == null) {
 			return;
 		}
@@ -90,11 +104,16 @@ final class ExhibitionSpecifications {
 					query.sectionFrom(), query.sectionTo()));
 			case OPENING_THIS_MONTH -> predicates.add(cb.between(root.<LocalDate>get("startDate"),
 					query.sectionFrom(), query.sectionTo()));
-			// C-6 무료 규칙의 SQL 근사 — "무료" 포함 또는 정확히 "0원". ("20,000원"이 '%0원%'에 걸리는 오탐을 피해 like가 아닌 equal.)
-			// 완전한 자릿수 규칙(금액이 0뿐)은 필드 계산(Exhibition.isFree)이 담당하며, 섹션 필터는 이 근사로 충분히 일관된다.
-			case FREE -> predicates.add(cb.or(
-					cb.like(cb.lower(root.get("price")), "%무료%"),
-					cb.equal(root.get("price"), "0원")));
+			// C-6 무료 규칙의 SQL 근사 — "무료" 포함 또는 정확히 "0원". 가격은 exhibition_detail로 이동해
+			// 서브쿼리(id in select exhibition_id ...)로 잇는다. ("20,000원"이 '%0원%'에 걸리는 오탐을 피해 like가 아닌 equal.)
+			case FREE -> {
+				Subquery<Long> detailSub = cq.subquery(Long.class);
+				Root<ExhibitionDetail> d = detailSub.from(ExhibitionDetail.class);
+				detailSub.select(d.get("exhibitionId")).where(cb.or(
+						cb.like(cb.lower(d.get("price")), "%무료%"),
+						cb.equal(d.get("price"), "0원")));
+				predicates.add(root.get("id").in(detailSub));
+			}
 		}
 	}
 

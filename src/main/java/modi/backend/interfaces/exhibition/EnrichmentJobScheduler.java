@@ -2,6 +2,7 @@ package modi.backend.interfaces.exhibition;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -30,10 +31,20 @@ public class EnrichmentJobScheduler {
 	private final DetailEnricher detailEnricher;
 	private final PlaceHoursRefresher placeHoursRefresher;
 
+	/**
+	 * 로컬 시드 모드면 드레인도 건너뛴다. 시드는 job을 만들지 않아 빈 큐 폴링만 돌아 무해하지만, "로컬은 외부 보강을 하지
+	 * 않는다"는 의도를 명확히 하려고 명시적으로 skip한다(다른 스케줄러·BootSync와 동일 게이트).
+	 */
+	@Value("${app.local-seed.enabled:false}")
+	private boolean localSeedEnabled;
+
 	/** 주기적으로 상세 재시도·영업시간 재검증 작업을 드레인한다(at-least-once — 재시작 후에도 남은 작업이 이어서 처리됨). */
 	@Scheduled(fixedDelayString = "${app.exhibition.enrichment.job-poll-interval-ms:60000}",
 			initialDelayString = "${app.exhibition.enrichment.job-poll-interval-ms:60000}")
 	public void drainJobs() {
+		if (localSeedEnabled) {
+			return; // 로컬 시드 모드 — 외부 보강 큐 드레인 안 함(로그 폭주 방지: 60초 폴링이라 침묵).
+		}
 		try {
 			detailEnricher.enrichDetails();
 		} catch (RuntimeException e) {

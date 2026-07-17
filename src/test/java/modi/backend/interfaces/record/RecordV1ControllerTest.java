@@ -61,6 +61,9 @@ class RecordV1ControllerTest {
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
+	modi.backend.domain.exhibition.ExhibitionPlaceRepository exhibitionPlaceRepository;
+
+	@Autowired
 	ExhibitionFacade exhibitionFacade;
 
 	// 스냅샷 독립성 e2e(Task 14)에서만 사용 — CATALOG 재동기화로 원본 전시 제목을 실제로 바꿔보기 위해 수집 포트를 목으로 둔다.
@@ -84,9 +87,10 @@ class RecordV1ControllerTest {
 		bearerUser1 = "Bearer " + tokenProvider.issue(u1, "kakao").accessToken();
 		bearerUser2 = "Bearer " + tokenProvider.issue(u2, "kakao").accessToken();
 
+		Long placeId = modi.backend.domain.exhibition.ExhibitionTestFactory.placeId(
+				exhibitionPlaceRepository, "예술의전당", null);
 		Exhibition exhibition = exhibitionRepository.save(Exhibition.createCatalog(
-				"RECORD-TEST-" + System.nanoTime(), "모네전", "예술의전당", null, null, null, null, null, null, null,
-				null, null, null, null, null, null, null, null));
+				"RECORD-TEST-" + System.nanoTime(), "모네전", placeId, null, null, null, null, null, "기관"));
 		exhibitionId = exhibition.getId();
 	}
 

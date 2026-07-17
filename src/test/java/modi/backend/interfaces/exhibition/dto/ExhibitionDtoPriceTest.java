@@ -7,10 +7,12 @@ import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
+
 import modi.backend.application.exhibition.ExhibitionResult;
 import modi.backend.domain.exhibition.Exhibition;
 import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionRegion;
+import modi.backend.domain.exhibition.ExhibitionDetail;
 
 /**
  * 상세 응답 price 폴백 검증 — 원천에 가격이 없으면(null/공백) "관람료 정보 없음"으로 노출하고, 값이 있으면 그대로 보낸다.
@@ -36,10 +38,10 @@ class ExhibitionDtoPriceTest {
 
 	private ExhibitionResult.Detail detailWithPrice(String price) {
 		LocalDate today = LocalDate.now();
-		Exhibition exhibition = Exhibition.createCatalog("CAT-PRICE", "제목", "장소", today.minusDays(1),
-				today.plusDays(10), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, "설명", null,
-				price, null, "기관", null, null, null, "전시", "서울");
-		// 장르·영업시간(정준층)은 이 테스트의 관심사가 아니다 — price 폴백만 본다.
-		return ExhibitionResult.Detail.from(exhibition, null, null, false, false);
+		Exhibition exhibition = Exhibition.createCatalog("CAT-PRICE", "제목", 1L, today.minusDays(1),
+				today.plusDays(10), ExhibitionCategory.PAINTING, null, null, "기관");
+		// price는 상세 satellite에서 온다. 장소·영업시간·장르는 이 테스트의 관심사가 아니다 — price 폴백만 본다.
+		ExhibitionDetail detail = ExhibitionDetail.create(1L, price, "설명", null, LocalDateTime.now());
+		return ExhibitionResult.Detail.from(exhibition, null, detail, null, java.util.List.of(), null, false, false);
 	}
 }

@@ -9,11 +9,18 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import modi.backend.application.exhibition.ExhibitionResult;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.exhibition.Exhibition;
+import modi.backend.domain.exhibition.ExhibitionDetail;
+import modi.backend.domain.exhibition.ExhibitionDetailRepository;
 import modi.backend.domain.exhibition.ExhibitionErrorCode;
+import modi.backend.domain.exhibition.ExhibitionPlace;
+import modi.backend.domain.exhibition.ExhibitionPlaceRepository;
 import modi.backend.domain.exhibition.ExhibitionRepository;
 import modi.backend.support.error.CoreException;
 import modi.backend.support.response.Cursor;
@@ -33,6 +40,8 @@ public class BookmarkFacade {
 
 	private final ExhibitionBookmarkRepository exhibitionBookmarkRepository;
 	private final ExhibitionRepository exhibitionRepository;
+	private final ExhibitionPlaceRepository exhibitionPlaceRepository;
+	private final ExhibitionDetailRepository exhibitionDetailRepository;
 
 	/** 관심 등록(6.1, 멱등). 없는 전시면 404. 반환은 항상 bookmarked=true. */
 	@Transactional
@@ -74,8 +83,19 @@ public class BookmarkFacade {
 		List<Exhibition> page = start >= ordered.size() ? List.of() : ordered.subList(start, end);
 		boolean hasNext = end < ordered.size();
 
+		Map<Long, ExhibitionPlace> placesById = exhibitionPlaceRepository.findAllByIds(
+				page.stream().map(Exhibition::getExhibitionPlaceId).collect(Collectors.toSet())).stream()
+				.collect(Collectors.toMap(ExhibitionPlace::getId, p -> p, (a, b) -> a));
+		Map<Long, ExhibitionDetail> detailsByExhibitionId = exhibitionDetailRepository.findAllByExhibitionIds(
+				page.stream().map(Exhibition::getId).toList()).stream()
+				.collect(Collectors.toMap(ExhibitionDetail::getExhibitionId, d -> d, (a, b) -> a));
 		List<ExhibitionResult.ListItem> content = page.stream()
-				.map(e -> ExhibitionResult.ListItem.from(e, today, true))
+				.map(e -> {
+					ExhibitionDetail detail = detailsByExhibitionId.get(e.getId());
+					boolean free = detail != null && detail.isFree();
+					return ExhibitionResult.ListItem.from(e, placesById.get(e.getExhibitionPlaceId()), today, free,
+							true);
+				})
 				.toList();
 		String nextCursor = null;
 		if (hasNext) {

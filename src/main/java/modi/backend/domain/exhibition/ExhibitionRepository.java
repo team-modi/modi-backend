@@ -37,24 +37,11 @@ public interface ExhibitionRepository {
 	/** 여러 원천 식별자로 CATALOG 전시를 일괄 조회(작업큐 대상 해소용, 살아있는 행만). 빈 입력이면 빈 목록. */
 	List<Exhibition> findAllByExternalIds(Collection<String> externalIds);
 
-	/** 같은 장소키를 공유하는 CATALOG 전시들(영업시간 재검증 작업의 대상 장소 해소용, 살아있는 행만). */
-	List<Exhibition> findCatalogByPlaceKey(String placeKey);
-
 	/**
 	 * 장르 초기화 백필용 — 아직 장르가 없는 CATALOG(공공데이터) 전시를 최대 {@code limit}건 조회(살아있는 행만).
 	 * "장르가 없다"의 판정 기준(어느 저장 위치를 보는가)은 구현 세부라 어댑터가 정한다.
 	 */
 	List<Exhibition> findCatalogWithoutGenre(int limit);
-
-	/**
-	 * 영업시간 보강 대상 — 주소(placeAddr)가 있고 아직 조회 안 했거나({@code operatingHoursSyncedAt IS NULL})
-	 * {@code staleBefore}보다 오래 전에 조회된 CATALOG 전시를 최대 {@code limit}건 조회(살아있는 행만).
-	 * 같은 장소를 묶기 쉽도록 placeAddr·id 순으로 정렬해 반환한다.
-	 */
-	List<Exhibition> findCatalogNeedingOperatingHours(LocalDateTime staleBefore, int limit);
-
-	/** 설명 재파싱용 — 설명이 있는 CATALOG 전시를 모두 조회(살아있는 행만). 재파싱 대상 판단은 호출부(멱등). */
-	List<Exhibition> findCatalogWithDescription();
 
 	/**
 	 * 홈 배너용(03_전시.md E-10) — {@code onDate}에 진행 중(startDate ≤ onDate ≤ endDate)인 CATALOG 전시를

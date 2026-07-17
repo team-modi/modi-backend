@@ -7,5 +7,5 @@ public interface GooglePlaceResponseRepository {
 
 	GooglePlaceResponse save(GooglePlaceResponse googlePlaceResponse);
 
-	Optional<GooglePlaceResponse> findByPlaceKey(String placeKey);
+	Optional<GooglePlaceResponse> findByExhibitionPlaceId(Long exhibitionPlaceId);
 }

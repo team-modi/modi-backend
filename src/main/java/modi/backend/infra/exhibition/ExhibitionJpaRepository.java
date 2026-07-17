@@ -38,23 +38,6 @@ public interface ExhibitionJpaRepository
 			@org.springframework.data.repository.query.Param("type") ExhibitionType type, Pageable pageable);
 
 	/**
-	 * 영업시간 보강 대상 — placeAddr 있고 미조회(operatingHoursSyncedAt IS NULL) 또는 staleBefore 이전 조회된 CATALOG(살아있는 행만).
-	 * "IS NULL OR <" 조건이라 파생 쿼리로 표현이 어려워 JPQL로 명시한다. placeAddr·id 순 정렬(같은 장소 그룹화 용이).
-	 */
-	@org.springframework.data.jpa.repository.Query("""
-			select e from Exhibition e
-			where e.type = :type and e.deletedAt is null and e.placeAddr is not null
-			  and (e.operatingHoursSyncedAt is null or e.operatingHoursSyncedAt < :staleBefore)
-			order by e.placeAddr asc, e.id asc""")
-	List<Exhibition> findCatalogNeedingOperatingHours(
-			@org.springframework.data.repository.query.Param("type") ExhibitionType type,
-			@org.springframework.data.repository.query.Param("staleBefore") java.time.LocalDateTime staleBefore,
-			Pageable pageable);
-
-	/** 설명이 있는 CATALOG 전체 조회(설명 재파싱 대상, 살아있는 행만). */
-	List<Exhibition> findByTypeAndDescriptionIsNotNullAndDeletedAtIsNull(ExhibitionType type);
-
-	/**
 	 * 홈 배너용 — 진행 중(startDate ≤ onDate ≤ endDate)인 CATALOG를 조회수 내림차순으로 페이지 크기만큼 조회(살아있는 행만).
 	 * 진행 중 조건은 두 날짜 파라미터에 동일한 오늘 값을 넘겨 표현한다.
 	 */
@@ -76,7 +59,4 @@ public interface ExhibitionJpaRepository
 	/** 여러 원천 식별자로 CATALOG 전시를 일괄 조회(작업큐 대상 해소용, 살아있는 행만). */
 	List<Exhibition> findByTypeAndExternalIdInAndDeletedAtIsNull(ExhibitionType type,
 			java.util.Collection<String> externalIds);
-
-	/** 같은 장소키를 공유하는 CATALOG 전시들(영업시간 재검증 작업의 대상 장소 해소용, 살아있는 행만). */
-	List<Exhibition> findByTypeAndPlaceKeyAndDeletedAtIsNull(ExhibitionType type, String placeKey);
 }

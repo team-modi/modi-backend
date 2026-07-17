@@ -75,29 +75,10 @@ public class ExhibitionRepositoryImpl implements ExhibitionRepository {
 	}
 
 	@Override
-	public List<Exhibition> findCatalogByPlaceKey(String placeKey) {
-		if (placeKey == null || placeKey.isBlank()) {
-			return List.of();
-		}
-		return jpaRepository.findByTypeAndPlaceKeyAndDeletedAtIsNull(ExhibitionType.CATALOG, placeKey);
-	}
-
-	@Override
 	public List<Exhibition> findCatalogWithoutGenre(int limit) {
 		// "장르 없음"의 판정 위치가 정준층(exhibition_genre)으로 옮겨졌다 — 포트 메서드명(도메인 언어)은 그대로다.
 		return jpaRepository.findCatalogWithoutCanonicalGenre(
 				ExhibitionType.CATALOG, PageRequest.of(0, Math.max(1, limit)));
-	}
-
-	@Override
-	public List<Exhibition> findCatalogNeedingOperatingHours(java.time.LocalDateTime staleBefore, int limit) {
-		return jpaRepository.findCatalogNeedingOperatingHours(
-				ExhibitionType.CATALOG, staleBefore, PageRequest.of(0, Math.max(1, limit)));
-	}
-
-	@Override
-	public List<Exhibition> findCatalogWithDescription() {
-		return jpaRepository.findByTypeAndDescriptionIsNotNullAndDeletedAtIsNull(ExhibitionType.CATALOG);
 	}
 
 	@Override

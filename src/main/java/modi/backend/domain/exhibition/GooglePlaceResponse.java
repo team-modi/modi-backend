@@ -42,8 +42,8 @@ public class GooglePlaceResponse {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@Column(name = "place_key", nullable = false, length = 500)
-	private String placeKey;
+	@Column(name = "exhibition_place_id", nullable = false)
+	private Long exhibitionPlaceId;
 
 	/** 구글 Place 응답 원본 JSON. */
 	@Column(name = "raw_json", columnDefinition = "text")
@@ -52,14 +52,14 @@ public class GooglePlaceResponse {
 	@Column(name = "fetched_at")
 	private LocalDateTime fetchedAt;
 
-	private GooglePlaceResponse(String placeKey, String rawJson, LocalDateTime fetchedAt) {
-		this.placeKey = placeKey;
+	private GooglePlaceResponse(Long exhibitionPlaceId, String rawJson, LocalDateTime fetchedAt) {
+		this.exhibitionPlaceId = exhibitionPlaceId;
 		this.rawJson = rawJson;
 		this.fetchedAt = fetchedAt;
 	}
 
-	public static GooglePlaceResponse first(String placeKey, String rawJson, LocalDateTime fetchedAt) {
-		return new GooglePlaceResponse(placeKey, rawJson, fetchedAt);
+	public static GooglePlaceResponse first(Long exhibitionPlaceId, String rawJson, LocalDateTime fetchedAt) {
+		return new GooglePlaceResponse(exhibitionPlaceId, rawJson, fetchedAt);
 	}
 
 	/** 재조회 결과로 원본을 갱신한다(멱등 upsert — 같은 장소는 항상 1행). */

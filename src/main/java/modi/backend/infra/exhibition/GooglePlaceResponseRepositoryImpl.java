@@ -20,10 +20,10 @@ public class GooglePlaceResponseRepositoryImpl implements GooglePlaceResponseRep
 	}
 
 	@Override
-	public Optional<GooglePlaceResponse> findByPlaceKey(String placeKey) {
-		if (placeKey == null) {
+	public Optional<GooglePlaceResponse> findByExhibitionPlaceId(Long exhibitionPlaceId) {
+		if (exhibitionPlaceId == null) {
 			return Optional.empty();
 		}
-		return jpaRepository.findByPlaceKey(placeKey);
+		return jpaRepository.findByExhibitionPlaceId(exhibitionPlaceId);
 	}
 }

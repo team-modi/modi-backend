@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import modi.backend.config.EnrichmentProperties;
 import modi.backend.domain.exhibition.EnrichmentJob;
 import modi.backend.domain.exhibition.EnrichmentJobRepository;
+import modi.backend.domain.exhibition.ExhibitionPlace;
+import modi.backend.domain.exhibition.ExhibitionPlaceRepository;
 import modi.backend.domain.exhibition.JobFailureType;
 import modi.backend.domain.exhibition.JobType;
 import modi.backend.domain.exhibition.PlaceHours;
@@ -30,6 +32,8 @@ public class EnrichmentJobFacade {
 	private final EnrichmentJobRepository enrichmentJobRepository;
 	/** 이벤트 구동 영업시간 재검증 가드(설계 §4-1)를 위해 정준 영업시간 테이블을 읽는다. */
 	private final PlaceHoursRepository placeHoursRepository;
+	/** target_key(=exhibition_place.place_key, 정규화 이름 — ADR-07)로 전시장을 해소해 정준 영업시간을 찾는다. */
+	private final ExhibitionPlaceRepository exhibitionPlaceRepository;
 	private final EnrichmentProperties properties;
 
 	/**
@@ -69,7 +73,12 @@ public class EnrichmentJobFacade {
 		if (placeKey == null || placeKey.isBlank()) {
 			return;
 		}
-		PlaceHours placeHours = placeHoursRepository.findByPlaceKey(placeKey).orElse(null);
+		// target_key는 exhibition_place.place_key(정규화 이름)다 — 전시장을 해소해 그 장소의 정준 영업시간을 본다.
+		ExhibitionPlace place = exhibitionPlaceRepository.findByPlaceKey(placeKey).orElse(null);
+		if (place == null) {
+			return; // 아직 그 이름의 전시장이 없다(비정상 유입) — 재검증 대상 아님.
+		}
+		PlaceHours placeHours = placeHoursRepository.findByExhibitionPlaceId(place.getId()).orElse(null);
 		if (placeHours == null) {
 			return; // 가드 1: 최초 조회 전 장소는 재검증 이벤트 대상이 아니다.
 		}

@@ -10,12 +10,22 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+
 import lombok.RequiredArgsConstructor;
 import modi.backend.domain.exhibition.Exhibition;
 import modi.backend.domain.exhibition.ExhibitionCategory;
+import modi.backend.domain.exhibition.ExhibitionDetail;
+import modi.backend.domain.exhibition.ExhibitionDetailRepository;
+import modi.backend.domain.exhibition.ExhibitionPlace;
+import modi.backend.domain.exhibition.ExhibitionPlaceRepository;
 import modi.backend.domain.exhibition.ExhibitionQuery;
 import modi.backend.domain.exhibition.ExhibitionRegion;
 import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.PlaceHours;
+import modi.backend.domain.exhibition.PlaceHoursRepository;
+import modi.backend.domain.exhibition.PlaceHoursStatus;
+import modi.backend.domain.exhibition.PlaceHoursVendor;
 import modi.backend.support.time.AppTime;
 
 /**
@@ -35,6 +45,9 @@ public class ExhibitionDemoSeeder implements ApplicationRunner {
 	private static final String REALM_NAME = "전시";
 
 	private final ExhibitionRepository exhibitionRepository;
+	private final ExhibitionPlaceRepository exhibitionPlaceRepository;
+	private final ExhibitionDetailRepository exhibitionDetailRepository;
+	private final PlaceHoursRepository placeHoursRepository;
 
 	@Override
 	public void run(ApplicationArguments args) {
@@ -99,10 +112,26 @@ public class ExhibitionDemoSeeder implements ApplicationRunner {
 						"10:00~19:00 (월요일 휴관)", "무료",
 						"https://example.com/mock/past", 126.972000, 37.556000, "중구"));
 
-		rows.forEach(r -> exhibitionRepository.save(Exhibition.createCatalog(
-				r.externalId(), r.title(), r.place(), r.startDate(), r.endDate(), r.region(), r.category(),
-				r.posterUrl(), r.description(), r.operatingHours(), r.price(), r.detailUrl(), SERVICE_NAME,
-				r.gpsX(), r.gpsY(), r.sigungu(), REALM_NAME, areaTextFor(r.region()))));
+		LocalDateTime now = LocalDateTime.now();
+		rows.forEach(r -> {
+			// 전시장 resolve-or-create(정규화 이름) — 데모라 신설 위주지만 같은 이름은 하나로 수렴한다.
+			ExhibitionPlace place = exhibitionPlaceRepository.findByPlaceKey(
+					modi.backend.domain.exhibition.PlaceKey.of(r.place()))
+					.orElseGet(() -> exhibitionPlaceRepository.save(ExhibitionPlace.createFromList(
+							r.place(), r.region(), r.sigungu(), r.gpsX(), r.gpsY())));
+			place.enrichDetail(null, null, r.detailUrl());
+			exhibitionPlaceRepository.save(place);
+			Exhibition saved = exhibitionRepository.save(Exhibition.createCatalog(
+					r.externalId(), r.title(), place.getId(), r.startDate(), r.endDate(), r.category(),
+					r.posterUrl(), r.detailUrl(), SERVICE_NAME));
+			// 상세 satellite(price·description·img) + 영업시간 정준행(operatingHours) — 응답 전 필드가 채워지게.
+			exhibitionDetailRepository.save(ExhibitionDetail.create(saved.getId(), r.price(), r.description(),
+					r.posterUrl(), now));
+			if (placeHoursRepository.findByExhibitionPlaceId(place.getId()).isEmpty()) {
+				placeHoursRepository.save(PlaceHours.first(place.getId(), r.operatingHours(),
+						PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.MOCK, now));
+			}
+		});
 		log.info("데모 시드: 표본 전시 {}건 적재 완료(공공데이터 기반 {}건 + MOCK 3건, 전 필드 채움)",
 				rows.size(), rows.size() - 3);
 	}

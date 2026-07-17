@@ -22,19 +22,19 @@ public class PlaceHoursRepositoryImpl implements PlaceHoursRepository {
 	}
 
 	@Override
-	public Optional<PlaceHours> findByPlaceKey(String placeKey) {
-		if (placeKey == null) {
+	public Optional<PlaceHours> findByExhibitionPlaceId(Long exhibitionPlaceId) {
+		if (exhibitionPlaceId == null) {
 			return Optional.empty();
 		}
-		return jpaRepository.findByPlaceKey(placeKey);
+		return jpaRepository.findByExhibitionPlaceId(exhibitionPlaceId);
 	}
 
 	@Override
-	public List<PlaceHours> findAllByPlaceKeys(Collection<String> placeKeys) {
+	public List<PlaceHours> findAllByExhibitionPlaceIds(Collection<Long> exhibitionPlaceIds) {
 		// 빈 컬렉션에 IN () 을 던지면 DB마다 동작이 갈린다 — 호출부가 방어하지 않아도 되게 여기서 막는다.
-		if (placeKeys == null || placeKeys.isEmpty()) {
+		if (exhibitionPlaceIds == null || exhibitionPlaceIds.isEmpty()) {
 			return List.of();
 		}
-		return jpaRepository.findAllByPlaceKeyIn(placeKeys);
+		return jpaRepository.findAllByExhibitionPlaceIdIn(exhibitionPlaceIds);
 	}
 }

@@ -1,8 +1,6 @@
 package modi.backend.domain.exhibition;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 
 import org.hibernate.annotations.DynamicUpdate;
@@ -20,17 +18,22 @@ import modi.backend.support.error.CoreException;
 import modi.backend.support.error.ErrorType;
 
 /**
- * 전시(애그리거트 루트). 두 출처를 하나의 테이블로 다룬다(03_전시.md 결정사항 — CUSTOM 독립 엔티티 모델링).
+ * 전시(애그리거트 루트). 두 출처를 하나의 테이블로 다룬다(CUSTOM 독립 엔티티 모델링).
  * <ul>
  *   <li>CATALOG: 외부 전시 API에서 동기화. {@code externalId}(원천 seq)로 upsert, {@code ownerId=null} → 전체 공개.</li>
  *   <li>CUSTOM: 사용자가 직접 등록. {@code ownerId}=등록자 → 등록자 본인에게만 노출.</li>
  * </ul>
- * 상태 변경은 이 Entity 메서드 안에서만 한다(Facade는 load·조율·save). id·시각은 {@link BaseEntity}.
+ *
+ * <p><b>코어는 생성 시점에 완결된다</b>(ADR-02·03): 전 컬럼이 목록(list) 소스에서 오거나 등록 입력이라 생성과 동시에 확정된다.
+ * 지연 도착 정보는 집합체 밖으로 나갔다 — 장소(name/region/gps/주소)는 {@link ExhibitionPlace}(N:1), 상세(price/description/
+ * img)는 {@link ExhibitionDetail}(1:1), 영업시간은 {@link PlaceHours}, 장르는 {@link ExhibitionGenre}, 작가는
+ * {@link Artist}+{@link ExhibitionArtist}(N:M). "부재"는 코어의 null이 아니라 <b>연관의 부재</b>로 표현한다.
+ *
+ * <p>의도된 판별 null은 둘뿐이다: {@code ownerId}(CUSTOM만), {@code externalId}·{@code detailUrl}·{@code serviceName}
+ * (CATALOG만 — 목록 소스라 생성 시점 확정, ADR-02 "부재는 타입으로"). 상태 변경은 이 Entity 메서드 안에서만 한다.
  */
 @Entity
 @Table(name = "exhibitions")
-// 변경된 컬럼만 UPDATE — 보강(장르·상세)과 조회수 증가 등이 같은 행을 짧은 시간차로
-// 갱신할 때 서로의 전체-컬럼 UPDATE가 상대 필드를 덮어쓰는 lost update를 막는다(@Version 미도입 환경 방어).
 @DynamicUpdate
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -42,19 +45,20 @@ public class Exhibition extends BaseEntity {
 	@Column(nullable = false, length = 20)
 	private ExhibitionType type;
 
-	/** 외부 전시 API의 원천 식별자(seq). CATALOG 동기화 upsert 기준키. CUSTOM은 null. */
+	/** 외부 전시 API의 원천 식별자(seq). CATALOG 동기화 upsert 기준키. CUSTOM은 null(의도된 판별 null). */
 	@Column(name = "external_id", length = 100)
 	private String externalId;
 
-	/** CUSTOM 전시의 등록자. CATALOG는 null(공개). */
+	/** CUSTOM 전시의 등록자. CATALOG는 null(공개, 의도된 판별 null). */
 	@Column(name = "owner_id")
 	private Long ownerId;
 
 	@Column(nullable = false, length = TITLE_MAX_LENGTH)
 	private String title;
 
-	@Column(length = 200)
-	private String place;
+	/** 전시장(N:1) 참조 — 경계 넘는 FK 아님, ID 논리 참조. 생성 시점 확정이라 NOT NULL(ADR-05·06). */
+	@Column(name = "exhibition_place_id", nullable = false)
+	private Long exhibitionPlaceId;
 
 	@Column(name = "start_date")
 	private LocalDate startDate;
@@ -64,231 +68,82 @@ public class Exhibition extends BaseEntity {
 
 	@Enumerated(EnumType.STRING)
 	@Column(length = 20)
-	private ExhibitionRegion region;
-
-	@Enumerated(EnumType.STRING)
-	@Column(length = 20)
 	private ExhibitionCategory category;
 
-	/** 전시 형태(개인전/단체전/기획전/아트페어). CUSTOM 등록 시 선택. CATALOG는 null. */
+	/** 전시 형태(개인전/단체전/기획전/아트페어). CUSTOM 등록 시 선택. CATALOG는 null(원천 미보유). */
 	@Enumerated(EnumType.STRING)
 	@Column(length = 20)
 	private ExhibitionFormat format;
 
-	/** 참여 작가·주최명(예: "김선영"). CUSTOM 등록 시 입력. */
-	@Column(length = 100)
-	private String artist;
-
+	/** 포스터 이미지 URL(목록 thumbnail 소스 — 코어 잔류, 설계 §1 교정). 없으면 null. */
 	@Column(name = "poster_url", length = 2048)
 	private String posterUrl;
 
-	@Column(columnDefinition = "text")
-	private String description;
-
-	/** 운영 시간(예: "10:00-18:00(월요일 휴관)"). 데이터 있을 때만. */
-	@Column(name = "operating_hours", length = 500)
-	private String operatingHours;
-
-	/** 관람료(예: "성인 20,000원"). 데이터 있을 때만. */
-	@Column(length = 500)
-	private String price;
-
-	/** 원문 상세 페이지 링크. */
+	/** 원문 상세 페이지 링크. CATALOG 목록 소스, CUSTOM은 null. */
 	@Column(name = "detail_url", length = 2048)
 	private String detailUrl;
 
-	/** 제공(연계) 기관명. */
+	/** 제공(연계) 기관명. CATALOG 목록 소스, CUSTOM은 null. */
 	@Column(name = "service_name", length = 200)
 	private String serviceName;
-
-	@Column(name = "gps_x")
-	private Double gpsX;
-
-	@Column(name = "gps_y")
-	private Double gpsY;
-
-	/** realmName 원문(예 "전시"). API 응답 필드를 누락 없이 영속(저장 정책). */
-	@Column(name = "realm_name", length = 50)
-	private String realmName;
-
-	/** area 원문(region enum 파생 전 원본 보존). */
-	@Column(name = "area_text", length = 50)
-	private String areaText;
-
-	@Column(length = 50)
-	private String sigungu;
-
-	/** 상세 지연수집 필드(상세 진입 시 채운다) — 장소 상세 주소. */
-	@Column(name = "place_addr", length = 500)
-	private String placeAddr;
-
-	/**
-	 * 정준층({@code place_hours})과 이 전시를 잇는 장소 키 — {@link PlaceKey#of}가 {@code placeAddr}에서 파생한다
-	 * (지금은 원문 그대로). 산출 지점이 한 곳이라 나중에 주소 정규화를 넣을 때 그 함수만 바꾸면 된다.
-	 */
-	@Column(name = "place_key", length = 500)
-	private String placeKey;
-
-	@Column(length = 100)
-	private String phone;
-
-	@Column(name = "place_url", length = 2048)
-	private String placeUrl;
-
-	@Column(name = "img_url", length = 2048)
-	private String imgUrl;
-
-	@Column(name = "place_seq", length = 100)
-	private String placeSeq;
-
-	/** 상세 필드가 마지막으로 동기화된 시각. null이면 아직 상세를 수집하지 않은 상태. */
-	@Column(name = "detail_synced_at")
-	private LocalDateTime detailSyncedAt;
-
-	/**
-	 * 영업시간({@code operatingHours})을 구글 Places로 마지막으로 조회 시도한 시각. null이면 아직 미조회.
-	 * 대상 선별(미조회·만료)과 실패 조회 백오프(미발견도 시각을 남겨 매일 재조회하지 않음)에 쓴다. {@code operatingHours} 값 자체와는 별개.
-	 */
-	@Column(name = "operating_hours_synced_at")
-	private LocalDateTime operatingHoursSyncedAt;
 
 	/** 우리 앱 내 조회수(인기순 정렬용). 외부 API의 조회수와 별개. */
 	@Column(name = "our_view_count", nullable = false)
 	private long ourViewCount = 0;
 
-	// genre_keyword 레거시 컬럼은 7단계(V26)에서 제거됨 — 진실 원천은 정준층 exhibition_genre다(읽기·선별·백필 전부 이관 완료).
-
-	private Exhibition(ExhibitionType type, String externalId, Long ownerId, String title, String place,
-			LocalDate startDate, LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category,
-			ExhibitionFormat format, String artist, String posterUrl, String description, String operatingHours,
-			String price, String detailUrl, String serviceName, Double gpsX, Double gpsY, String sigungu,
-			String realmName, String areaText) {
+	private Exhibition(ExhibitionType type, String externalId, Long ownerId, String title, Long exhibitionPlaceId,
+			LocalDate startDate, LocalDate endDate, ExhibitionCategory category, ExhibitionFormat format,
+			String artist, String posterUrl, String detailUrl, String serviceName) {
 		this.type = type;
 		this.externalId = externalId;
 		this.ownerId = ownerId;
 		this.title = requireTitle(title);
-		this.place = place;
+		this.exhibitionPlaceId = exhibitionPlaceId;
 		this.startDate = startDate;
 		this.endDate = endDate;
-		this.region = region;
 		this.category = category;
 		this.format = format;
-		this.artist = artist;
 		this.posterUrl = posterUrl;
-		this.description = description;
-		this.operatingHours = operatingHours;
-		this.price = price;
 		this.detailUrl = detailUrl;
 		this.serviceName = serviceName;
-		this.gpsX = gpsX;
-		this.gpsY = gpsY;
-		this.sigungu = sigungu;
-		this.realmName = realmName;
-		this.areaText = areaText;
 		validatePeriod();
-		validateSoloArtist();
+		validateSoloArtist(format, artist);
 	}
 
 	/**
-	 * 사용자 개인 전시(CUSTOM) 등록. 제목 필수, 기간 {@code RULE: 전시 기간}·{@code RULE: 개인전 작가} 검증.
-	 * format·artist는 선택이나 {@code format=SOLO}면 artist 필수.
-	 * <p>장르는 이 엔티티에 저장하지 않는다 — 진실 원천은 정준층 {@link ExhibitionGenre}이고, 등록 유스케이스가
-	 * 전시 저장 후 별도로 정준층에 남긴다({@code ExhibitionFacade.registerCustom}). 7단계에서 레거시 컬럼을 제거했다.
+	 * 사용자 개인 전시(CUSTOM) 등록. 제목 필수, 기간·개인전 작가 검증. {@code exhibitionPlaceId}는 Facade가 전시장을
+	 * resolve-or-create(정규화 이름)해 넘긴다. {@code artist}는 SOLO 검증에만 쓰고 코어에 저장하지 않는다 —
+	 * 작가는 {@link Artist}+{@link ExhibitionArtist}에 별도 저장한다(Facade가 조율).
 	 */
-	public static Exhibition createCustom(Long ownerId, String title, String place, LocalDate startDate,
-			LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category, ExhibitionFormat format,
-			String artist, String posterUrl) {
-		return new Exhibition(ExhibitionType.CUSTOM, null, ownerId, title, place, startDate, endDate,
-				region, category, format, artist, posterUrl, null, null, null, null, null, null, null, null, null,
-				null);
+	public static Exhibition createCustom(Long ownerId, String title, Long exhibitionPlaceId, LocalDate startDate,
+			LocalDate endDate, ExhibitionCategory category, ExhibitionFormat format, String artist, String posterUrl) {
+		return new Exhibition(ExhibitionType.CUSTOM, null, ownerId, title, exhibitionPlaceId, startDate, endDate,
+				category, format, artist, posterUrl, null, null);
 	}
 
-	/** 외부 API 수집 전시(CATALOG) 생성. {@code externalId}는 동기화 upsert 기준키. */
-	public static Exhibition createCatalog(String externalId, String title, String place, LocalDate startDate,
-			LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category, String posterUrl,
-			String description, String operatingHours, String price, String detailUrl, String serviceName,
-			Double gpsX, Double gpsY, String sigungu, String realmName, String areaText) {
-		return new Exhibition(ExhibitionType.CATALOG, externalId, null, title, place, startDate, endDate,
-				region, category, null, null, posterUrl, description, operatingHours, price, detailUrl, serviceName,
-				gpsX, gpsY, sigungu, realmName, areaText);
+	/** 외부 API 수집 전시(CATALOG) 생성. {@code externalId}는 동기화 upsert 기준키. 상세(price 등)는 별도 satellite로 지연 채움. */
+	public static Exhibition createCatalog(String externalId, String title, Long exhibitionPlaceId, LocalDate startDate,
+			LocalDate endDate, ExhibitionCategory category, String posterUrl, String detailUrl, String serviceName) {
+		return new Exhibition(ExhibitionType.CATALOG, externalId, null, title, exhibitionPlaceId, startDate, endDate,
+				category, null, null, posterUrl, detailUrl, serviceName);
 	}
 
-	/** 상세 지연수집(상세 진입 시 1회) — 목록엔 없던 필드를 채우고 동기화 시각을 기록한다. detailUrl은 값이 있을 때만 덮어쓴다. */
-	public void applyDetail(CatalogDetailData d) {
-		this.price = d.price();
-		this.description = d.description();
-		if (d.detailUrl() != null) {
-			this.detailUrl = d.detailUrl();
-		}
-		this.phone = d.phone();
-		this.imgUrl = d.imgUrl();
-		this.placeUrl = d.placeUrl();
-		this.placeAddr = d.placeAddr();
-		// place_key는 주소에서 파생한다 — 주소가 채워지는 이 자리가 유일한 산출 지점이라 둘이 갈릴 수 없다.
-		this.placeKey = PlaceKey.of(d.placeAddr());
-		this.placeSeq = d.placeSeq();
-		this.detailSyncedAt = LocalDateTime.now();
-	}
-
-	public boolean isDetailSynced() {
-		return detailSyncedAt != null;
+	/** 관리자 수정 — 전시장 재지정(place 이름 변경 시 Facade가 새 전시장을 resolve-or-create해 넘긴다). */
+	public void reassignPlace(Long exhibitionPlaceId) {
+		this.exhibitionPlaceId = exhibitionPlaceId;
 	}
 
 	/**
-	 * 구글 Places로 조회한 영업시간을 우리 표시 규칙 문자열로 반영한다(운영시간 보강). {@code operatingHours} 컬럼을 재사용한다
-	 * (공공데이터엔 영업시간이 없어 비어 있던 컬럼). 조회 시각({@code operatingHoursSyncedAt})은 결과 유무와 무관하게 항상 기록해
-	 * 재조회 대상에서 빠지게 한다 — 미발견/영업시간 없음이면 {@code formatted=null}로 값은 비우되 시각만 남긴다(실패 조회 백오프).
+	 * 관리자 수정 — 제목이 실제로 바뀌면 변경 이력을 돌려준다(멱등). null 인자는 "건드리지 않음".
+	 * (place는 전시장, price·description은 상세로 분리돼 각 엔티티가 자기 변경을 판단한다.)
 	 */
-	public void applyOperatingHours(String formatted, LocalDateTime syncedAt) {
-		this.operatingHours = (formatted == null || formatted.isBlank()) ? null : formatted;
-		this.operatingHoursSyncedAt = syncedAt;
-	}
-
-	/**
-	 * 상세 확인 완료 표기(값은 채우지 않음) — 원천 상세2에 항목이 없어(상세 미보유) 채울 게 없을 때 호출한다.
-	 * detailSyncedAt만 기록해 상세 백필의 재조회 대상(detailSyncedAt IS NULL)에서 빠지게 한다
-	 * (매 보강 주기마다 상세 없는 행에 외부 호출을 반복하지 않도록). 일시 실패는 예외로 처리되어 이 경로를 타지 않는다.
-	 */
-	public void markDetailChecked() {
-		if (this.detailSyncedAt == null) {
-			this.detailSyncedAt = LocalDateTime.now();
+	public Optional<FieldChange> applyTitleEdit(String title) {
+		if (title == null || java.util.Objects.equals(this.title, title)) {
+			return Optional.empty();
 		}
-	}
-
-	/**
-	 * 저장된 설명을 재파싱한 평문으로 교체한다(기존 수집분 데이터 정리용 — 관리자 재파싱 API에서 호출).
-	 * 설명 필드만 갱신하고 다른 값(장르·상세 등)은 건드리지 않는다. 실질 변경이 없으면 호출부에서 걸러 저장을 아낀다.
-	 */
-	public void reparseDescription(String cleanedDescription) {
-		this.description = cleanedDescription;
-	}
-
-	/**
-	 * 관리자 수정(6단계) — 넘어온 필드만 갱신하고, <b>실제로 값이 바뀐 필드의 변경 목록</b>을 돌려준다.
-	 * "무엇이 바뀌었나"를 판단하는 건 도메인 규칙이라 Entity가 맡는다(Facade는 그 목록을 이력으로 남기기만 한다).
-	 * <p>
-	 * null 인자는 "이 필드는 건드리지 않음"이다(값을 비우는 수정은 빈 문자열로 온다 — 별개 사건). 값이 실제로
-	 * 달라진 필드만 {@link FieldChange}로 담으므로, 같은 값으로 저장해도 이력이 생기지 않는다(멱등).
-	 */
-	public List<FieldChange> applyAdminEdit(String title, String place, String price, String description) {
-		List<FieldChange> changes = new java.util.ArrayList<>();
-		if (title != null && !java.util.Objects.equals(this.title, title)) {
-			changes.add(new FieldChange("title", this.title, title));
-			this.title = title;
-		}
-		if (place != null && !java.util.Objects.equals(this.place, place)) {
-			changes.add(new FieldChange("place", this.place, place));
-			this.place = place;
-		}
-		if (price != null && !java.util.Objects.equals(this.price, price)) {
-			changes.add(new FieldChange("price", this.price, price));
-			this.price = price;
-		}
-		if (description != null && !java.util.Objects.equals(this.description, description)) {
-			changes.add(new FieldChange("description", this.description, description));
-			this.description = description;
-		}
-		return changes;
+		FieldChange change = new FieldChange("title", this.title, title);
+		this.title = title;
+		return Optional.of(change);
 	}
 
 	/** 우리 앱 내 조회 1회 발생 시 호출(인기순 정렬용 카운터). */
@@ -302,7 +157,7 @@ public class Exhibition extends BaseEntity {
 
 	/**
 	 * 무료 여부(C-6 규칙) — 가격 텍스트가 "무료"를 포함하거나, 표기된 금액이 0뿐이면 무료.
-	 * null/공백(가격 미상)은 무료로 보지 않는다. 목록 {@code free} 필드와 {@code section=free} 필터가 공유하는 단일 규칙.
+	 * null/공백(가격 미상)은 무료로 보지 않는다. 가격은 상세({@link ExhibitionDetail})에 있어 호출부가 값을 넘긴다.
 	 */
 	public static boolean isFree(String price) {
 		if (price == null || price.isBlank()) {
@@ -315,27 +170,14 @@ public class Exhibition extends BaseEntity {
 		return digits.matches("0+");
 	}
 
-	public boolean isFree() {
-		return isFree(this.price);
-	}
-
 	/**
-	 * 종료 D-데이(오늘로부터 종료일까지 남은 일수). 종료일이 없거나 이미 종료됐으면 null.
-	 * (오늘 == 종료일이면 D-0)
+	 * 종료 D-데이(오늘로부터 종료일까지 남은 일수). 종료일이 없거나 이미 종료됐으면 null. (오늘 == 종료일이면 D-0)
 	 */
 	public Integer dDay(LocalDate today) {
 		if (endDate == null || endDate.isBefore(today)) {
 			return null;
 		}
 		return (int) java.time.temporal.ChronoUnit.DAYS.between(today, endDate);
-	}
-
-	/** 작가 요약(목록·상세의 artistSummary). CUSTOM은 등록 작가명, CATALOG는 원천 미보유라 null. */
-	public String artistSummary() {
-		if (isCatalog() || artist == null || artist.isBlank()) {
-			return null;
-		}
-		return artist;
 	}
 
 	/** 요청자가 이 전시를 조회할 수 있는가. CATALOG는 공개, CUSTOM은 등록자 본인만. */
@@ -367,7 +209,7 @@ public class Exhibition extends BaseEntity {
 	}
 
 	/** {@code RULE: 개인전 작가} — format=SOLO(개인전)면 작가명이 필요하다. */
-	private void validateSoloArtist() {
+	private static void validateSoloArtist(ExhibitionFormat format, String artist) {
 		if (format == ExhibitionFormat.SOLO && (artist == null || artist.isBlank())) {
 			throw new CoreException(ErrorType.INVALID_INPUT, "개인전은 작가명이 필요합니다");
 		}

@@ -71,6 +71,12 @@ class ExhibitionIntegrationTest {
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
+	modi.backend.domain.exhibition.ExhibitionPlaceRepository exhibitionPlaceRepository;
+
+	@Autowired
+	modi.backend.domain.exhibition.ExhibitionDetailRepository exhibitionDetailRepository;
+
+	@Autowired
 	ExhibitionBookmarkRepository exhibitionBookmarkRepository;
 
 	@MockitoBean
@@ -114,8 +120,17 @@ class ExhibitionIntegrationTest {
 	/** 표본 CATALOG를 리포지토리로 직접 적재(가격·좌표·기간 제어). 기본 startDate는 과거로 둬 최신순 상단을 침범하지 않게 한다. */
 	private Long saveCatalog(String externalId, String title, LocalDate startDate, LocalDate endDate,
 			ExhibitionRegion region, ExhibitionCategory category, String price, Double gpsX, Double gpsY) {
-		return exhibitionRepository.save(Exhibition.createCatalog(externalId, title, "표본 장소", startDate, endDate,
-				region, category, null, null, null, price, null, "기관", gpsX, gpsY, null, "전시", null)).getId();
+		// 전시장은 전시마다 고유(region·gps 필터·거리순이 전시별로 갈리게) — 자연키 이름을 externalId로 유일하게.
+		Long placeId = exhibitionPlaceRepository.save(
+				modi.backend.domain.exhibition.ExhibitionPlace.createFromList(title + "@" + externalId, region, null,
+						gpsX, gpsY)).getId();
+		Exhibition e = exhibitionRepository.save(
+				Exhibition.createCatalog(externalId, title, placeId, startDate, endDate, category, null, null, "기관"));
+		if (price != null && !price.isBlank()) {
+			exhibitionDetailRepository.save(modi.backend.domain.exhibition.ExhibitionDetail.create(
+					e.getId(), price, null, null, java.time.LocalDateTime.now()));
+		}
+		return e.getId();
 	}
 
 	private String loginAndGetAccessToken(long providerUserId, String nickname) throws Exception {

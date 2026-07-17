@@ -12,8 +12,8 @@ public interface PlaceHoursRepository {
 
 	PlaceHours save(PlaceHours placeHours);
 
-	Optional<PlaceHours> findByPlaceKey(String placeKey);
+	Optional<PlaceHours> findByExhibitionPlaceId(Long exhibitionPlaceId);
 
 	/** 여러 장소의 영업시간을 한 번에 읽는다(N+1 방지). 목록엔 영업시간이 나가지 않아 현재는 상세·배치 경로용이다. */
-	List<PlaceHours> findAllByPlaceKeys(Collection<String> placeKeys);
+	List<PlaceHours> findAllByExhibitionPlaceIds(Collection<Long> exhibitionPlaceIds);
 }

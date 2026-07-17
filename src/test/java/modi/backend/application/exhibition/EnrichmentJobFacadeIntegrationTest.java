@@ -15,6 +15,8 @@ import org.springframework.context.annotation.Import;
 import modi.backend.TestcontainersConfiguration;
 import modi.backend.domain.exhibition.EnrichmentJob;
 import modi.backend.domain.exhibition.EnrichmentJobRepository;
+import modi.backend.domain.exhibition.ExhibitionPlace;
+import modi.backend.domain.exhibition.ExhibitionPlaceRepository;
 import modi.backend.domain.exhibition.JobFailureType;
 import modi.backend.domain.exhibition.JobStatus;
 import modi.backend.domain.exhibition.JobType;
@@ -43,8 +45,22 @@ class EnrichmentJobFacadeIntegrationTest {
 	@Autowired
 	PlaceHoursRepository placeHoursRepository;
 
+	@Autowired
+	ExhibitionPlaceRepository exhibitionPlaceRepository;
+
 	private String nextKey(String prefix) {
 		return prefix + "-" + SEQ.getAndIncrement();
+	}
+
+	/**
+	 * placeKey(=정규화 이름) 전시장 + 그 장소의 정준 영업시간(syncedAt)을 만든다. HOURS_REFRESH target_key는
+	 * exhibition_place.place_key라, enqueueHoursRefresh가 이 전시장을 해소해 정준행을 본다(가드 판정).
+	 */
+	private void seedPlaceWithHours(String placeKey, LocalDateTime syncedAt) {
+		Long placeId = exhibitionPlaceRepository.save(
+				ExhibitionPlace.createFromList(placeKey, null, null, null, null)).getId();
+		placeHoursRepository.save(PlaceHours.first(placeId, "매일 10:00~18:00",
+				PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.GOOGLE, syncedAt));
 	}
 
 	@Test
@@ -127,11 +143,9 @@ class EnrichmentJobFacadeIntegrationTest {
 		String recentPlace = nextKey("PLACE");
 		String stalePlace = nextKey("PLACE");
 		// 최근 확인(1일 전) — 기본 최소 간격 30일 이내라 skip 대상.
-		placeHoursRepository.save(PlaceHours.first(recentPlace, "매일 10:00~18:00",
-				PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.GOOGLE, now.minusDays(1)));
+		seedPlaceWithHours(recentPlace, now.minusDays(1));
 		// 오래됨(60일 전) — 재검증 대상.
-		placeHoursRepository.save(PlaceHours.first(stalePlace, "매일 10:00~18:00",
-				PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.GOOGLE, now.minusDays(60)));
+		seedPlaceWithHours(stalePlace, now.minusDays(60));
 
 		enrichmentJobFacade.enqueueHoursRefresh(recentPlace, now);
 		enrichmentJobFacade.enqueueHoursRefresh(stalePlace, now);
@@ -147,8 +161,7 @@ class EnrichmentJobFacadeIntegrationTest {
 	void 재검증_종료작업_재활성화() {
 		LocalDateTime now = LocalDateTime.now();
 		String placeKey = nextKey("PLACE");
-		placeHoursRepository.save(PlaceHours.first(placeKey, "매일 10:00~18:00",
-				PlaceHoursStatus.SUCCEEDED, PlaceHoursVendor.GOOGLE, now.minusDays(60)));
+		seedPlaceWithHours(placeKey, now.minusDays(60));
 		enrichmentJobFacade.enqueueHoursRefresh(placeKey, now);
 		EnrichmentJob job = enrichmentJobRepository
 				.findByJobTypeAndTargetKey(JobType.PLACE_HOURS_REFRESH, placeKey).orElseThrow();

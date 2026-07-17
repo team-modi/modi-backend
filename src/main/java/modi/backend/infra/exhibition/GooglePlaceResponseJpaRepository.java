@@ -8,5 +8,5 @@ import modi.backend.domain.exhibition.GooglePlaceResponse;
 
 public interface GooglePlaceResponseJpaRepository extends JpaRepository<GooglePlaceResponse, Long> {
 
-	Optional<GooglePlaceResponse> findByPlaceKey(String placeKey);
+	Optional<GooglePlaceResponse> findByExhibitionPlaceId(Long exhibitionPlaceId);
 }

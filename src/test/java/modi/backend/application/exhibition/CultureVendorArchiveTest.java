@@ -57,6 +57,9 @@ class CultureVendorArchiveTest {
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
+	modi.backend.domain.exhibition.ExhibitionDetailRepository exhibitionDetailRepository;
+
+	@Autowired
 	CultureListResponseRepository cultureListResponseRepository;
 
 	@Autowired
@@ -175,9 +178,11 @@ class CultureVendorArchiveTest {
 
 		exhibitionFacade.syncCatalog();
 
-		// 빈 응답은 보관할 원본이 없다 — 벤더 행 없음. 도메인은 기존대로 "확인 완료"만 표기해 재조회를 막는다.
+		// 빈 응답은 보관할 원본이 없다 — 벤더 행 없음(V29에서 상태머신 제거). 도메인은 "확인 완료"만 표기해 재조회를 막는다
+		// — 상세 satellite 행 존재로 판정한다(연관 부재 = 미동기화).
 		assertThat(cultureDetailResponseRepository.findByExternalId(externalId)).isEmpty();
-		assertThat(exhibitionRepository.findByExternalId(externalId).orElseThrow().isDetailSynced()).isTrue();
+		Long exhibitionId = exhibitionRepository.findByExternalId(externalId).orElseThrow().getId();
+		assertThat(exhibitionDetailRepository.existsByExhibitionId(exhibitionId)).isTrue();
 	}
 
 	@Test

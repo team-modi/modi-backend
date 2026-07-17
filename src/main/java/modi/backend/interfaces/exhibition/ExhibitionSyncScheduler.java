@@ -2,6 +2,7 @@ package modi.backend.interfaces.exhibition;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -33,9 +34,17 @@ public class ExhibitionSyncScheduler {
 	private final CatalogEnricher catalogEnricher;
 	private final PlaceHoursEnricher placeHoursEnricher;
 
+	/** 로컬 시드 모드면 정기 동기화도 건너뛴다(로컬 실 API 호출 0 — 시드 데이터 유지). */
+	@Value("${app.local-seed.enabled:false}")
+	private boolean localSeedEnabled;
+
 	/** 매일 자정: 목록+상세를 한 패스로 적재/완성 → 신규분 장르 분류 → 신규/만료 장소 영업시간 보강. 실패해도 다음 주기에 재시도. */
 	@Scheduled(cron = "${app.exhibition.sync.cron:0 0 0 * * *}")
 	public void syncDaily() {
+		if (localSeedEnabled) {
+			log.info("전시 정기 동기화 skip — app.local-seed.enabled=true (로컬 시드 데이터 유지, 외부 API 호출 안 함)");
+			return;
+		}
 		try {
 			log.info("전시 정기 동기화 신규 {}건", exhibitionFacade.syncCatalog());
 			catalogEnricher.enrichGenres();

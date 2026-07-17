@@ -47,7 +47,7 @@ public class PlaceHoursEnricher {
 	 */
 	public int enrichPlaceHours() {
 		LocalDateTime staleBefore = LocalDateTime.now().minusDays(properties.refreshAfterDays());
-		List<PlaceHoursTarget> targets = exhibitionFacade.findVenuesNeedingHours(staleBefore, properties.maxVenuesPerRun());
+		List<PlaceHoursTarget> targets = exhibitionFacade.findPlacesNeedingHours(staleBefore, properties.maxVenuesPerRun());
 		if (targets.isEmpty()) {
 			return 0;
 		}
@@ -58,7 +58,7 @@ public class PlaceHoursEnricher {
 				String formatted = data.map(d -> openingHoursFormatter.format(d.weeklyHours())).orElse(null);
 				exhibitionFacade.applyVenueHours(target, data.orElse(null), formatted, placeHoursProvider.vendor(),
 						LocalDateTime.now());
-				touched += target.exhibitionIds().size();
+				touched += 1;
 			} catch (RuntimeException e) {
 				// 전송 실패 등 — 이 장소만 건너뛰고 synced_at을 남기지 않아 다음 주기에 재시도한다(기존 동작 불변).
 				// 정준층엔 "시도했고 실패했다"를 남긴다 — 현행 스키마가 표현하지 못하던 사실이고, 표시값은 지우지 않는다.

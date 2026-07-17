@@ -10,7 +10,7 @@ import modi.backend.domain.exhibition.PlaceHours;
 
 public interface PlaceHoursJpaRepository extends JpaRepository<PlaceHours, Long> {
 
-	Optional<PlaceHours> findByPlaceKey(String placeKey);
+	Optional<PlaceHours> findByExhibitionPlaceId(Long exhibitionPlaceId);
 
-	List<PlaceHours> findAllByPlaceKeyIn(Collection<String> placeKeys);
+	List<PlaceHours> findAllByExhibitionPlaceIdIn(Collection<Long> exhibitionPlaceIds);
 }

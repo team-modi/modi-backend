@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
+import modi.backend.domain.exhibition.Artist;
+import modi.backend.domain.exhibition.ArtistRepository;
 import modi.backend.domain.exhibition.CatalogDetailData;
 import modi.backend.domain.exhibition.CatalogExhibitionData;
 import modi.backend.domain.exhibition.CatalogListData;
@@ -26,12 +28,18 @@ import modi.backend.domain.exhibition.CultureDetailResponseRepository;
 import modi.backend.domain.exhibition.CultureListResponse;
 import modi.backend.domain.exhibition.CultureListResponseRepository;
 import modi.backend.domain.exhibition.Exhibition;
+import modi.backend.domain.exhibition.ExhibitionArtist;
+import modi.backend.domain.exhibition.ExhibitionArtistRepository;
 import modi.backend.domain.exhibition.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.ExhibitionCategory;
+import modi.backend.domain.exhibition.ExhibitionDetail;
+import modi.backend.domain.exhibition.ExhibitionDetailRepository;
 import modi.backend.domain.exhibition.ExhibitionErrorCode;
 import modi.backend.domain.exhibition.ExhibitionFormat;
 import modi.backend.domain.exhibition.ExhibitionGenre;
 import modi.backend.domain.exhibition.ExhibitionGenreRepository;
+import modi.backend.domain.exhibition.ExhibitionPlace;
+import modi.backend.domain.exhibition.ExhibitionPlaceRepository;
 import modi.backend.domain.exhibition.ExhibitionQuery;
 import modi.backend.domain.exhibition.ExhibitionRegion;
 import modi.backend.domain.exhibition.ExhibitionRegionGroup;
@@ -49,7 +57,6 @@ import modi.backend.domain.exhibition.PlaceHoursData;
 import modi.backend.domain.exhibition.PlaceHoursRepository;
 import modi.backend.domain.exhibition.PlaceHoursStatus;
 import modi.backend.domain.exhibition.PlaceHoursVendor;
-import modi.backend.domain.exhibition.PlaceKey;
 import modi.backend.domain.exhibition.SyncRun;
 import modi.backend.domain.exhibition.SyncRunRepository;
 import modi.backend.domain.exhibition.SyncTrigger;
@@ -63,9 +70,9 @@ import modi.backend.support.response.Cursor;
 import modi.backend.support.time.AppTime;
 
 /**
- * 전시 유스케이스 조율(03_전시.md). load·조율·save만 하고, 상태 변경·규칙 판단은 {@link Exhibition} 메서드에 위임한다.
- * 목록은 커서(키셋) 페이지네이션 — latest/ending/popular은 DB 키셋, distance는 앱 레이어 정렬(best-effort).
- * CATALOG는 외부 API로 동기화해 DB에 upsert하고 조회/등록은 DB만 본다(수집-적재 방식).
+ * 전시 유스케이스 조율(03_전시.md). load·조율·save만 하고, 상태 변경·규칙 판단은 도메인 엔티티에 위임한다.
+ * 장소(name/region/gps/주소)는 {@link ExhibitionPlace}(N:1, resolve-or-create), 상세(price/description/img)는
+ * {@link ExhibitionDetail}(1:1), 작가는 {@link Artist}+{@link ExhibitionArtist}(N:M) — 응답 조립 시 조인한다(API 계약 불변).
  */
 @Service
 @RequiredArgsConstructor
@@ -76,29 +83,26 @@ public class ExhibitionFacade {
 	private static final int MAX_SIZE = 50;
 	private static final int ENDING_SOON_DAYS = 7;
 	private static final int BANNER_LIMIT = 3;
-	// 영업시간 보강 1회 실행에서 스캔하는 전시 상한(장소 그룹화 대상). 실제 외부 호출은 장소 수(maxVenuesPerRun)로 별도 제한된다.
-	private static final int PLACE_HOURS_SCAN_LIMIT = 3000;
 
 	private final ExhibitionRepository exhibitionRepository;
 	private final ExhibitionCatalogClient catalogClient;
 	private final ExhibitionBookmarkRepository exhibitionBookmarkRepository;
 	private final VenueRepository venueRepository;
-	// 크로스 도메인 실용 조회: 상세의 recorded 계산을 위해 record의 Spring Data 리포지토리를 직접 읽는다(전용 포트 미도입).
 	private final RecordJpaRepository recordJpaRepository;
-	/** 영업시간 정준층 — 장소당 1행(place_key). 상세의 operatingHours가 여기서 나간다. */
 	private final PlaceHoursRepository placeHoursRepository;
-	/** 구글 응답 원본 — 벤더층. 변환 규칙이 바뀌면 여기서 정준을 재생성한다(재호출·과금 없이). */
 	private final GooglePlaceResponseRepository googlePlaceResponseRepository;
-	/** 장르 분류 전략(랜덤/AI) — 주입되는 구현은 {@code app.exhibition.genre.classifier}로 선택된다(@Primary). */
 	private final GenreClassifier genreClassifier;
-	/** 장르 정준층 — 분류 결과를 계보(provider·model)와 함께 남긴다. 전시와는 ID로만 참조한다. */
 	private final ExhibitionGenreRepository exhibitionGenreRepository;
-	/** 목록(realm2) 응답 원본 — 벤더층. 재파싱 원료·원천 정정 감지용(도메인 적재와 병행 기록). */
 	private final CultureListResponseRepository cultureListResponseRepository;
-	/** 상세(detail2) 응답 원본 + 수집 상태기계 — 벤더층. */
 	private final CultureDetailResponseRepository cultureDetailResponseRepository;
-	/** 동기화 실행 기록 — 원천을 다 가져왔나(조용한 절단 감지)와 실행 집계를 남긴다. */
 	private final SyncRunRepository syncRunRepository;
+	/** 전시장(N:1) — 자연키=정규화 이름. 장소·지역·gps·주소의 진실 원천이자 영업시간 정렬 기준(ADR-05·06·07). */
+	private final ExhibitionPlaceRepository exhibitionPlaceRepository;
+	/** 상세 satellite(1:1) — price/description/img. 연관 부재 = 미동기화(ADR-03). */
+	private final ExhibitionDetailRepository exhibitionDetailRepository;
+	/** 작가(정규화 이름 UK) + 조인(N:M) — CUSTOM 등록의 artist 문자열을 resolve-or-create해 조인으로 잇는다. */
+	private final ArtistRepository artistRepository;
+	private final ExhibitionArtistRepository exhibitionArtistRepository;
 	/** 통합 보강 작업큐 — 상세 실패 재시도·이벤트 구동 영업시간 재검증을 enqueue한다(at-least-once의 진입점). */
 	private final EnrichmentJobFacade enrichmentJobFacade;
 
@@ -109,7 +113,7 @@ public class ExhibitionFacade {
 
 	/**
 	 * 목록/탐색(5.2). 필터 미지정 시 오늘 진행 중인 전시를 기본 노출한다. 비로그인은 CATALOG만.
-	 * 커서의 정렬 판별자는 현재 sort와 일치해야 한다(Cursor.decode가 검증 → INVALID_CURSOR).
+	 * place·region은 전시장 조인에서, free는 상세 가격에서 조립한다.
 	 */
 	@Transactional(readOnly = true)
 	public ExhibitionResult.ListPage search(ExhibitionCriteria.Search criteria) {
@@ -138,28 +142,52 @@ public class ExhibitionFacade {
 		boolean hasNext = rows.size() > size;
 		List<Exhibition> page = hasNext ? rows.subList(0, size) : rows;
 
-		Set<Long> bookmarked = bookmarkedIds(criteria.requesterId(), page);
-		List<ExhibitionResult.ListItem> content = page.stream()
-				.map(e -> ExhibitionResult.ListItem.from(e, today, bookmarked.contains(e.getId())))
-				.toList();
+		List<ExhibitionResult.ListItem> content = toListItems(page, today, criteria.requesterId());
 		String nextCursor = hasNext ? encodeCursor(sort, page.get(page.size() - 1)) : null;
 		long totalCount = exhibitionRepository.count(query);
 		return new ExhibitionResult.ListPage(content, nextCursor, hasNext, totalCount);
 	}
 
-	/**
-	 * 홈 배너(03_전시.md E-10). 운영자 지정 기능은 아직 없어, 오늘 진행 중인 전시 중 조회수 상위 최대 3개를 노출한다.
-	 * 진행 중 전시가 없으면 빈 배열을 반환한다(홈은 배너 부재 시 섹션만 노출).
-	 */
-	@Transactional(readOnly = true)
-	public List<ExhibitionResult.Banner> banners() {
-		return exhibitionRepository.findOngoingCatalogTopByViews(LocalDate.now(AppTime.KST), BANNER_LIMIT)
-				.stream().map(ExhibitionResult.Banner::from).toList();
+	/** 페이지 전시들을 장소·상세·관심 배치 조회로 조립한 목록 항목으로 변환한다(N+1 방지). */
+	private List<ExhibitionResult.ListItem> toListItems(List<Exhibition> page, LocalDate today, Long requesterId) {
+		if (page.isEmpty()) {
+			return List.of();
+		}
+		Map<Long, ExhibitionPlace> placesById = placesByIdFor(page);
+		Map<Long, ExhibitionDetail> detailsByExhibitionId = exhibitionDetailRepository
+				.findAllByExhibitionIds(page.stream().map(Exhibition::getId).toList()).stream()
+				.collect(Collectors.toMap(ExhibitionDetail::getExhibitionId, d -> d, (a, b) -> a));
+		Set<Long> bookmarked = bookmarkedIds(requesterId, page);
+		return page.stream().map(e -> {
+			ExhibitionDetail detail = detailsByExhibitionId.get(e.getId());
+			boolean free = detail != null && detail.isFree();
+			return ExhibitionResult.ListItem.from(e, placesById.get(e.getExhibitionPlaceId()), today, free,
+					bookmarked.contains(e.getId()));
+		}).toList();
+	}
+
+	private Map<Long, ExhibitionPlace> placesByIdFor(List<Exhibition> exhibitions) {
+		Set<Long> placeIds = exhibitions.stream().map(Exhibition::getExhibitionPlaceId).collect(Collectors.toSet());
+		return exhibitionPlaceRepository.findAllByIds(placeIds).stream()
+				.collect(Collectors.toMap(ExhibitionPlace::getId, p -> p, (a, b) -> a));
 	}
 
 	/**
-	 * 거리순(5.2, P2 best-effort). lat·lng 필수. 후보를 앱 레이어에서 단순 제곱거리로 정렬(좌표 null은 뒤로)하고,
-	 * 커서는 마지막 id 위치 기준으로 슬라이스한다(완전한 키셋 대신 후보 재조회 — 단순화).
+	 * 홈 배너(E-10). 오늘 진행 중인 전시 중 조회수 상위 최대 3개를 노출한다. 진행 중 전시가 없으면 빈 배열.
+	 */
+	@Transactional(readOnly = true)
+	public List<ExhibitionResult.Banner> banners() {
+		List<Exhibition> rows = exhibitionRepository.findOngoingCatalogTopByViews(LocalDate.now(AppTime.KST),
+				BANNER_LIMIT);
+		Map<Long, ExhibitionPlace> placesById = placesByIdFor(rows);
+		return rows.stream()
+				.map(e -> ExhibitionResult.Banner.from(e, placesById.get(e.getExhibitionPlaceId())))
+				.toList();
+	}
+
+	/**
+	 * 거리순(5.2, P2 best-effort). lat·lng 필수. 좌표는 전시장(exhibition_place)에서 온다 — 후보의 장소를 배치 로드해
+	 * 단순 제곱거리로 정렬(좌표 null은 뒤로)하고, 커서는 마지막 id 위치 기준으로 슬라이스한다.
 	 */
 	private ExhibitionResult.ListPage searchByDistance(ExhibitionCriteria.Search criteria, LocalDate today,
 			int size, ExhibitionQuery query) {
@@ -168,8 +196,10 @@ public class ExhibitionFacade {
 		}
 		double lat = criteria.lat();
 		double lng = criteria.lng();
-		List<Exhibition> ordered = exhibitionRepository.searchAll(query).stream()
-				.sorted(distanceComparator(lat, lng))
+		List<Exhibition> candidates = exhibitionRepository.searchAll(query);
+		Map<Long, ExhibitionPlace> placesById = placesByIdFor(candidates);
+		List<Exhibition> ordered = candidates.stream()
+				.sorted(distanceComparator(placesById, lat, lng))
 				.toList();
 
 		Cursor cursor = Cursor.decode(criteria.cursor(), "distance").orElse(null);
@@ -178,21 +208,20 @@ public class ExhibitionFacade {
 		List<Exhibition> page = start >= ordered.size() ? List.of() : ordered.subList(start, end);
 		boolean hasNext = end < ordered.size();
 
-		Set<Long> bookmarked = bookmarkedIds(criteria.requesterId(), page);
-		List<ExhibitionResult.ListItem> content = page.stream()
-				.map(e -> ExhibitionResult.ListItem.from(e, today, bookmarked.contains(e.getId())))
-				.toList();
+		List<ExhibitionResult.ListItem> content = toListItems(page, today, criteria.requesterId());
 		String nextCursor = null;
 		if (hasNext) {
 			Exhibition last = page.get(page.size() - 1);
-			nextCursor = Cursor.of("distance", String.valueOf(distanceSq(last, lat, lng)), last.getId()).encode();
+			nextCursor = Cursor.of("distance",
+					String.valueOf(distanceSq(placesById.get(last.getExhibitionPlaceId()), lat, lng)), last.getId())
+					.encode();
 		}
 		return new ExhibitionResult.ListPage(content, nextCursor, hasNext, ordered.size());
 	}
 
 	/**
-	 * 상세(5.3). 없으면 404, 타인의 CUSTOM이면 403. CATALOG 최초 진입 시 상세를 1회 지연 수집해 캐시한다.
-	 * bookmarked·recorded는 요청자 기준으로 채운다(비로그인 false).
+	 * 상세(5.3). 없으면 404, 타인의 CUSTOM이면 403. CATALOG 최초 진입 시 상세를 1회 지연 수집해 캐시한다(상세 satellite upsert).
+	 * place·operatingHours·artists는 요청 시 조인해 조립한다.
 	 */
 	@Transactional
 	public ExhibitionResult.Detail getDetail(ExhibitionCriteria.Detail criteria) {
@@ -201,11 +230,12 @@ public class ExhibitionFacade {
 		if (!exhibition.isAccessibleBy(criteria.requesterId())) {
 			throw new CoreException(ErrorType.FORBIDDEN, "타인의 개인 전시 접근: " + criteria.exhibitionId());
 		}
-		if (exhibition.isCatalog() && !exhibition.isDetailSynced()) {
+		if (exhibition.isCatalog() && !exhibitionDetailRepository.existsByExhibitionId(exhibition.getId())) {
 			try {
-				catalogClient.fetchDetail(exhibition.getExternalId()).ifPresent(exhibition::applyDetail);
+				catalogClient.fetchDetail(exhibition.getExternalId())
+						.ifPresent(d -> applyCatalogDetail(exhibition, d, LocalDateTime.now()));
 			} catch (CoreException ex) {
-				// 외부 실패 시 base 필드만 반환 — detailSyncedAt이 null로 남아 다음 조회에서 재시도된다.
+				// 외부 실패 시 base 필드만 반환 — 상세행이 없어 다음 조회에서 재시도된다.
 			}
 		}
 		exhibition.increaseView();
@@ -215,8 +245,7 @@ public class ExhibitionFacade {
 				&& exhibitionBookmarkRepository.existsActive(requesterId, exhibition.getId());
 		boolean recorded = requesterId != null
 				&& recordJpaRepository.existsByUserIdAndExhibitionIdAndDeletedAtIsNull(requesterId, exhibition.getId());
-		return ExhibitionResult.Detail.from(exhibition, genreOf(exhibition.getId()),
-				placeHoursOf(exhibition.getPlaceKey()), bookmarked, recorded);
+		return assembleDetail(exhibition, bookmarked, recorded);
 	}
 
 	/** 스냅샷/조회용 — 조회수 증가·외부 상세수집·개인화 없이 DB에서만 전시를 읽어 반환한다(기록 생성 등 내부 사용). */
@@ -227,21 +256,27 @@ public class ExhibitionFacade {
 		if (!e.isAccessibleBy(requesterId)) {
 			throw new CoreException(ErrorType.FORBIDDEN, "타인의 개인 전시 접근: " + exhibitionId);
 		}
-		return ExhibitionResult.Detail.from(e, genreOf(e.getId()), placeHoursOf(e.getPlaceKey()), false, false);
+		return assembleDetail(e, false, false);
 	}
 
-	/**
-	 * 상세의 keywords 출처 — 정준층({@code exhibition_genre})에서 읽는다(이관 2단계-b, 읽기 전환).
-	 * 미분류면 null이고 상세는 빈 배열을 내려보낸다. {@code exhibitions.genre_keyword}로 폴백하지 않는다 —
-	 * 폴백은 진실 원천을 모호하게 만들고, 정준층 쓰기가 빠져도 아무도 눈치채지 못하게 한다.
-	 */
+	/** 상세 응답 조립 — 장소·상세·영업시간·작가·장르를 각 저장소에서 읽어 하나로 모은다. */
+	private ExhibitionResult.Detail assembleDetail(Exhibition exhibition, boolean bookmarked, boolean recorded) {
+		ExhibitionPlace place = exhibitionPlaceRepository.findById(exhibition.getExhibitionPlaceId()).orElse(null);
+		ExhibitionDetail detail = exhibitionDetailRepository.findByExhibitionId(exhibition.getId()).orElse(null);
+		PlaceHours placeHours = place == null ? null
+				: placeHoursRepository.findByExhibitionPlaceId(place.getId()).orElse(null);
+		List<String> artistNames = exhibitionArtistRepository.findArtistNames(exhibition.getId());
+		return ExhibitionResult.Detail.from(exhibition, place, detail, placeHours, artistNames,
+				genreOf(exhibition.getId()), bookmarked, recorded);
+	}
+
 	private ExhibitionGenre genreOf(Long exhibitionId) {
 		return exhibitionGenreRepository.findByExhibitionId(exhibitionId).orElse(null);
 	}
 
 	/**
-	 * 개인 전시 등록(5.4). 제목 필수·기간·개인전 작가 검증은 Entity에서 수행한다.
-	 * venueId가 있으면 전시관에서 장소·지역(요청 region 미지정 시)을 파생한다(없는 venueId면 404). 장르 키워드는 마스터에서 무작위로 1개 부여(임시).
+	 * 개인 전시 등록(5.4). 제목 필수·기간·개인전 작가 검증은 Entity에서. 전시장은 resolve-or-create(정규화 이름)로 확정해
+	 * {@code exhibition_place_id NOT NULL}을 지탱하고, 작가 문자열은 resolve-or-create + 조인으로 잇는다.
 	 */
 	@Transactional
 	public ExhibitionResult.Created registerCustom(ExhibitionCriteria.CustomCreate criteria) {
@@ -249,17 +284,18 @@ public class ExhibitionFacade {
 		ExhibitionCategory category = criteria.category() == null ? null
 				: ExhibitionCategory.from(criteria.category());
 		ExhibitionFormat format = criteria.format() == null ? null : ExhibitionFormat.from(criteria.format());
-		String place = criteria.place();
+		String placeName = criteria.place();
 		if (criteria.venueId() != null) {
 			Venue venue = venueRepository.findById(criteria.venueId())
 					.orElseThrow(() -> new CoreException(VenueErrorCode.VENUE_NOT_FOUND));
-			place = venue.getName();
+			placeName = venue.getName();
 			if (region == null) {
 				region = venue.getRegion();
 			}
 		}
-		// 장르: 사용자가 장르 시트에서 직접 고르면 그 값(마스터 검증 + provider=USER), 미지정이면 분류기(랜덤/AI)가 부여한다.
-		// 분류기는 실패해도 예외를 던지지 않고 유효 장르를 반환하므로 등록 흐름을 깨지 않는다(폴백 시 provider=RANDOM).
+		// place·venueId 모두 없으면 장소 미상 센티넬로 수렴한다(exhibition_place_id NOT NULL 지탱) — 제목만 등록도 그대로 동작한다.
+		ExhibitionPlace place = resolvePlace(placeName, region, null, null, null);
+		// 장르: 사용자가 직접 고르면 그 값(provider=USER), 미지정이면 분류기(랜덤/AI)가 부여한다(실패해도 유효 장르 반환).
 		GenreResult genre;
 		if (criteria.genreKeyword() != null && !criteria.genreKeyword().isBlank()) {
 			if (!GenreKeyword.contains(criteria.genreKeyword())) {
@@ -268,22 +304,45 @@ public class ExhibitionFacade {
 			genre = GenreResult.user(criteria.genreKeyword());
 		} else {
 			genre = genreClassifier.classify(new GenreClassification(criteria.title(),
-					category == null ? null : category.name(), null, place, criteria.artist(), null));
+					category == null ? null : category.name(), null, placeName, criteria.artist(), null));
 		}
-		Exhibition exhibition = Exhibition.createCustom(criteria.ownerId(), criteria.title(), place,
-				criteria.startDate(), criteria.endDate(), region, category, format, criteria.artist(),
-				criteria.posterUrl());
+		Exhibition exhibition = Exhibition.createCustom(criteria.ownerId(), criteria.title(), place.getId(),
+				criteria.startDate(), criteria.endDate(), category, format, criteria.artist(), criteria.posterUrl());
 		Exhibition saved = exhibitionRepository.save(exhibition);
-		// 장르는 정준층에만 남긴다(레거시 컬럼은 7단계에서 제거). 신규 전시라 항상 생성(upsert 분기 불필요).
+		linkArtist(saved.getId(), criteria.artist());
 		exhibitionGenreRepository.save(ExhibitionGenre.create(saved.getId(), genre.genreKeyword(),
 				genre.provider(), genre.model(), LocalDateTime.now()));
 		return ExhibitionResult.Created.from(saved);
 	}
 
+	/** 전시장 resolve-or-create — 정규화 이름 기준 upsert. 기존 행이면 비어 있던 신원 필드만 보강한다(ADR-07). */
+	private ExhibitionPlace resolvePlace(String name, ExhibitionRegion region, String sigungu, Double gpsX,
+			Double gpsY) {
+		String placeKey = modi.backend.domain.exhibition.PlaceKey.of(name);
+		return exhibitionPlaceRepository.findByPlaceKey(placeKey)
+				.map(existing -> {
+					existing.enrichIdentity(region, sigungu, gpsX, gpsY);
+					return exhibitionPlaceRepository.save(existing);
+				})
+				.orElseGet(() -> exhibitionPlaceRepository
+						.save(ExhibitionPlace.createFromList(name, region, sigungu, gpsX, gpsY)));
+	}
+
+	/** 작가 문자열을 resolve-or-create(정규화 이름 UK)해 전시와 조인(멱등)한다. 이름이 비면 건너뛴다. */
+	private void linkArtist(Long exhibitionId, String rawArtist) {
+		String normalized = Artist.normalize(rawArtist);
+		if (normalized == null) {
+			return;
+		}
+		Artist artist = artistRepository.findByName(normalized)
+				.orElseGet(() -> artistRepository.save(Artist.create(normalized)));
+		if (!exhibitionArtistRepository.existsByExhibitionIdAndArtistId(exhibitionId, artist.getId())) {
+			exhibitionArtistRepository.save(ExhibitionArtist.of(exhibitionId, artist.getId()));
+		}
+	}
+
 	/**
-	 * 개인 전시(CUSTOM) 동반 삭제 — 기록 삭제 시, 그 기록이 직접 만든 전시를 더는 어떤 기록도 참조하지 않을 때 호출된다.
-	 * 본인이 등록한 CUSTOM만 soft-delete하고(공용 CATALOG·타인 전시·이미 삭제된 전시는 무시) 멱등하게 동작한다.
-	 * (기록을 지워도 전시가 '내 전시' 목록에 남아 조회되던 고아 전시 문제 방지)
+	 * 개인 전시(CUSTOM) 동반 삭제 — 본인이 등록한 CUSTOM만 soft-delete(공용 CATALOG·타인 전시·이미 삭제된 전시는 무시), 멱등.
 	 */
 	@Transactional
 	public void deleteCustomOwnedBy(Long exhibitionId, Long ownerId) {
@@ -296,25 +355,32 @@ public class ExhibitionFacade {
 	}
 
 	/**
-	 * 장르 백필 1배치의 <b>조회 단계</b> — 아직 장르가 없는 CATALOG(공공데이터) 전시를 최대 {@code max}건 값으로 뽑아 나온다.
-	 * AI 호출은 이 트랜잭션 밖({@link CatalogEnricher})에서 일어나고, 반영은 {@link #applyGenres}가 별도 트랜잭션으로 맡는다
-	 * — 최대 60초(+429 재시도 백오프)가 걸리는 외부 호출에 DB 커넥션을 물리지 않기 위함이다({@link PlaceHoursEnricher}와 동형).
-	 * 대상이 "미분류 행"이라 멱등하다 — 반복 실행돼도 신규 행만 나온다.
+	 * 장르 백필 1배치의 조회 단계 — 아직 장르가 없는 CATALOG 전시를 최대 {@code max}건 뽑아 분류 입력을 조립한다.
+	 * 제목·카테고리는 코어에서, 설명은 상세 satellite에서, 장소명은 전시장 조인에서 조립한다(코어에 없으므로).
 	 */
 	@Transactional(readOnly = true)
 	public List<GenreTarget> findGenreTargets(int max) {
-		return exhibitionRepository.findCatalogWithoutGenre(max).stream()
-				.map(e -> new GenreTarget(e.getId(), GenreClassification.from(e)))
-				.toList();
+		List<Exhibition> rows = exhibitionRepository.findCatalogWithoutGenre(max);
+		if (rows.isEmpty()) {
+			return List.of();
+		}
+		Map<Long, ExhibitionPlace> placesById = placesByIdFor(rows);
+		Map<Long, ExhibitionDetail> detailsByExhibitionId = exhibitionDetailRepository
+				.findAllByExhibitionIds(rows.stream().map(Exhibition::getId).toList()).stream()
+				.collect(Collectors.toMap(ExhibitionDetail::getExhibitionId, d -> d, (a, b) -> a));
+		return rows.stream().map(e -> {
+			ExhibitionPlace place = placesById.get(e.getExhibitionPlaceId());
+			ExhibitionDetail detail = detailsByExhibitionId.get(e.getId());
+			GenreClassification input = new GenreClassification(e.getTitle(),
+					e.getCategory() == null ? null : e.getCategory().name(),
+					detail == null ? null : detail.getDescription(),
+					place == null ? null : place.getName(), null, null);
+			return new GenreTarget(e.getId(), input);
+		}).toList();
 	}
 
 	/**
-	 * 장르 백필 1배치의 <b>반영 단계</b> — 분류 결과를 정준층({@code exhibition_genre})에 쓴다(레거시 컬럼은 7단계에서 제거).
-	 * <p>
-	 * 정준층에 {@code provider}를 남기는 이유: 출처를 안 남기면 랜덤 폴백값이 AI 분류값과 구분되지 않아, 저장되는 순간
-	 * 미분류(IS NULL) 대상에서 빠져 <b>영구 이탈</b>한다. {@code provider=RANDOM}이 남으면 선별 재분류가 가능해진다.
-	 * <p>
-	 * 전시는 id로 다시 읽어 <b>존재만 확인</b>한다 — 조회~반영 사이에 사라진 전시는 건너뛴다(정준층에도 남기지 않는다).
+	 * 장르 백필 1배치의 반영 단계 — 분류 결과를 정준층({@code exhibition_genre})에 쓴다. 전시는 id로 다시 읽어 존재만 확인한다.
 	 *
 	 * @return 이번 배치로 장르를 부여한 전시 수(0이면 미분류 없음 → 소진)
 	 */
@@ -335,14 +401,12 @@ public class ExhibitionFacade {
 			if (result == null || exhibition == null) {
 				continue;
 			}
-			// 전시 존재만 확인하고(위 exhibitionsById), 장르는 정준층에만 쓴다(레거시 컬럼 제거 — 7단계).
 			saveCanonicalGenre(exhibition.getId(), result, genresById.get(exhibition.getId()), now);
 			applied++;
 		}
 		return applied;
 	}
 
-	/** 정준층 upsert — 없으면 생성, 있으면 재분류(분류는 덮어쓰기가 정상 동작이다: 모델 업그레이드·폴백 복구). */
 	private void saveCanonicalGenre(Long exhibitionId, GenreResult result, ExhibitionGenre existing,
 			LocalDateTime now) {
 		if (existing == null) {
@@ -408,166 +472,121 @@ public class ExhibitionFacade {
 		}
 	}
 
-	/** DETAIL 작업이 만난 대상 전시의 상태(없음/이미완성/상세필요)를 판정한다(외부 호출은 호출부가 트랜잭션 밖에서). */
+	/** DETAIL 작업이 만난 대상 전시의 상태(없음/이미완성/상세필요)를 판정한다 — 상세 satellite 행 존재로 판정. */
 	@Transactional(readOnly = true)
 	public DetailTargetState findDetailTargetState(String externalId) {
 		Exhibition exhibition = exhibitionRepository.findByExternalId(externalId).orElse(null);
 		if (exhibition == null) {
 			return DetailTargetState.MISSING;
 		}
-		return exhibition.isDetailSynced() ? DetailTargetState.ALREADY_SYNCED : DetailTargetState.NEEDS_DETAIL;
+		return exhibitionDetailRepository.existsByExhibitionId(exhibition.getId())
+				? DetailTargetState.ALREADY_SYNCED : DetailTargetState.NEEDS_DETAIL;
 	}
 
-	/** DETAIL 작업 반영 — 받아온 상세를 전시에 채우고 원본을 벤더층에 보관한다. 상세로 확정된 place_key로 재검증도 건다. */
+	/** DETAIL 작업 반영 — 상세 satellite 채움 + 전시장 보강 + 원본 벤더층 보관. 그 전시장 자연키로 영업시간 재검증을 건다. */
 	@Transactional
 	public void applyDetailForJob(String externalId, CatalogDetailData detail) {
 		Exhibition exhibition = exhibitionRepository.findByExternalId(externalId).orElse(null);
-		if (exhibition == null || exhibition.isDetailSynced()) {
+		if (exhibition == null || exhibitionDetailRepository.existsByExhibitionId(exhibition.getId())) {
 			return;
 		}
-		exhibition.applyDetail(detail);
-		exhibitionRepository.save(exhibition);
+		applyCatalogDetail(exhibition, detail, LocalDateTime.now());
 		archiveDetailOutcome(externalId, detail);
-		enqueueHoursRefreshBestEffort(exhibition.getPlaceKey());
+		exhibitionPlaceRepository.findById(exhibition.getExhibitionPlaceId())
+				.ifPresent(place -> enqueueHoursRefreshBestEffort(place.getPlaceKey()));
 	}
 
-	/** DETAIL 작업 반영 — 원천에 상세가 없으면(빈 응답) 확인 완료만 표기해 재조회를 막는다(기존 동작). */
+	/** DETAIL 작업 반영 — 원천에 상세가 없으면(빈 응답) 확인 완료행만 남겨 재조회를 막는다(기존 동작). */
 	@Transactional
 	public void markDetailCheckedForJob(String externalId) {
 		Exhibition exhibition = exhibitionRepository.findByExternalId(externalId).orElse(null);
-		if (exhibition == null || exhibition.isDetailSynced()) {
+		if (exhibition == null || exhibitionDetailRepository.existsByExhibitionId(exhibition.getId())) {
 			return;
 		}
-		exhibition.markDetailChecked();
-		exhibitionRepository.save(exhibition);
-	}
-
-	/** HOURS_REFRESH 작업의 place_key로 조회 대상(장소명·주소·전시 id들)을 만든다. 그 장소를 쓰는 전시가 없으면 비어 있다. */
-	@Transactional(readOnly = true)
-	public java.util.Optional<PlaceHoursTarget> resolvePlaceHoursTarget(String placeKey) {
-		List<Exhibition> exhibitions = exhibitionRepository.findCatalogByPlaceKey(placeKey);
-		if (exhibitions.isEmpty()) {
-			return java.util.Optional.empty();
-		}
-		List<Long> ids = exhibitions.stream().map(Exhibition::getId).toList();
-		String placeName = exhibitions.get(0).getPlace();
-		String placeAddr = exhibitions.stream().map(Exhibition::getPlaceAddr)
-				.filter(a -> a != null && !a.isBlank()).findFirst().orElse(placeKey);
-		return java.util.Optional.of(new PlaceHoursTarget(placeName, placeAddr, ids));
+		saveCheckedDetail(exhibition.getId(), LocalDateTime.now());
 	}
 
 	/**
-	 * 영업시간 조회 대상을 <b>장소(placeAddr) 단위</b>로 묶어 최대 {@code maxVenues}개 반환한다 — 같은 장소 전시는 1콜로 처리하기 위함.
-	 * 대상 전시는 {@code staleBefore} 이전 조회분·미조회분(주소 있는 CATALOG)이며, 스캔 상한 내에서 등장한 장소들을 앞에서부터 채택한다.
+	 * HOURS_REFRESH 작업의 target_key(= {@code exhibition_place.place_key}, 정규화 이름 — ADR-07)로 조회 대상을 만든다.
+	 * 전시장이 없거나 주소가 없으면(질의 불가) 비어 있다 — 호출부가 그 작업을 성공 처리로 마감한다.
 	 */
 	@Transactional(readOnly = true)
-	public List<PlaceHoursTarget> findVenuesNeedingHours(java.time.LocalDateTime staleBefore, int maxVenues) {
-		List<Exhibition> candidates = exhibitionRepository.findCatalogNeedingOperatingHours(
-				staleBefore, PLACE_HOURS_SCAN_LIMIT);
-		// placeAddr → (대표 장소명 + 전시 id들). 등장 순서(placeAddr asc) 보존 + 장소 수 상한.
-		java.util.LinkedHashMap<String, java.util.List<Long>> idsByAddr = new java.util.LinkedHashMap<>();
-		java.util.Map<String, String> nameByAddr = new java.util.HashMap<>();
-		for (Exhibition e : candidates) {
-			String addr = e.getPlaceAddr();
-			if (addr == null || addr.isBlank()) {
-				continue;
-			}
-			if (!idsByAddr.containsKey(addr) && idsByAddr.size() >= Math.max(1, maxVenues)) {
-				continue; // 장소 상한 도달 — 새 장소는 다음 주기에
-			}
-			idsByAddr.computeIfAbsent(addr, k -> new java.util.ArrayList<>()).add(e.getId());
-			nameByAddr.putIfAbsent(addr, e.getPlace());
-		}
-		return idsByAddr.entrySet().stream()
-				.map(en -> new PlaceHoursTarget(nameByAddr.get(en.getKey()), en.getKey(), en.getValue()))
+	public java.util.Optional<PlaceHoursTarget> resolvePlaceHoursTarget(String placeKey) {
+		return exhibitionPlaceRepository.findByPlaceKey(placeKey)
+				.filter(place -> place.getAddress() != null && !place.getAddress().isBlank())
+				.map(place -> new PlaceHoursTarget(place.getId(), place.getName(), place.getAddress()));
+	}
+
+	/**
+	 * 영업시간 조회 대상을 <b>전시장 단위</b>로 최대 {@code maxVenues}개 반환한다 — 자연키가 이름(ADR-07)이라 장소당 1행이
+	 * 곧 유료 호출 1회다. 주소가 있고, 아직 정준행이 없거나 {@code staleBefore} 이전 동기화된 전시장을 앞에서부터 채택한다.
+	 */
+	@Transactional(readOnly = true)
+	public List<PlaceHoursTarget> findPlacesNeedingHours(LocalDateTime staleBefore, int maxVenues) {
+		return exhibitionPlaceRepository.findPlacesNeedingHours(staleBefore, Math.max(1, maxVenues)).stream()
+				.map(p -> new PlaceHoursTarget(p.getId(), p.getName(), p.getAddress()))
 				.toList();
 	}
 
 	/**
-	 * 한 장소의 조회 결과를 반영한다(장소 단위 트랜잭션): 벤더 원본 적재 + 정준층 저장 + 그 장소 전시들에 표시값 저장.
-	 * <p>
-	 * {@code exhibitions.operating_hours}에도 <b>계속</b> 쓴다(쓰기 이중화) — 읽기는 정준층으로 옮겼지만 컬럼 정리는
-	 * 7단계의 몫이고, 그때까지 이 컬럼이 즉시 복구 가능한 안전망으로 남는다.
-	 * {@code data}가 null(미발견)이면 전시엔 {@code formatted=null}로 값은 비우되 조회 시각만 남긴다(재조회 백오프 — 기존 동작).
+	 * 한 전시장의 조회 결과를 반영한다(전시장 단위 트랜잭션): 벤더 원본 적재 + 정준층(place_hours) 저장.
+	 * 읽기가 정준층으로 옮겨졌고 exhibitions의 영업시간 복제 컬럼은 제거됐으므로, 여기서 전시 행은 건드리지 않는다.
+	 * {@code data}가 null(미발견)이면 {@code formatted=null}로 값은 비우되 동기화 시각은 남긴다(재조회 백오프).
 	 */
 	@Transactional
 	public void applyVenueHours(PlaceHoursTarget target, PlaceHoursData data, String formatted,
-			PlaceHoursVendor vendor, java.time.LocalDateTime now) {
-		String placeKey = PlaceKey.of(target.placeAddr());
-		archiveGooglePlaceResponse(placeKey, data, vendor, now);
-		savePlaceHours(placeKey, formatted, PlaceHoursStatus.of(data, formatted), vendor, now);
-		for (Exhibition e : exhibitionRepository.findAllActiveByIds(target.exhibitionIds())) {
-			e.applyOperatingHours(formatted, now);
-			exhibitionRepository.save(e);
-		}
+			PlaceHoursVendor vendor, LocalDateTime now) {
+		Long placeId = target.exhibitionPlaceId();
+		archiveGooglePlaceResponse(placeId, data, vendor, now);
+		savePlaceHours(placeId, formatted, PlaceHoursStatus.of(data, formatted), vendor, now);
 	}
 
-	/**
-	 * 조회가 전송 오류로 실패했음을 정준층에 남긴다(재시도 대상). <b>표시값은 지우지 않는다</b> —
-	 * 부가 기능의 일시 장애로 사용자에게 보이던 영업시간이 사라지면 그건 서비스 후퇴다.
-	 * {@code operating_hours_synced_at}도 남기지 않아 다음 주기 재시도라는 기존 동작이 그대로 유지된다.
-	 */
+	/** 조회가 전송 오류로 실패했음을 정준층에 남긴다(재시도 대상). 표시값·동기화 시각은 지키지 않아 다음 주기 재시도가 유지된다. */
 	@Transactional
 	public void recordVenueHoursFailure(PlaceHoursTarget target, PlaceHoursVendor vendor) {
+		Long placeId = target.exhibitionPlaceId();
 		try {
-			savePlaceHours(PlaceKey.of(target.placeAddr()), null, PlaceHoursStatus.FAILED, vendor, LocalDateTime.now());
+			placeHoursRepository.findByExhibitionPlaceId(placeId)
+					.ifPresentOrElse(row -> {
+						row.recordFailure(vendor);
+						placeHoursRepository.save(row);
+					}, () -> placeHoursRepository.save(
+							PlaceHours.first(placeId, null, PlaceHoursStatus.FAILED, vendor, null)));
 		} catch (RuntimeException e) {
-			log.warn("영업시간 실패 기록 실패(장소={}, 보강은 계속): {}", target.placeAddr(), e.getMessage());
+			log.warn("영업시간 실패 기록 실패(placeId={}, 보강은 계속): {}", placeId, e.getMessage());
 		}
 	}
 
-	/**
-	 * 벤더 원본 upsert. <b>구글이 준 응답만</b> 적재한다 — 이 테이블은 구글 전용 벤더 테이블이라(카카오가 오면
-	 * {@code kakao_place_response}가 따로 생긴다) mock이 만든 값을 넣으면 "구글이 이렇게 답했다"는 거짓이 된다.
-	 * mock 실행은 정준층에 {@code provider=MOCK}으로만 남고 벤더층은 비어 있는 게 정상이다.
-	 */
-	private void archiveGooglePlaceResponse(String placeKey, PlaceHoursData data, PlaceHoursVendor vendor,
-			java.time.LocalDateTime now) {
-		if (placeKey == null || data == null || data.rawJson() == null || vendor != PlaceHoursVendor.GOOGLE) {
+	/** 벤더 원본 upsert — 구글이 준 응답만 적재한다(mock은 정준층에 provider=MOCK으로만 남고 벤더층은 비어 있는 게 정상). */
+	private void archiveGooglePlaceResponse(Long placeId, PlaceHoursData data, PlaceHoursVendor vendor,
+			LocalDateTime now) {
+		if (placeId == null || data == null || data.rawJson() == null || vendor != PlaceHoursVendor.GOOGLE) {
 			return;
 		}
-		googlePlaceResponseRepository.findByPlaceKey(placeKey)
+		googlePlaceResponseRepository.findByExhibitionPlaceId(placeId)
 				.ifPresentOrElse(row -> {
 					row.refresh(data.rawJson(), now);
 					googlePlaceResponseRepository.save(row);
 				}, () -> googlePlaceResponseRepository.save(
-						GooglePlaceResponse.first(placeKey, data.rawJson(), now)));
+						GooglePlaceResponse.first(placeId, data.rawJson(), now)));
 	}
 
-	/** 정준층 upsert — 없으면 생성, 있으면 갱신(영업시간은 바뀌는 값이라 덮어쓰기가 정상 동작이다). synced_at은 성공 확인 시각만 남긴다(재검증 간격 판정 기준). */
-	private void savePlaceHours(String placeKey, String formatted, PlaceHoursStatus status,
-			PlaceHoursVendor vendor, LocalDateTime now) {
-		if (placeKey == null) {
-			return; // 주소 없는 장소는 키가 없다 — 대상 선별이 placeAddr is not null이라 실제로는 오지 않는다.
+	/** 정준층 upsert — 없으면 생성, 있으면 갱신(영업시간은 바뀌는 값이라 덮어쓰기가 정상 동작). synced_at은 성공 확인 시각(재검증 간격 판정 기준). */
+	private void savePlaceHours(Long placeId, String formatted, PlaceHoursStatus status, PlaceHoursVendor vendor,
+			LocalDateTime now) {
+		if (placeId == null) {
+			return;
 		}
-		placeHoursRepository.findByPlaceKey(placeKey)
+		placeHoursRepository.findByExhibitionPlaceId(placeId)
 				.ifPresentOrElse(row -> {
 					row.refresh(formatted, status, vendor, now);
 					placeHoursRepository.save(row);
-				}, () -> placeHoursRepository.save(PlaceHours.first(placeKey, formatted, status, vendor, now)));
+				}, () -> placeHoursRepository.save(PlaceHours.first(placeId, formatted, status, vendor, now)));
 	}
 
 	/**
-	 * 상세의 operatingHours 출처 — 정준층({@code place_hours})에서 읽는다(이관 4단계, 읽기 전환).
-	 * 조회된 적 없는 장소면 null이고 상세는 값을 안 내려보낸다. {@code exhibitions.operating_hours}로 폴백하지
-	 * <b>않는다</b> — 폴백은 두 곳이 갈렸을 때 어느 쪽이 진실인지 모호하게 만들고, 정준층 쓰기가 통째로 빠져도
-	 * 아무도 눈치채지 못하게 한다. 전 경로가 덮인다는 근거는 쓰기 이중화와 V23 백필 두 개다.
-	 */
-	private PlaceHours placeHoursOf(String placeKey) {
-		return placeHoursRepository.findByPlaceKey(placeKey).orElse(null);
-	}
-
-	/**
-	 * 외부 전시 API 수집 → DB 적재/완성(<b>목록+상세 한 패스</b>). 목록과 상세2를 함께 받아 <b>적재 시점에 곧바로 완전한 행</b>으로 만든다:
-	 * <ul>
-	 *   <li>신규(externalId 미존재): 상세까지 채워 새로 적재한다.</li>
-	 *   <li>기존이나 상세 미완성: 상세만 채워 완성한다(장르 등 다른 보강값은 건드리지 않는다).</li>
-	 *   <li>이미 상세까지 완성: 건너뛴다(외부 상세 호출 없음 → 정상 상태에선 값이 안 바뀐다).</li>
-	 * </ul>
-	 * 별도 상세 백필 잡 없이 이 동기화 하나로 상세까지 채운다. 루프는 트랜잭션 밖에서 돌고 행 단위 save만 각자 트랜잭션으로 커밋해
-	 * 다건 상세 API 호출을 한 트랜잭션에 오래 물지 않는다(커넥션 장기 점유 방지). 장르(AI 분류)는 호출부가
-	 * {@link CatalogEnricher#enrichGenres()}로 이어서 채운다(미분류 행 = 방금 적재된 신규 전시).
-	 * 인증키 미설정 시 수집 목록이 비어 0을 반환한다(외부 호출 없음).
+	 * 외부 전시 API 수집 → DB 적재/완성(목록+상세 한 패스). 신규는 전시장을 resolve-or-create해 상세까지 채워 적재하고,
+	 * 기존 미완성은 상세만 채운다. 루프는 트랜잭션 밖, 행 단위 save만 각자 트랜잭션으로 커밋한다.
 	 *
 	 * @return 이번 동기화로 새로 적재된 전시 수(기존 행 상세 완성 건은 제외)
 	 */
@@ -583,7 +602,6 @@ public class ExhibitionFacade {
 		SyncRun run = SyncRun.started(trigger, syncedAt);
 		CatalogListData fetched = catalogClient.fetchAll();
 		List<CatalogExhibitionData> collected = fetched.items();
-		// 원천이 말한 총 건수와 절단 여부 — 현행이 파싱만 하고 버려 감지하지 못하던 사실이다.
 		run.fetched(fetched.totalCount(), fetched.truncated(), collected.size());
 		if (fetched.truncated()) {
 			log.warn("전시 동기화 절단 — 원천 총 {}건 중 상한(max-pages × num-of-rows)에 걸려 일부만 수집됨",
@@ -594,11 +612,7 @@ public class ExhibitionFacade {
 		int skipped = 0;
 		int deferred = 0;
 		for (CatalogExhibitionData data : collected) {
-			// 벤더층 기록은 도메인 적재보다 <b>먼저·무조건</b> 한다 — 기간 불량으로 스킵되는 행이야말로
-			// "원천이 뭐라고 했나"의 증거가 필요한 행이기 때문이다(원본은 도메인 유효성과 생명주기가 다르다).
 			archiveListResponse(data, syncedAt);
-			// 원천 데이터 품질 이슈(예: 종료일<시작일)로 단건이 도메인 불변식을 어겨도 배치 전체가 중단되지 않도록,
-			// 부적합 레코드는 건너뛰고 계속 적재한다. 엔티티를 건드리기 전에 걸러 dirty-flush도 방지한다.
 			if (!hasValidPeriod(data)) {
 				skipped++;
 				continue;
@@ -610,7 +624,6 @@ public class ExhibitionFacade {
 					case SKIPPED -> { /* 이미 완성된 행 — 변화 없음 */ }
 				}
 			} catch (RuntimeException e) {
-				// 상세 조회 등 일시 실패는 이번 행만 건너뛰고 다음 주기에 재시도한다(불완전한 행을 적재하지 않는다).
 				deferred++;
 				log.warn("전시 동기화 단건 실패(externalId={}, 다음 주기 재시도): {}", data.externalId(), e.getMessage());
 			}
@@ -619,12 +632,10 @@ public class ExhibitionFacade {
 			log.info("전시 동기화: 수집 {} / 신규적재 {} / 기존상세완성 {} / 기간스킵 {} / 실패연기 {}",
 					collected.size(), inserted, completed, skipped, deferred);
 		}
-		// 같은 집계를 행으로도 남긴다 — 로그는 질의할 수 없어 추이도 회귀도 볼 수 없다.
 		archiveSyncRun(run, inserted, completed, skipped, deferred);
 		return inserted;
 	}
 
-	/** 실행 기록 적재. 실패해도 동기화를 깨지 않는다 — 부가 기록이 본 기능을 멈추면 이관이 서비스를 후퇴시킨다. */
 	private void archiveSyncRun(SyncRun run, int inserted, int completed, int skipped, int deferred) {
 		try {
 			run.finished(inserted, completed, skipped, deferred, LocalDateTime.now());
@@ -638,30 +649,29 @@ public class ExhibitionFacade {
 		INSERTED, COMPLETED, SKIPPED
 	}
 
-	/**
-	 * 목록 1건을 상세까지 채워 적재/완성한다. 신규는 상세를 받아 새로 적재하고, 기존 미완성 행은 상세만 채워 완성한다.
-	 * 상세가 원천에 없으면(빈 응답) 목록 필드만으로 적재하되 확인 완료로 표기해 재조회를 막는다.
-	 * 상세 API 일시 실패는 예외로 전파되어 호출부에서 해당 행만 연기한다. save만 트랜잭션(외부 호출은 트랜잭션 밖).
-	 */
+	/** 목록 1건을 상세까지 채워 적재/완성한다. 신규는 전시장 resolve 후 새로 적재, 기존 미완성 행은 상세만 채운다. */
 	private SyncOutcome syncListedWithDetail(CatalogExhibitionData data) {
 		Exhibition existing = exhibitionRepository.findByExternalId(data.externalId()).orElse(null);
 		if (existing != null) {
-			if (existing.isDetailSynced()) {
-				return SyncOutcome.SKIPPED; // 이미 상세까지 완성 — 재적재/재호출 없음
+			if (exhibitionDetailRepository.existsByExhibitionId(existing.getId())) {
+				return SyncOutcome.SKIPPED;
 			}
 			applyDetailOrCheck(existing);
-			exhibitionRepository.save(existing);
 			return SyncOutcome.COMPLETED;
 		}
-		Exhibition created = Exhibition.createCatalog(data.externalId(), data.title(), data.place(),
-				data.startDate(), data.endDate(), data.region(), data.category(), data.posterUrl(), null, null,
-				null, data.detailUrl(), data.serviceName(), data.gpsX(), data.gpsY(), data.sigungu(),
-				data.realmName(), data.areaText());
-		applyDetailOrCheck(created);
-		exhibitionRepository.save(created);
-		// 이벤트 구동 재검증(설계 §4-1): 새 전시가 기존 장소(place_hours 존재)에 들어오면 그 장소 영업시간을 재검증 enqueue한다.
-		// 가드(기존 장소만·최소 간격·UK 중복)는 큐 파사드가 판단한다. place_key는 상세 도착 후에만 있으므로 여기(적재 직후)가 맞다.
-		enqueueHoursRefreshBestEffort(created.getPlaceKey());
+		// 신규는 상세를 <b>먼저</b> 받아본다 — 상세 호출이 일시 실패하면 아무것도 적재하지 않고 이 행만 다음 주기로 연기한다
+		// (불완전한 행·전시장만 남기지 않는다). 상세가 성공/빈 응답일 때만 전시장 resolve + 전시·상세 적재로 진행한다.
+		java.util.Optional<CatalogDetailData> detail = fetchDetailDeferring(data.externalId());
+		ExhibitionPlace place = resolvePlace(data.place(), data.region(), data.sigungu(), data.gpsX(), data.gpsY());
+		Exhibition saved = exhibitionRepository.save(Exhibition.createCatalog(data.externalId(), data.title(),
+				place.getId(), data.startDate(), data.endDate(), data.category(), data.posterUrl(), data.detailUrl(),
+				data.serviceName()));
+		LocalDateTime now = LocalDateTime.now();
+		detail.ifPresentOrElse(d -> applyCatalogDetail(saved, d, now), () -> saveCheckedDetail(saved.getId(), now));
+		archiveDetailOutcome(data.externalId(), detail.orElse(null));
+		// 이벤트 구동 재검증(설계 §4-1): 새 전시가 기존 장소(place_hours 존재)에 들어오면 재검증 enqueue한다. target_key는
+		// 전시장 자연키(정규화 이름). 가드(기존 장소만·최소 간격·UK 중복)는 큐 파사드가 판단한다.
+		enqueueHoursRefreshBestEffort(place.getPlaceKey());
 		return SyncOutcome.INSERTED;
 	}
 
@@ -677,32 +687,48 @@ public class ExhibitionFacade {
 		}
 	}
 
-	/** 원천 상세2를 받아 채우거나(있음), 상세 미보유(빈 응답)면 확인 완료만 표기한다. 일시 실패는 예외로 전파된다. */
+	/** 원천 상세2를 받아 상세를 채우거나(있음), 상세 미보유(빈 응답)면 확인 완료행만 남긴다. 일시 실패는 예외로 전파된다(기존 행 완성 경로). */
 	private void applyDetailOrCheck(Exhibition exhibition) {
-		String externalId = exhibition.getExternalId();
-		java.util.Optional<CatalogDetailData> detail;
+		java.util.Optional<CatalogDetailData> detail = fetchDetailDeferring(exhibition.getExternalId());
+		LocalDateTime now = LocalDateTime.now();
+		detail.ifPresentOrElse(d -> applyCatalogDetail(exhibition, d, now),
+				() -> saveCheckedDetail(exhibition.getId(), now));
+		archiveDetailOutcome(exhibition.getExternalId(), detail.orElse(null));
+	}
+
+	/** 상세를 조회한다. 일시 실패면 벤더층에 "시도했고 실패했다"를 남기고 예외를 전파해 호출부가 이 행만 연기하게 한다. */
+	private java.util.Optional<CatalogDetailData> fetchDetailDeferring(String externalId) {
 		try {
-			detail = catalogClient.fetchDetail(externalId);
+			return catalogClient.fetchDetail(externalId);
 		} catch (RuntimeException e) {
-			// 진행 상태(재시도)는 이제 통합 작업큐가 안다 — 상세 실패는 DETAIL_SYNC 작업으로 남겨 백오프 재시도되게 한다.
-			// (현행 최대 갭 해소: 벤더 테이블의 status/attempt는 쓰기만 되고 안 읽혔다.) 예외는 그대로 전파해 이 행만 연기하는 기존 동작은 불변이다.
+			// 진행 상태(재시도)는 통합 작업큐가 안다 — 상세 실패는 DETAIL_SYNC 작업으로 남겨 백오프 재시도되게 한다
+			// (V29에서 culture_detail_response 상태머신은 제거됐다). 예외는 전파해 이 행만 연기하는 동작은 불변.
 			enqueueDetailRetryBestEffort(externalId);
 			throw e;
 		}
-		detail.ifPresentOrElse(exhibition::applyDetail, exhibition::markDetailChecked);
-		archiveDetailOutcome(externalId, detail.orElse(null));
 	}
 
-	/**
-	 * 목록 응답 원본을 벤더층에 upsert한다(신규 = first, 재수집 = seenAgain). UK(external_id)라 멱등하다.
-	 * <p>
-	 * <b>실패해도 동기화를 깨지 않는다</b> — 이 단계의 원본 적재는 도메인 적재와 <b>병행</b>일 뿐이고, 읽는 곳이 아직 없다.
-	 * 부가 기록 때문에 본 기능이 멈추면 이관이 오히려 서비스를 후퇴시킨다({@link PlaceHoursEnricher}가 영업시간에
-	 * 적용하는 원칙과 같다).
-	 * <p>
-	 * payload가 null이면(원본 조각을 신뢰할 수 없는 응답) 적재하지 않는다 — 원본 없는 원본 행은 의미가 없고,
-	 * 잘못된 조각을 남기면 재파싱 원료가 오염된다.
-	 */
+	/** 상세 값을 상세 satellite에 upsert하고, 전시장 보강 필드(주소/전화/홈페이지)를 채운다. */
+	private void applyCatalogDetail(Exhibition exhibition, CatalogDetailData d, LocalDateTime now) {
+		exhibitionDetailRepository.findByExhibitionId(exhibition.getId())
+				.ifPresentOrElse(row -> {
+					row.update(d.price(), d.description(), d.imgUrl(), now);
+					exhibitionDetailRepository.save(row);
+				}, () -> exhibitionDetailRepository.save(
+						ExhibitionDetail.create(exhibition.getId(), d.price(), d.description(), d.imgUrl(), now)));
+		exhibitionPlaceRepository.findById(exhibition.getExhibitionPlaceId()).ifPresent(place -> {
+			place.enrichDetail(d.placeAddr(), d.phone(), d.placeUrl());
+			exhibitionPlaceRepository.save(place);
+		});
+	}
+
+	/** 상세를 확인했으나 원천에 값이 없음 — 확인 완료행만 남겨 재조회 대상에서 빠지게 한다(멱등). */
+	private void saveCheckedDetail(Long exhibitionId, LocalDateTime now) {
+		if (!exhibitionDetailRepository.existsByExhibitionId(exhibitionId)) {
+			exhibitionDetailRepository.save(ExhibitionDetail.markChecked(exhibitionId, now));
+		}
+	}
+
 	private void archiveListResponse(CatalogExhibitionData data, LocalDateTime syncedAt) {
 		if (data.payload() == null) {
 			return;
@@ -721,7 +747,7 @@ public class ExhibitionFacade {
 
 	/**
 	 * 상세 원본을 벤더층에 upsert한다(순수 원본 보관소 — 설계 §2). {@code data}가 있을 때만 기록한다:
-	 * 원천에 상세가 없으면(빈 응답) 남길 원본이 없어 행을 만들지 않는다(그 사실은 {@code exhibitions.detail_synced_at}이 안다).
+	 * 원천에 상세가 없으면(빈 응답) 남길 원본이 없어 행을 만들지 않는다(그 사실은 상세 satellite 행 존재가 안다).
 	 */
 	private void archiveDetailOutcome(String externalId, CatalogDetailData data) {
 		if (data == null) {
@@ -751,12 +777,10 @@ public class ExhibitionFacade {
 		}
 	}
 
-	/** 원천 데이터 기간 유효성 — 둘 다 있을 때만 시작일 ≤ 종료일. 결측은 관대하게 통과(엔티티 불변식과 동일 기준). */
 	private static boolean hasValidPeriod(CatalogExhibitionData data) {
 		return data.startDate() == null || data.endDate() == null || !data.startDate().isAfter(data.endDate());
 	}
 
-	/** date 지정 시 그 날짜, 아무 필터(키워드·지역·카테고리·섹션) 없으면 오늘(랜딩 기본), 그 외엔 기간 제한 없음. */
 	private LocalDate resolveOngoingOn(LocalDate date, String keyword, List<ExhibitionRegion> regions,
 			List<ExhibitionCategory> categories, ExhibitionSection section, LocalDate today) {
 		if (date != null) {
@@ -767,7 +791,6 @@ public class ExhibitionFacade {
 		return noOtherFilter ? today : null;
 	}
 
-	/** 섹션 날짜창을 오늘·period로 계산해 조회 쿼리를 만든다. */
 	private ExhibitionQuery buildQuery(String keyword, LocalDate ongoingOn, List<ExhibitionRegion> regions,
 			List<ExhibitionCategory> categories, ExhibitionSection section, LocalDate today, String period,
 			String sort, String cursorKey, Long cursorId, Long requesterId) {
@@ -797,7 +820,6 @@ public class ExhibitionFacade {
 		return exhibitionBookmarkRepository.findBookmarkedExhibitionIds(requesterId, ids);
 	}
 
-	/** 마지막 커서 값(정렬 컬럼값 + id)으로 다음 페이지 커서를 인코딩한다. 정렬 컬럼값이 null이면 key 없이 id만. */
 	private static String encodeCursor(String sort, Exhibition last) {
 		String key = switch (sort) {
 			case "ending" -> last.getEndDate() == null ? null : last.getEndDate().toString();
@@ -807,22 +829,22 @@ public class ExhibitionFacade {
 		return Cursor.of(sort, key, last.getId()).encode();
 	}
 
-	private static Comparator<Exhibition> distanceComparator(double lat, double lng) {
-		return Comparator.comparingDouble((Exhibition e) -> distanceSq(e, lat, lng))
-				.thenComparing(Exhibition::getId);
+	private static Comparator<Exhibition> distanceComparator(Map<Long, ExhibitionPlace> placesById, double lat,
+			double lng) {
+		return Comparator.comparingDouble((Exhibition e) -> distanceSq(placesById.get(e.getExhibitionPlaceId()), lat,
+				lng)).thenComparing(Exhibition::getId);
 	}
 
-	/** 단순 제곱 유클리드 거리(좌표 null은 최댓값 → 뒤로). 근거리 정렬 근사로 충분하다(정밀 하버사인 대신 단순화). */
-	private static double distanceSq(Exhibition e, double lat, double lng) {
-		if (e.getGpsX() == null || e.getGpsY() == null) {
+	/** 단순 제곱 유클리드 거리(좌표 null은 최댓값 → 뒤로). 좌표는 전시장에서 온다. */
+	private static double distanceSq(ExhibitionPlace place, double lat, double lng) {
+		if (place == null || place.getGpsX() == null || place.getGpsY() == null) {
 			return Double.MAX_VALUE;
 		}
-		double dx = e.getGpsX() - lng;
-		double dy = e.getGpsY() - lat;
+		double dx = place.getGpsX() - lng;
+		double dy = place.getGpsY() - lat;
 		return dx * dx + dy * dy;
 	}
 
-	/** 정렬된 리스트에서 lastId 항목 다음 인덱스. 못 찾으면(데이터 변동) 0(처음부터). */
 	private static int nextIndexAfter(List<Exhibition> ordered, Long lastId) {
 		for (int i = 0; i < ordered.size(); i++) {
 			if (ordered.get(i).getId().equals(lastId)) {
@@ -862,7 +884,6 @@ public class ExhibitionFacade {
 				.map(ExhibitionCategory::from).toList();
 	}
 
-	/** sort 코드 → 정규화(latest 기본). 미정의 값은 latest로 취급한다(커서 정렬 판별자도 이 값으로 통일). */
 	private static String canonicalSort(String sort) {
 		if (sort == null) {
 			return "latest";
