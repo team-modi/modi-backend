@@ -5,6 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 echo "[seed] modi-mysql/mydatabase 에 전시 시드 적용 중..."
 docker exec -i modi-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" mydatabase' < scripts/seed-local-exhibitions.sql
+echo "[seed] 더미 보강(영업시간·장르·상세필드) 적용 중..."
+docker exec -i modi-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" mydatabase' < scripts/seed-local-dummy-enrichment.sql
 echo "[seed] 완료. 검증:"
 docker exec modi-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N mydatabase -e "SELECT CONCAT(\"exhibitions=\",COUNT(*)) FROM exhibitions; SELECT CONCAT(\"genre=\",COUNT(*)) FROM exhibition_genre; SELECT CONCAT(\"list_raw=\",COUNT(*)) FROM culture_list_response;"'
 echo "[seed] 참고: CULTURE_API_KEY를 비워두면 부팅 동기화가 skip되어 시드가 유지된다."
