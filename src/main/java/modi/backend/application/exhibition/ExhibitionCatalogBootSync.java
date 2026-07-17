@@ -35,7 +35,7 @@ public class ExhibitionCatalogBootSync implements ApplicationRunner {
 		// 목록+상세 동기화 후 장르 분류 — readiness를 막지 않도록 데몬 스레드에서 1회 수행(실패해도 자정 동기화가 재시도).
 		Thread bootSync = new Thread(() -> {
 			try {
-				int synced = exhibitionFacade.syncCatalog();
+				int synced = exhibitionFacade.syncCatalog(modi.backend.domain.exhibition.SyncTrigger.BOOT);
 				log.info("부팅 시 전시 카탈로그 동기화(상세 포함) 신규 {}건", synced);
 			} catch (RuntimeException e) {
 				log.warn("부팅 시 전시 카탈로그 동기화 스킵(외부 불가) — {}", e.getMessage());

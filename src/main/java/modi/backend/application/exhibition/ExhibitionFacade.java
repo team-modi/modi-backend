@@ -43,6 +43,7 @@ import modi.backend.domain.exhibition.GenreKeyword;
 import modi.backend.domain.exhibition.GenreResult;
 import modi.backend.domain.exhibition.GooglePlaceResponse;
 import modi.backend.domain.exhibition.GooglePlaceResponseRepository;
+import modi.backend.domain.exhibition.JobType;
 import modi.backend.domain.exhibition.PlaceHours;
 import modi.backend.domain.exhibition.PlaceHoursData;
 import modi.backend.domain.exhibition.PlaceHoursRepository;
@@ -51,6 +52,7 @@ import modi.backend.domain.exhibition.PlaceHoursVendor;
 import modi.backend.domain.exhibition.PlaceKey;
 import modi.backend.domain.exhibition.SyncRun;
 import modi.backend.domain.exhibition.SyncRunRepository;
+import modi.backend.domain.exhibition.SyncTrigger;
 import modi.backend.domain.venue.Venue;
 import modi.backend.domain.venue.VenueErrorCode;
 import modi.backend.domain.venue.VenueRepository;
@@ -97,6 +99,8 @@ public class ExhibitionFacade {
 	private final CultureDetailResponseRepository cultureDetailResponseRepository;
 	/** 동기화 실행 기록 — 원천을 다 가져왔나(조용한 절단 감지)와 실행 집계를 남긴다. */
 	private final SyncRunRepository syncRunRepository;
+	/** 통합 보강 작업큐 — 상세 실패 재시도·이벤트 구동 영업시간 재검증을 enqueue한다(at-least-once의 진입점). */
+	private final EnrichmentJobFacade enrichmentJobFacade;
 
 	/** 지역 필터 그룹 목록(디자인 병합 칩). 정적 enum 메타데이터라 조회 없이 변환만 한다. */
 	public List<ExhibitionResult.RegionGroup> getRegionGroups() {
@@ -350,6 +354,108 @@ public class ExhibitionFacade {
 		exhibitionGenreRepository.save(existing);
 	}
 
+	// ── 통합 작업큐 처리기(enricher) 지원 — 조회/반영을 값으로 주고받아 외부 호출을 트랜잭션 밖에 둔다 ──────────
+
+	/** 미분류 CATALOG 전시의 원천 식별자들(GENRE_CLASSIFY 스윕용). 대상이 "미분류 행"이라 멱등하다. */
+	@Transactional(readOnly = true)
+	public List<String> findUnclassifiedCatalogExternalIds(int limit) {
+		return exhibitionRepository.findCatalogWithoutGenre(limit).stream()
+				.map(Exhibition::getExternalId)
+				.filter(id -> id != null && !id.isBlank())
+				.toList();
+	}
+
+	/**
+	 * GENRE 작업 배치의 <b>조회 단계</b> — 아직 미분류인(정준층 행 없음) 전시만 골라 {@code external_id → 분류 입력}으로 돌려준다.
+	 * 이미 분류됐거나 사라진 전시의 external_id는 결과에서 빠진다(호출부가 그 작업을 성공 처리로 마감한다).
+	 */
+	@Transactional(readOnly = true)
+	public Map<String, GenreClassification> resolveGenreInputs(java.util.Collection<String> externalIds) {
+		List<Exhibition> exhibitions = exhibitionRepository.findAllByExternalIds(externalIds);
+		if (exhibitions.isEmpty()) {
+			return Map.of();
+		}
+		List<Long> ids = exhibitions.stream().map(Exhibition::getId).toList();
+		Set<Long> classified = exhibitionGenreRepository.findAllByExhibitionIds(ids).stream()
+				.map(ExhibitionGenre::getExhibitionId).collect(Collectors.toSet());
+		Map<String, GenreClassification> inputs = new java.util.HashMap<>();
+		for (Exhibition e : exhibitions) {
+			if (!classified.contains(e.getId())) {
+				inputs.put(e.getExternalId(), GenreClassification.from(e));
+			}
+		}
+		return inputs;
+	}
+
+	/** GENRE 작업 배치의 <b>반영 단계</b> — 분류 성공분만 정준층에 쓴다(AI 폴백분은 호출부가 아예 넘기지 않는다). */
+	@Transactional
+	public void applyGenreResults(Map<String, GenreResult> resultsByExternalId, LocalDateTime now) {
+		if (resultsByExternalId.isEmpty()) {
+			return;
+		}
+		List<Exhibition> exhibitions = exhibitionRepository.findAllByExternalIds(resultsByExternalId.keySet());
+		if (exhibitions.isEmpty()) {
+			return;
+		}
+		List<Long> ids = exhibitions.stream().map(Exhibition::getId).toList();
+		Map<Long, ExhibitionGenre> existing = exhibitionGenreRepository.findAllByExhibitionIds(ids).stream()
+				.collect(Collectors.toMap(ExhibitionGenre::getExhibitionId, g -> g));
+		for (Exhibition e : exhibitions) {
+			GenreResult result = resultsByExternalId.get(e.getExternalId());
+			if (result != null) {
+				saveCanonicalGenre(e.getId(), result, existing.get(e.getId()), now);
+			}
+		}
+	}
+
+	/** DETAIL 작업이 만난 대상 전시의 상태(없음/이미완성/상세필요)를 판정한다(외부 호출은 호출부가 트랜잭션 밖에서). */
+	@Transactional(readOnly = true)
+	public DetailTargetState findDetailTargetState(String externalId) {
+		Exhibition exhibition = exhibitionRepository.findByExternalId(externalId).orElse(null);
+		if (exhibition == null) {
+			return DetailTargetState.MISSING;
+		}
+		return exhibition.isDetailSynced() ? DetailTargetState.ALREADY_SYNCED : DetailTargetState.NEEDS_DETAIL;
+	}
+
+	/** DETAIL 작업 반영 — 받아온 상세를 전시에 채우고 원본을 벤더층에 보관한다. 상세로 확정된 place_key로 재검증도 건다. */
+	@Transactional
+	public void applyDetailForJob(String externalId, CatalogDetailData detail) {
+		Exhibition exhibition = exhibitionRepository.findByExternalId(externalId).orElse(null);
+		if (exhibition == null || exhibition.isDetailSynced()) {
+			return;
+		}
+		exhibition.applyDetail(detail);
+		exhibitionRepository.save(exhibition);
+		archiveDetailOutcome(externalId, detail);
+		enqueueHoursRefreshBestEffort(exhibition.getPlaceKey());
+	}
+
+	/** DETAIL 작업 반영 — 원천에 상세가 없으면(빈 응답) 확인 완료만 표기해 재조회를 막는다(기존 동작). */
+	@Transactional
+	public void markDetailCheckedForJob(String externalId) {
+		Exhibition exhibition = exhibitionRepository.findByExternalId(externalId).orElse(null);
+		if (exhibition == null || exhibition.isDetailSynced()) {
+			return;
+		}
+		exhibition.markDetailChecked();
+		exhibitionRepository.save(exhibition);
+	}
+
+	/** HOURS_REFRESH 작업의 place_key로 조회 대상(장소명·주소·전시 id들)을 만든다. 그 장소를 쓰는 전시가 없으면 비어 있다. */
+	@Transactional(readOnly = true)
+	public java.util.Optional<PlaceHoursTarget> resolvePlaceHoursTarget(String placeKey) {
+		List<Exhibition> exhibitions = exhibitionRepository.findCatalogByPlaceKey(placeKey);
+		if (exhibitions.isEmpty()) {
+			return java.util.Optional.empty();
+		}
+		List<Long> ids = exhibitions.stream().map(Exhibition::getId).toList();
+		String placeName = exhibitions.get(0).getPlace();
+		String placeAddr = exhibitions.stream().map(Exhibition::getPlaceAddr)
+				.filter(a -> a != null && !a.isBlank()).findFirst().orElse(placeKey);
+		return java.util.Optional.of(new PlaceHoursTarget(placeName, placeAddr, ids));
+	}
+
 	/**
 	 * 영업시간 조회 대상을 <b>장소(placeAddr) 단위</b>로 묶어 최대 {@code maxVenues}개 반환한다 — 같은 장소 전시는 1콜로 처리하기 위함.
 	 * 대상 전시는 {@code staleBefore} 이전 조회분·미조회분(주소 있는 CATALOG)이며, 스캔 상한 내에서 등장한 장소들을 앞에서부터 채택한다.
@@ -389,7 +495,7 @@ public class ExhibitionFacade {
 			PlaceHoursVendor vendor, java.time.LocalDateTime now) {
 		String placeKey = PlaceKey.of(target.placeAddr());
 		archiveGooglePlaceResponse(placeKey, data, vendor, now);
-		savePlaceHours(placeKey, formatted, PlaceHoursStatus.of(data, formatted), vendor);
+		savePlaceHours(placeKey, formatted, PlaceHoursStatus.of(data, formatted), vendor, now);
 		for (Exhibition e : exhibitionRepository.findAllActiveByIds(target.exhibitionIds())) {
 			e.applyOperatingHours(formatted, now);
 			exhibitionRepository.save(e);
@@ -404,7 +510,7 @@ public class ExhibitionFacade {
 	@Transactional
 	public void recordVenueHoursFailure(PlaceHoursTarget target, PlaceHoursVendor vendor) {
 		try {
-			savePlaceHours(PlaceKey.of(target.placeAddr()), null, PlaceHoursStatus.FAILED, vendor);
+			savePlaceHours(PlaceKey.of(target.placeAddr()), null, PlaceHoursStatus.FAILED, vendor, LocalDateTime.now());
 		} catch (RuntimeException e) {
 			log.warn("영업시간 실패 기록 실패(장소={}, 보강은 계속): {}", target.placeAddr(), e.getMessage());
 		}
@@ -428,17 +534,17 @@ public class ExhibitionFacade {
 						GooglePlaceResponse.first(placeKey, data.rawJson(), now)));
 	}
 
-	/** 정준층 upsert — 없으면 생성, 있으면 갱신(영업시간은 바뀌는 값이라 덮어쓰기가 정상 동작이다). */
+	/** 정준층 upsert — 없으면 생성, 있으면 갱신(영업시간은 바뀌는 값이라 덮어쓰기가 정상 동작이다). synced_at은 성공 확인 시각만 남긴다(재검증 간격 판정 기준). */
 	private void savePlaceHours(String placeKey, String formatted, PlaceHoursStatus status,
-			PlaceHoursVendor vendor) {
+			PlaceHoursVendor vendor, LocalDateTime now) {
 		if (placeKey == null) {
 			return; // 주소 없는 장소는 키가 없다 — 대상 선별이 placeAddr is not null이라 실제로는 오지 않는다.
 		}
 		placeHoursRepository.findByPlaceKey(placeKey)
 				.ifPresentOrElse(row -> {
-					row.refresh(formatted, status, vendor);
+					row.refresh(formatted, status, vendor, now);
 					placeHoursRepository.save(row);
-				}, () -> placeHoursRepository.save(PlaceHours.first(placeKey, formatted, status, vendor)));
+				}, () -> placeHoursRepository.save(PlaceHours.first(placeKey, formatted, status, vendor, now)));
 	}
 
 	/**
@@ -466,10 +572,15 @@ public class ExhibitionFacade {
 	 * @return 이번 동기화로 새로 적재된 전시 수(기존 행 상세 완성 건은 제외)
 	 */
 	public int syncCatalog() {
+		return syncCatalog(SyncTrigger.SCHEDULE);
+	}
+
+	/** 계기(BOOT/SCHEDULE/MANUAL)를 명시한 동기화 — sync_run.trigger_type에 남긴다("왜 이 시각에 돌았나"). */
+	public int syncCatalog(SyncTrigger trigger) {
 		// 배치 전체가 같은 last_seen_at을 공유해야 "이번 동기화에 안 보인 행"(last_seen_at < 이 시각)이 한 번에 가려진다.
 		// 아이템마다 now()를 찍으면 그 경계가 흐려진다.
 		LocalDateTime syncedAt = LocalDateTime.now();
-		SyncRun run = SyncRun.started(syncedAt);
+		SyncRun run = SyncRun.started(trigger, syncedAt);
 		CatalogListData fetched = catalogClient.fetchAll();
 		List<CatalogExhibitionData> collected = fetched.items();
 		// 원천이 말한 총 건수와 절단 여부 — 현행이 파싱만 하고 버려 감지하지 못하던 사실이다.
@@ -548,7 +659,22 @@ public class ExhibitionFacade {
 				data.realmName(), data.areaText());
 		applyDetailOrCheck(created);
 		exhibitionRepository.save(created);
+		// 이벤트 구동 재검증(설계 §4-1): 새 전시가 기존 장소(place_hours 존재)에 들어오면 그 장소 영업시간을 재검증 enqueue한다.
+		// 가드(기존 장소만·최소 간격·UK 중복)는 큐 파사드가 판단한다. place_key는 상세 도착 후에만 있으므로 여기(적재 직후)가 맞다.
+		enqueueHoursRefreshBestEffort(created.getPlaceKey());
 		return SyncOutcome.INSERTED;
+	}
+
+	/** 영업시간 재검증 enqueue는 부가 작업이라 어떤 실패(큐 저장 오류 등)도 동기화를 깨지 않는다 — 이 장소만 건너뛴다. */
+	private void enqueueHoursRefreshBestEffort(String placeKey) {
+		if (placeKey == null) {
+			return;
+		}
+		try {
+			enrichmentJobFacade.enqueueHoursRefresh(placeKey, LocalDateTime.now());
+		} catch (RuntimeException e) {
+			log.warn("영업시간 재검증 enqueue 실패(placeKey={}, 동기화는 계속): {}", placeKey, e.getMessage());
+		}
 	}
 
 	/** 원천 상세2를 받아 채우거나(있음), 상세 미보유(빈 응답)면 확인 완료만 표기한다. 일시 실패는 예외로 전파된다. */
@@ -558,8 +684,9 @@ public class ExhibitionFacade {
 		try {
 			detail = catalogClient.fetchDetail(externalId);
 		} catch (RuntimeException e) {
-			// 벤더층엔 "시도했고 실패했다"를 남기고 예외는 그대로 전파한다 — 호출부가 이 행만 연기하는 기존 동작은 불변이다.
-			archiveDetailFailure(externalId);
+			// 진행 상태(재시도)는 이제 통합 작업큐가 안다 — 상세 실패는 DETAIL_SYNC 작업으로 남겨 백오프 재시도되게 한다.
+			// (현행 최대 갭 해소: 벤더 테이블의 status/attempt는 쓰기만 되고 안 읽혔다.) 예외는 그대로 전파해 이 행만 연기하는 기존 동작은 불변이다.
+			enqueueDetailRetryBestEffort(externalId);
 			throw e;
 		}
 		detail.ifPresentOrElse(exhibition::applyDetail, exhibition::markDetailChecked);
@@ -592,37 +719,35 @@ public class ExhibitionFacade {
 		}
 	}
 
-	/** 상세 응답 결과(상세 있음 / 원천에 없음)를 벤더층에 기록한다. {@code data}가 null이면 원천에 상세가 없다는 뜻이다. */
+	/**
+	 * 상세 원본을 벤더층에 upsert한다(순수 원본 보관소 — 설계 §2). {@code data}가 있을 때만 기록한다:
+	 * 원천에 상세가 없으면(빈 응답) 남길 원본이 없어 행을 만들지 않는다(그 사실은 {@code exhibitions.detail_synced_at}이 안다).
+	 */
 	private void archiveDetailOutcome(String externalId, CatalogDetailData data) {
+		if (data == null) {
+			return;
+		}
 		try {
-			CultureDetailResponse existing = cultureDetailResponseRepository.findByExternalId(externalId).orElse(null);
-			if (existing == null) {
-				cultureDetailResponseRepository.save(data == null
-						? CultureDetailResponse.noData(externalId)
-						: CultureDetailResponse.succeeded(externalId, data.payload()));
-				return;
-			}
-			if (data == null) {
-				existing.recordNoData();
-			} else {
-				existing.recordSucceeded(data.payload());
-			}
-			cultureDetailResponseRepository.save(existing);
+			cultureDetailResponseRepository.findByExternalId(externalId)
+					.ifPresentOrElse(row -> {
+						row.refresh(data.payload());
+						cultureDetailResponseRepository.save(row);
+					}, () -> cultureDetailResponseRepository.save(
+							CultureDetailResponse.first(externalId, data.payload())));
 		} catch (RuntimeException e) {
 			log.warn("상세 원본 적재 실패(externalId={}, 동기화는 계속): {}", externalId, e.getMessage());
 		}
 	}
 
-	/** 상세 호출이 일시 실패했음을 벤더층에 기록한다(재시도 대상). 기록 자체의 실패는 동기화를 깨지 않는다. */
-	private void archiveDetailFailure(String externalId) {
+	/**
+	 * 상세 조회 실패를 재시도 작업으로 남긴다(DETAIL_SYNC). 진행 상태·재시도는 통합 작업큐가 맡으므로 벤더 테이블엔
+	 * 아무것도 쓰지 않는다. 큐 저장 실패는 동기화를 깨지 않는다 — 예외는 상위(applyDetailOrCheck)가 전파해 이 행만 연기한다.
+	 */
+	private void enqueueDetailRetryBestEffort(String externalId) {
 		try {
-			cultureDetailResponseRepository.findByExternalId(externalId)
-					.ifPresentOrElse(row -> {
-						row.recordFailed();
-						cultureDetailResponseRepository.save(row);
-					}, () -> cultureDetailResponseRepository.save(CultureDetailResponse.failed(externalId)));
+			enrichmentJobFacade.enqueue(JobType.DETAIL_SYNC, externalId, LocalDateTime.now());
 		} catch (RuntimeException e) {
-			log.warn("상세 실패 기록 실패(externalId={}, 동기화는 계속): {}", externalId, e.getMessage());
+			log.warn("상세 재시도 작업 enqueue 실패(externalId={}, 동기화는 계속): {}", externalId, e.getMessage());
 		}
 	}
 

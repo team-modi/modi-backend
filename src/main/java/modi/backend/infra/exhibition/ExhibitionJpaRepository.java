@@ -72,4 +72,11 @@ public interface ExhibitionJpaRepository
 
 	/** 여러 전시를 ID로 조회(사용자 상세의 북마크/전시활동 제목 표시용, 살아있는 행만). */
 	List<Exhibition> findByIdInAndDeletedAtIsNull(java.util.Collection<Long> ids);
+
+	/** 여러 원천 식별자로 CATALOG 전시를 일괄 조회(작업큐 대상 해소용, 살아있는 행만). */
+	List<Exhibition> findByTypeAndExternalIdInAndDeletedAtIsNull(ExhibitionType type,
+			java.util.Collection<String> externalIds);
+
+	/** 같은 장소키를 공유하는 CATALOG 전시들(영업시간 재검증 작업의 대상 장소 해소용, 살아있는 행만). */
+	List<Exhibition> findByTypeAndPlaceKeyAndDeletedAtIsNull(ExhibitionType type, String placeKey);
 }
