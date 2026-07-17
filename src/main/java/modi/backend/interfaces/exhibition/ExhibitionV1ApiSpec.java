@@ -21,40 +21,7 @@ import modi.backend.interfaces.exhibition.dto.ExhibitionDto;
 /**
  * 전시 API Swagger 스펙(03_전시.md). MVC 어노테이션은 {@link ExhibitionV1Controller}.
  */
-@Tag(name = "Exhibition", description = """
-		전시 목록/탐색 · 상세 · 개인 전시 등록.
-
-		## 공통 응답 포맷(ApiResponse)
-		모든 응답은 아래 봉투(envelope)로 감싸진다. 성공은 예외 없이 HTTP 200이며(프로젝트 컨벤션 — 201 미사용),
-		실패는 에러의 HTTP 상태 코드와 함께 meta.result=FAIL · meta.errorCode · meta.message가 내려간다.
-		```
-		{
-		  "meta": { "result": "SUCCESS" | "FAIL", "errorCode": string | null, "message": string | null },
-		  "data": <T> | null
-		}
-		```
-		검증(Bean Validation) 실패는 위 포맷의 data에 필드별 오류 배열이 추가로 담긴다:
-		```
-		"data": [ { "field": "title", "value": "", "reason": "공백일 수 없습니다" } ]
-		```
-
-		## 공통 에러 코드(ErrorType)
-		| errorCode | HTTP | 의미 |
-		|---|---|---|
-		| INVALID_INPUT | 400 | 요청 파라미터/바디가 올바르지 않음(형식 오류·미정의 enum 코드 등) |
-		| INVALID_CURSOR | 400 | 커서-조건 불일치·손상된 커서 |
-		| UNAUTHORIZED | 401 | 인증(Bearer access 토큰)이 필요하거나 무효함 |
-		| FORBIDDEN | 403 | 인증은 됐으나 해당 리소스 접근 권한이 없음 |
-		| NOT_FOUND | 404 | 요청한 리소스를 찾을 수 없음 |
-		| METHOD_NOT_ALLOWED | 405 | 허용되지 않은 HTTP 메서드 |
-		| INTERNAL_ERROR | 500 | 서버 내부 오류 |
-
-		## 전시 도메인 에러 코드(ExhibitionErrorCode)
-		| errorCode | HTTP | 의미 |
-		|---|---|---|
-		| NOT_FOUND | 404 | 요청한 전시를 찾을 수 없음 |
-		| EXTERNAL_API_UNAVAILABLE | 503 | 외부 전시 정보(문화포털 등)를 불러올 수 없음 |
-		""")
+@Tag(name = "Exhibition", description = "전시 목록/탐색 · 상세 · 개인 전시 등록.")
 public interface ExhibitionV1ApiSpec {
 
 	@Operation(summary = "전시 목록/탐색", description = """
