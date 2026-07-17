@@ -47,8 +47,14 @@ class ExhibitionDetailTest {
 		venueRepository = mock(modi.backend.domain.venue.VenueRepository.class);
 		recordJpaRepository = mock(RecordJpaRepository.class);
 		facade = new ExhibitionFacade(exhibitionRepository, catalogClient, bookmarkRepository, venueRepository,
-				recordJpaRepository, mock(modi.backend.domain.exhibition.PlaceHoursSnapshotRepository.class),
-				new modi.backend.infra.genre.RandomGenreClassifier());
+				recordJpaRepository, mock(modi.backend.domain.exhibition.PlaceHoursRepository.class),
+				mock(modi.backend.domain.exhibition.GooglePlaceResponseRepository.class),
+				new modi.backend.infra.genre.RandomGenreClassifier(),
+				mock(modi.backend.domain.exhibition.ExhibitionGenreRepository.class),
+				mock(modi.backend.domain.exhibition.CultureListResponseRepository.class),
+				mock(modi.backend.domain.exhibition.CultureDetailResponseRepository.class),
+				mock(modi.backend.domain.exhibition.SyncRunRepository.class),
+				mock(EnrichmentJobFacade.class));
 		given(exhibitionRepository.save(any(Exhibition.class))).willAnswer(invocation -> invocation.getArgument(0));
 	}
 
@@ -63,7 +69,7 @@ class ExhibitionDetailTest {
 		Exhibition e = catalogNotSynced("S1");
 		given(exhibitionRepository.findById(1L)).willReturn(Optional.of(e));
 		given(catalogClient.fetchDetail("S1"))
-				.willReturn(Optional.of(new CatalogDetailData("무료", null, null, null, null, null, "주소", null)));
+				.willReturn(Optional.of(new CatalogDetailData("무료", null, null, null, null, null, "주소", null, null)));
 
 		facade.getDetail(new ExhibitionCriteria.Detail(1L, null));
 
@@ -110,7 +116,7 @@ class ExhibitionDetailTest {
 	@Test
 	@DisplayName("타인의 CUSTOM 전시 조회 시 403")
 	void 상세_타인의_CUSTOM_403() {
-		Exhibition custom = Exhibition.createCustom(10L, "개인 전시", "장소", null, null, null, null, null, null, null,
+		Exhibition custom = Exhibition.createCustom(10L, "개인 전시", "장소", null, null, null, null, null, null,
 				null);
 		given(exhibitionRepository.findById(3L)).willReturn(Optional.of(custom));
 

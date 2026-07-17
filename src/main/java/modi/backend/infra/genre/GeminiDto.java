@@ -65,9 +65,15 @@ public final class GeminiDto {
 
 	// ----- 응답 -----
 
-	/** 응답 루트. 후보 첫 파트의 텍스트가 곧 분류 결과다. */
+	/**
+	 * 응답 루트. 후보 첫 파트의 텍스트가 곧 분류 결과다.
+	 * <p>
+	 * {@code modelVersion}은 <b>실제 서빙 모델</b>이다 — 요청 모델({@code app.exhibition.genre.gemini.model})은 별칭(alias)일
+	 * 수 있어 진실은 응답에 있다. 정준층({@code exhibition_genre.model})이 이 값을 기록해 모델 업그레이드 시 구모델 산출분만
+	 * 선별 재분류한다. {@code ignoreUnknown}은 <b>선언된 컴포넌트의 바인딩을 막지 않는다</b>(선언 안 된 여분 필드만 무시).
+	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
-	public record Response(List<Candidate> candidates) {
+	public record Response(List<Candidate> candidates, String modelVersion) {
 
 		/** 첫 후보의 첫 파트 텍스트(없으면 null). */
 		public String firstText() {

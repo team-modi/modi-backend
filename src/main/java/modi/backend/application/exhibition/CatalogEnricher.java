@@ -1,19 +1,36 @@
 package modi.backend.application.exhibition;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
 import modi.backend.config.CatalogEnrichProperties;
+import modi.backend.config.GenreProperties;
+import modi.backend.domain.exhibition.EnrichmentJob;
+import modi.backend.domain.exhibition.GenreClassification;
+import modi.backend.domain.exhibition.GenreClassifier;
+import modi.backend.domain.exhibition.GenreProvider;
+import modi.backend.domain.exhibition.GenreResult;
+import modi.backend.domain.exhibition.JobFailureType;
+import modi.backend.domain.exhibition.JobType;
 
 /**
- * 공공데이터(CATALOG) 장르 보강 오케스트레이션.
- * <p>
- * 목록 동기화({@link ExhibitionFacade#syncCatalog()})가 목록+상세를 한 패스로 채우므로, 여기서는 상세 대신 <b>장르(AI 분류)만</b> 담당한다:
- * 미분류 CATALOG를 배치로(배치당 AI 1콜) 상한 내 반복 분류해 전량 백필한다(273건도 배치 크기 40이면 몇 콜로 끝난다).
- * 루프는 트랜잭션 밖에서 돌고 배치 단위 처리만 {@link ExhibitionFacade}의 트랜잭션 메서드(프록시 경유)로 위임해,
- * 다건 AI 호출을 한 트랜잭션에 오래 물지 않는다. 대상이 "미분류 행"이라 멱등 — 반복 실행돼도 신규 행만 처리한다.
+ * 공공데이터(CATALOG) 장르 보강 오케스트레이션 — <b>통합 작업큐 기반</b>({@link JobType#GENRE_CLASSIFY}).
+ *
+ * <p><b>왜 큐인가</b>(사용자 최우선 요구 "AI는 늦어도 최소 1회 무조건"): 현행은 AI 장애 시 랜덤 폴백값이
+ * {@code genre_keyword}에 저장돼 미분류(IS NULL) 대상에서 빠져 <b>영구 이탈</b>했다 — AI가 회복돼도 다시 분류되지 않았다.
+ * 이제 미분류 전시를 GENRE_CLASSIFY 작업으로 남기고, AI가 폴백하면(=장애) 작업을 <b>RETRYABLE</b>로 두어 회복 후
+ * 자동 재분류되게 한다. 그동안 전시는 장르 없이 노출된다(기능 강등, 설계 §2).
+ *
+ * <p>흐름: (1) 스윕 — 미분류 CATALOG를 GENRE_CLASSIFY로 멱등 enqueue. (2) 드레인 — 도래 작업을 배치로(배치당 AI 1콜)
+ * 분류하고, 성공분만 정준층에 쓰고 작업을 성공 처리, 폴백분은 작업을 RETRYABLE로 둔다. AI 호출은 트랜잭션 밖이다.
  */
 @Component
 @RequiredArgsConstructor
@@ -22,26 +39,116 @@ public class CatalogEnricher {
 	private static final Logger log = LoggerFactory.getLogger(CatalogEnricher.class);
 
 	private final ExhibitionFacade exhibitionFacade;
+	private final EnrichmentJobFacade enrichmentJobFacade;
 	private final CatalogEnrichProperties properties;
+	private final GenreProperties genreProperties;
+	/** 장르 분류 전략(랜덤/AI) — 주입되는 구현은 {@code app.exhibition.genre.classifier}로 선택된다(@Primary). */
+	private final GenreClassifier genreClassifier;
 
 	/**
-	 * 미분류 CATALOG 장르를 배치로 상한 내 전량 백필. 각 배치는 AI 1회 호출(배치가 batchSize 미만이면 미분류 소진 → 종료).
+	 * 미분류 CATALOG 장르를 작업큐로 스윕·드레인한다. 각 배치는 AI 1회 호출(배치가 비면 조기 종료).
 	 *
-	 * @return 이번 실행으로 장르를 부여한 전시 수
+	 * @return 이번 실행에서 상태를 전이시킨 GENRE_CLASSIFY 작업 수(분류·재시도·마감)
 	 */
 	public int enrichGenres() {
-		int batchSize = properties.genreBatchSize();
+		LocalDateTime now = LocalDateTime.now();
+		sweepUnclassified(now);
 		int total = 0;
 		for (int i = 0; i < properties.genreMaxBatchesPerRun(); i++) {
-			int classified = exhibitionFacade.initGenres(batchSize);
-			total += classified;
-			if (classified < batchSize) {
-				break; // 남은 미분류 없음 → 조기 종료(빈 배치로 AI를 태우지 않음)
+			int processed = drainBatch(properties.genreBatchSize());
+			total += processed;
+			if (processed == 0) {
+				break; // 도래 작업 소진 → 조기 종료(AI를 빈 배치로 태우지 않음)
 			}
 		}
 		if (total > 0) {
-			log.info("전시 장르 백필 {}건", total);
+			log.info("전시 장르 작업 처리 {}건", total);
 		}
 		return total;
+	}
+
+	/** 미분류 CATALOG를 GENRE_CLASSIFY로 멱등 enqueue한다(이번 실행이 드레인할 수 있는 만큼만 — 나머진 다음 실행이 스윕). */
+	private void sweepUnclassified(LocalDateTime now) {
+		int sweepLimit = properties.genreBatchSize() * properties.genreMaxBatchesPerRun();
+		List<String> externalIds = exhibitionFacade.findUnclassifiedCatalogExternalIds(sweepLimit);
+		if (!externalIds.isEmpty()) {
+			enrichmentJobFacade.enqueueAll(JobType.GENRE_CLASSIFY, externalIds, now);
+		}
+	}
+
+	/**
+	 * 한 배치 드레인: 도래 작업 조회 → [조회 tx] 대상 해소 → <b>tx 밖 AI 호출</b> → [반영 tx] 성공분 쓰기 + 작업 전이.
+	 * AI 호출이 트랜잭션 밖이라는 것이 이 배치의 존재 이유다(배치 1콜이 최대 60초 + 429 백오프까지 걸린다).
+	 *
+	 * @return 이 배치에서 상태를 전이시킨 작업 수(0이면 도래 작업 없음)
+	 */
+	private int drainBatch(int batchSize) {
+		LocalDateTime now = LocalDateTime.now();
+		List<EnrichmentJob> jobs = enrichmentJobFacade.findDue(JobType.GENRE_CLASSIFY, batchSize, now);
+		if (jobs.isEmpty()) {
+			return 0;
+		}
+		List<String> externalIds = jobs.stream().map(EnrichmentJob::getTargetKey).toList();
+		Map<String, GenreClassification> inputs = exhibitionFacade.resolveGenreInputs(externalIds);
+
+		List<EnrichmentJob> actionable = new ArrayList<>();
+		List<GenreClassification> inputList = new ArrayList<>();
+		int transitioned = 0;
+		for (EnrichmentJob job : jobs) {
+			GenreClassification input = inputs.get(job.getTargetKey());
+			if (input == null) {
+				// 이미 분류됐거나 전시가 사라짐 — 할 일 없으니 성공으로 마감(재분류 대상 아님).
+				if (EnrichmentJobProcessing.succeed(enrichmentJobFacade, job, now)) {
+					transitioned++;
+				}
+			} else {
+				actionable.add(job);
+				inputList.add(input);
+			}
+		}
+		if (actionable.isEmpty()) {
+			return transitioned;
+		}
+
+		List<GenreResult> results = genreClassifier.classifyAll(inputList); // 트랜잭션 밖 AI 호출(배치당 1콜)
+
+		Map<String, GenreResult> toWrite = new HashMap<>();
+		List<EnrichmentJob> succeededJobs = new ArrayList<>();
+		List<EnrichmentJob> retryJobs = new ArrayList<>();
+		for (int i = 0; i < actionable.size(); i++) {
+			EnrichmentJob job = actionable.get(i);
+			GenreResult result = i < results.size() ? results.get(i) : null;
+			if (result != null && isRealClassification(result)) {
+				toWrite.put(job.getTargetKey(), result);
+				succeededJobs.add(job);
+			} else {
+				retryJobs.add(job); // AI 미가용(폴백) — 회복 후 재분류되게 RETRYABLE로 둔다.
+			}
+		}
+
+		exhibitionFacade.applyGenreResults(toWrite, now); // 성공분만 정준층에 쓴다(폴백값은 저장하지 않음)
+		for (EnrichmentJob job : succeededJobs) {
+			if (EnrichmentJobProcessing.succeed(enrichmentJobFacade, job, now)) {
+				transitioned++;
+			}
+		}
+		for (EnrichmentJob job : retryJobs) {
+			if (EnrichmentJobProcessing.fail(enrichmentJobFacade, job, JobFailureType.RETRYABLE,
+					"AI 분류 미가용(폴백) — 회복 후 재분류", now)) {
+				transitioned++;
+			}
+		}
+		return transitioned;
+	}
+
+	/**
+	 * 이 결과를 "성공한 분류"로 볼지 판정한다. AI(gemini) 구성일 때는 랜덤 폴백(=AI 장애)은 성공이 아니다 —
+	 * 그래야 회복 후 재분류된다. 랜덤/mock 구성일 때는 RANDOM이 정상 산출이라 성공으로 본다(무한 재시도 방지).
+	 */
+	private boolean isRealClassification(GenreResult result) {
+		if (genreProperties.useGemini()) {
+			return result.provider() != GenreProvider.RANDOM;
+		}
+		return true;
 	}
 }

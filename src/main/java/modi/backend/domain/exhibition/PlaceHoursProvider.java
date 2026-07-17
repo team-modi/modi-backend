@@ -22,4 +22,14 @@ public interface PlaceHoursProvider {
 	 * @param placeAddr 전시 주소(place_addr). 필수 입력.
 	 */
 	Optional<PlaceHoursData> fetch(String placeName, String placeAddr);
+
+	/**
+	 * 이 조회기의 벤더 — 정준층({@code place_hours.provider})에 계보로 남는다.
+	 * <p>
+	 * <b>{@link PlaceHoursData}에 싣지 않고 포트가 직접 노출하는 이유</b>: 미발견({@link Optional#empty()})과
+	 * 전송 실패(예외)에는 데이터가 아예 없는데, 그 두 경우야말로 "<b>누가</b> 못 찾았나 / 누가 실패했나"를 남겨야 하는
+	 * 자리다. 결과 안에만 벤더가 있으면 그 행들의 {@code provider}를 채울 수 없고, 채우지 못하면 mock이 만든 값과
+	 * 실호출 결과가 DB에서 섞여 선별 재조회가 불가능해진다.
+	 */
+	PlaceHoursVendor vendor();
 }

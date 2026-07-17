@@ -30,6 +30,7 @@ import modi.backend.TestcontainersConfiguration;
 import modi.backend.application.exhibition.ExhibitionFacade;
 import modi.backend.domain.auth.TokenProvider;
 import modi.backend.domain.exhibition.CatalogExhibitionData;
+import modi.backend.domain.exhibition.CatalogListData;
 import modi.backend.domain.exhibition.Exhibition;
 import modi.backend.domain.exhibition.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.ExhibitionCategory;
@@ -154,10 +155,10 @@ class RecordV1ControllerTest {
 		String mutatedTitle = "스냅샷 변경후전시-" + System.nanoTime();
 
 		// 1) 전시 동기화(목) — 원본 제목으로 CATALOG 최초 적재
-		given(catalogClient.fetchAll()).willReturn(List.of(
+		given(catalogClient.fetchAll()).willReturn(listData(List.of(
 				new CatalogExhibitionData(externalId, originalTitle, "스냅샷 갤러리", today.minusDays(5),
 						today.plusDays(25), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING,
-						"https://poster/snapshot.jpg", null, "기관", null, null, null, "전시", "서울")));
+						"https://poster/snapshot.jpg", null, "기관", null, null, null, "전시", "서울", null))));
 		exhibitionFacade.syncCatalog();
 		Long catalogExhibitionId = exhibitionRepository.findByExternalId(externalId).orElseThrow().getId();
 
@@ -190,10 +191,10 @@ class RecordV1ControllerTest {
 						.value(hasItem(originalTitle)));
 
 		// 4) 같은 externalId를 다른 제목으로 재동기화 — 동기화는 "신규만 추가" 정책이라 기존 행을 건드리지 않는다.
-		given(catalogClient.fetchAll()).willReturn(List.of(
+		given(catalogClient.fetchAll()).willReturn(listData(List.of(
 				new CatalogExhibitionData(externalId, mutatedTitle, "스냅샷 갤러리 이전", today.minusDays(5),
 						today.plusDays(25), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING,
-						"https://poster/mutated.jpg", null, "기관", null, null, null, "전시", "서울")));
+						"https://poster/mutated.jpg", null, "기관", null, null, null, "전시", "서울", null))));
 		exhibitionFacade.syncCatalog();
 
 		// 기존 전시 행이 원천 갱신본으로 덮이지 않았음을 확인한다(신규만 추가 — 재적재 갱신 없음).
@@ -331,4 +332,13 @@ class RecordV1ControllerTest {
 				.getContentAsString();
 		return response.replaceAll("(?s).*\"recordId\":(\\d+).*", "$1");
 	}
+
+	/**
+	 * 목록 수집 결과 래퍼 — 포트가 이제 "원천이 말한 총 건수·절단 여부"까지 돌려준다(이관 5단계, sync_run이 채울 값).
+	 * 이 테스트들의 관심사가 아니라 아이템만 담고 totalCount는 수집 수와 같게 둔다(= 절단 없음).
+	 */
+	private static CatalogListData listData(java.util.List<CatalogExhibitionData> items) {
+		return new CatalogListData(items, items.size(), false);
+	}
+
 }

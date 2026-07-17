@@ -223,7 +223,7 @@ class NotificationFacadeTest {
 	private Exhibition exhibition(Long id, String title, LocalDate endDate) {
 		LocalDate startDate = LocalDate.now(AppTime.KST).minusDays(30);
 		Exhibition exhibition = Exhibition.createCustom(99L, title, "갤러리", startDate, endDate,
-				null, null, null, null, "https://img/" + id + "-poster.jpg", null);
+				null, null, null, null, "https://img/" + id + "-poster.jpg");
 		ReflectionTestUtils.setField(exhibition, "id", id);
 		return exhibition;
 	}

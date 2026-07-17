@@ -17,6 +17,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import modi.backend.config.GeminiProperties;
 import modi.backend.domain.exhibition.GenreClassification;
 import modi.backend.domain.exhibition.GenreKeyword;
+import modi.backend.domain.exhibition.GenreProvider;
+import modi.backend.domain.exhibition.GenreResult;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -58,9 +60,9 @@ class GeminiGenreClassifierTest {
 	void classify_success_returnsGenreAndSendsStructuredRequest() throws InterruptedException {
 		server.enqueue(candidateResponse("사진"));
 
-		String genre = classifier.classify(input);
+		GenreResult result = classifier.classify(input);
 
-		assertThat(genre).isEqualTo("사진");
+		assertThat(result.genreKeyword()).isEqualTo("사진");
 		RecordedRequest recorded = server.takeRequest();
 		assertThat(recorded.getPath()).isEqualTo("/v1beta/models/gemini-2.5-flash:generateContent");
 		assertThat(recorded.getHeader("x-goog-api-key")).isEqualTo("test-api-key");
@@ -69,13 +71,27 @@ class GeminiGenreClassifierTest {
 	}
 
 	@Test
-	@DisplayName("응답이 마스터에 없는 값이면 랜덤으로 폴백한다")
+	@DisplayName("성공 시 계보로 provider=GEMINI와 응답 modelVersion(요청 모델이 아니라)을 붙인다")
+	void classify_success_carriesProviderAndResponseModelVersion() {
+		// 요청 모델은 "gemini-2.5-flash"(별칭일 수 있음)인데 실제 서빙 모델은 응답이 말한 값이다 — 계보엔 응답 쪽이 남아야 한다.
+		server.enqueue(candidateResponse("사진", "gemini-2.5-flash-002"));
+
+		GenreResult result = classifier.classify(input);
+
+		assertThat(result.provider()).isEqualTo(GenreProvider.GEMINI);
+		assertThat(result.model()).isEqualTo("gemini-2.5-flash-002");
+	}
+
+	@Test
+	@DisplayName("응답이 마스터에 없는 값이면 랜덤으로 폴백하고, 그 사실을 provider=RANDOM으로 드러낸다")
 	void classify_unknownGenre_fallsBackToRandom() {
 		server.enqueue(candidateResponse("K-POP 콘서트"));
 
-		String genre = classifier.classify(input);
+		GenreResult result = classifier.classify(input);
 
-		assertThat(GenreKeyword.all()).contains(genre);
+		assertThat(GenreKeyword.all()).contains(result.genreKeyword());
+		// 폴백을 GEMINI로 기록하면 랜덤값이 AI 분류값으로 위장돼 영구 이탈한다.
+		assertThat(result.provider()).isEqualTo(GenreProvider.RANDOM);
 	}
 
 	@Test
@@ -85,9 +101,10 @@ class GeminiGenreClassifierTest {
 		server.enqueue(new MockResponse().setResponseCode(429).setBody("{\"error\":{\"code\":429}}"));
 		server.enqueue(new MockResponse().setResponseCode(429).setBody("{\"error\":{\"code\":429}}"));
 
-		String genre = classifier.classify(input);
+		GenreResult result = classifier.classify(input);
 
-		assertThat(GenreKeyword.all()).contains(genre);
+		assertThat(GenreKeyword.all()).contains(result.genreKeyword());
+		assertThat(result.provider()).isEqualTo(GenreProvider.RANDOM);
 		assertThat(server.getRequestCount()).isEqualTo(2);
 	}
 
@@ -97,9 +114,10 @@ class GeminiGenreClassifierTest {
 		server.enqueue(new MockResponse().setResponseCode(429).setBody("{\"error\":{\"code\":429}}"));
 		server.enqueue(candidateResponse("미디어아트"));
 
-		String genre = classifier.classify(input);
+		GenreResult result = classifier.classify(input);
 
-		assertThat(genre).isEqualTo("미디어아트");
+		assertThat(result.genreKeyword()).isEqualTo("미디어아트");
+		assertThat(result.provider()).isEqualTo(GenreProvider.GEMINI);
 	}
 
 	@Test
@@ -108,9 +126,10 @@ class GeminiGenreClassifierTest {
 		GeminiGenreClassifier disabled = classifierWith(new GeminiProperties(
 				server.url("/").toString(), "", "gemini-2.5-flash", 5L, 1, 0L));
 
-		String genre = disabled.classify(input);
+		GenreResult result = disabled.classify(input);
 
-		assertThat(GenreKeyword.all()).contains(genre);
+		assertThat(GenreKeyword.all()).contains(result.genreKeyword());
+		assertThat(result.provider()).isEqualTo(GenreProvider.RANDOM);
 		assertThat(server.getRequestCount()).isZero();
 	}
 
@@ -122,9 +141,14 @@ class GeminiGenreClassifierTest {
 				new GenreClassification("서울 사진전", null, "다큐멘터리 사진", "시립미술관", null, "전시"),
 				new GenreClassification("미디어아트 페스타", null, "인터랙티브 영상 설치", "백남준아트센터", null, "전시"));
 
-		List<String> genres = classifier.classifyAll(inputs);
+		List<GenreResult> genres = classifier.classifyAll(inputs);
 
-		assertThat(genres).containsExactly("사진", "미디어아트");
+		assertThat(genres).extracting(GenreResult::genreKeyword).containsExactly("사진", "미디어아트");
+		// 배치 전 항목이 같은 응답에서 나왔으므로 계보도 동일하게 붙는다.
+		assertThat(genres).allSatisfy(g -> {
+			assertThat(g.provider()).isEqualTo(GenreProvider.GEMINI);
+			assertThat(g.model()).isEqualTo("gemini-2.5-flash");
+		});
 		assertThat(server.getRequestCount()).isEqualTo(1); // 전시마다 호출하지 않고 단일 호출
 		RecordedRequest recorded = server.takeRequest();
 		String body = recorded.getBody().readUtf8();
@@ -139,11 +163,14 @@ class GeminiGenreClassifierTest {
 				new GenreClassification("서울 사진전", null, null, null, null, null),
 				new GenreClassification("무제", null, null, null, null, null));
 
-		List<String> genres = classifier.classifyAll(inputs);
+		List<GenreResult> genres = classifier.classifyAll(inputs);
 
 		assertThat(genres).hasSize(2);
-		assertThat(genres.get(0)).isEqualTo("사진");
-		assertThat(GenreKeyword.all()).contains(genres.get(1));
+		assertThat(genres.get(0).genreKeyword()).isEqualTo("사진");
+		assertThat(genres.get(0).provider()).isEqualTo(GenreProvider.GEMINI);
+		// 누락 항목만 랜덤 보정 — 계보가 항목 단위라 성공분과 폴백분이 섞인 배치도 나중에 구분된다.
+		assertThat(GenreKeyword.all()).contains(genres.get(1).genreKeyword());
+		assertThat(genres.get(1).provider()).isEqualTo(GenreProvider.RANDOM);
 	}
 
 	@Test
@@ -155,10 +182,11 @@ class GeminiGenreClassifierTest {
 				new GenreClassification("A", null, null, null, null, null),
 				new GenreClassification("B", null, null, null, null, null));
 
-		List<String> genres = classifier.classifyAll(inputs);
+		List<GenreResult> genres = classifier.classifyAll(inputs);
 
 		assertThat(genres).hasSize(2);
-		assertThat(GenreKeyword.all()).containsAll(genres);
+		assertThat(GenreKeyword.all()).containsAll(genres.stream().map(GenreResult::genreKeyword).toList());
+		assertThat(genres).allSatisfy(g -> assertThat(g.provider()).isEqualTo(GenreProvider.RANDOM));
 	}
 
 	/**
@@ -169,13 +197,21 @@ class GeminiGenreClassifierTest {
 		String arr = java.util.Arrays.stream(genres)
 				.map(g -> "\\\"" + g + "\\\"").collect(java.util.stream.Collectors.joining(", "));
 		String json = """
-				{ "candidates": [ { "content": { "role": "model", "parts": [ { "text": "[%s]" } ] } } ] }
+				{
+				  "candidates": [ { "content": { "role": "model", "parts": [ { "text": "[%s]" } ] } } ],
+				  "modelVersion": "gemini-2.5-flash"
+				}
 				""".formatted(arr);
 		return new MockResponse().setResponseCode(200).setHeader("Content-Type", "application/json").setBody(json);
 	}
 
 	/** 실제 Gemini 응답 형태를 모사한 200 응답(여분 필드 role·finishReason 포함 — 관대한 파싱 검증). */
 	private static MockResponse candidateResponse(String genreText) {
+		return candidateResponse(genreText, "gemini-2.5-flash");
+	}
+
+	/** 응답 modelVersion을 지정하는 변형 — "요청 모델이 아니라 응답 모델을 계보에 남긴다"를 검증하기 위함. */
+	private static MockResponse candidateResponse(String genreText, String modelVersion) {
 		String json = """
 				{
 				  "candidates": [
@@ -185,9 +221,9 @@ class GeminiGenreClassifierTest {
 				      "index": 0
 				    }
 				  ],
-				  "modelVersion": "gemini-2.5-flash"
+				  "modelVersion": "%s"
 				}
-				""".formatted(genreText);
+				""".formatted(genreText, modelVersion);
 		return new MockResponse()
 				.setResponseCode(200)
 				.setHeader("Content-Type", "application/json")

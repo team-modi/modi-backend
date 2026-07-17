@@ -17,9 +17,15 @@ import modi.backend.config.GeminiProperties;
 import modi.backend.domain.exhibition.GenreClassification;
 import modi.backend.domain.exhibition.GenreClassifier;
 import modi.backend.domain.exhibition.GenreKeyword;
+import modi.backend.domain.exhibition.GenreProvider;
+import modi.backend.domain.exhibition.GenreResult;
 
 /**
  * Gemini(무료 한도) 기반 "실제 AI" 장르 분류기. 전시 텍스트를 보고 마스터 장르 중 하나로 분류한다.
+ * <p>
+ * 폴백이 <b>이 클래스 안에서</b> 일어나므로 반환값은 값이 아니라 {@link GenreResult}(값 + 출처)다 — 호출부는
+ * "GEMINI가 분류함"과 "GEMINI 실패 → 랜덤"을 반환값만으로 구분할 수 있어야 한다(정준층 provider의 존재 이유).
+ * 성공 경로는 {@link GenreProvider#GEMINI} + 응답 {@code modelVersion}을, 모든 폴백 경로는 {@link GenreProvider#RANDOM}을 붙인다.
  * <p>
  * 견고성 계약({@link GenreClassifier} 참조)을 지키기 위해 <b>절대 예외를 전파하지 않는다</b>:
  * <ul>
@@ -67,16 +73,18 @@ public class GeminiGenreClassifier implements GenreClassifier {
 	}
 
 	@Override
-	public String classify(GenreClassification input) {
+	public GenreResult classify(GenreClassification input) {
 		if (!properties.isConfigured()) {
 			log.debug("Gemini api-key 미설정 — 랜덤 분류로 폴백");
 			return fallbackWith("disabled", input);
 		}
 		try {
-			String genre = callWithRetry(input);
+			GeminiDto.Response response = callWithRetry(input);
+			String genre = response == null ? null : response.firstText();
 			if (GenreKeyword.contains(genre)) {
 				count("success");
-				return genre;
+				// 계보의 model은 요청 모델이 아니라 응답 modelVersion이다 — 요청 모델은 별칭일 수 있고 진실은 응답에 있다.
+				return GenreResult.ai(genre, GenreProvider.GEMINI, response.modelVersion());
 			}
 			log.warn("Gemini 장르 응답이 마스터에 없음(genre={}) — 랜덤 폴백", genre);
 			return fallbackWith("invalid_response", input);
@@ -95,7 +103,7 @@ public class GeminiGenreClassifier implements GenreClassifier {
 	 * 해당 항목만 랜덤으로 보정하고, 429/오류/미설정이면 전체를 랜덤으로 폴백한다(항상 입력과 같은 크기·유효 장르 반환).
 	 */
 	@Override
-	public List<String> classifyAll(List<GenreClassification> inputs) {
+	public List<GenreResult> classifyAll(List<GenreClassification> inputs) {
 		if (inputs == null || inputs.isEmpty()) {
 			return List.of();
 		}
@@ -105,15 +113,17 @@ public class GeminiGenreClassifier implements GenreClassifier {
 			return fallback.classifyAll(inputs);
 		}
 		try {
-			List<String> genres = callBatchWithRetry(inputs);
-			List<String> result = new ArrayList<>(inputs.size());
+			GeminiDto.Response response = callBatchWithRetry(inputs);
+			List<String> genres = parseArray(response == null ? null : response.firstText());
+			String model = response == null ? null : response.modelVersion();
+			List<GenreResult> result = new ArrayList<>(inputs.size());
 			for (int i = 0; i < inputs.size(); i++) {
 				String genre = genres != null && i < genres.size() ? genres.get(i) : null;
 				if (GenreKeyword.contains(genre)) {
-					result.add(genre);
+					result.add(GenreResult.ai(genre, GenreProvider.GEMINI, model));
 					count("success");
 				} else {
-					// 응답 누락·마스터 이탈 항목만 개별 랜덤 보정(전체 폴백은 아님)
+					// 응답 누락·마스터 이탈 항목만 개별 랜덤 보정(전체 폴백은 아님) — 이 항목만 provider=RANDOM이 된다.
 					result.add(fallback.classify(inputs.get(i)));
 					count("fallback_invalid_item");
 				}
@@ -133,16 +143,16 @@ public class GeminiGenreClassifier implements GenreClassifier {
 	/**
 	 * 한 건 분류를 시도하되 429는 {@code max-retries}회까지 백오프 후 재시도한다.
 	 * 재시도까지 모두 429면 마지막 예외를 던져(상위에서 폴백) 흐름을 잇는다.
+	 * <p>
+	 * 텍스트만 꺼내지 않고 응답 전체를 올려보낸다 — 계보에 남길 {@code modelVersion}이 응답 루트에 있기 때문이다.
 	 */
-	private String callWithRetry(GenreClassification input) {
+	private GeminiDto.Response callWithRetry(GenreClassification input) {
 		GeminiDto.Request request = buildRequest(input);
 		int attempts = properties.maxRetries() + 1;
 		WebClientResponseException.TooManyRequests last = null;
 		for (int i = 0; i < attempts; i++) {
 			try {
-				GeminiDto.Response response = geminiApi.generateContent(
-						properties.model(), properties.apiKey(), request);
-				return response == null ? null : response.firstText();
+				return geminiApi.generateContent(properties.model(), properties.apiKey(), request);
 			} catch (WebClientResponseException.TooManyRequests e) {
 				last = e;
 				count("retry_429");
@@ -163,16 +173,17 @@ public class GeminiGenreClassifier implements GenreClassifier {
 		return new GeminiDto.Request(system, List.of(userContent), config);
 	}
 
-	/** 배치 분류를 시도하되 429는 {@code max-retries}회까지 백오프 후 재시도한다. 소진 시 마지막 예외를 던진다(상위 폴백). */
-	private List<String> callBatchWithRetry(List<GenreClassification> inputs) {
+	/**
+	 * 배치 분류를 시도하되 429는 {@code max-retries}회까지 백오프 후 재시도한다. 소진 시 마지막 예외를 던진다(상위 폴백).
+	 * 파싱은 호출부가 한다 — 응답 전체(= {@code modelVersion} 포함)를 올려보내야 하기 때문이다.
+	 */
+	private GeminiDto.Response callBatchWithRetry(List<GenreClassification> inputs) {
 		GeminiDto.Request request = buildBatchRequest(inputs);
 		int attempts = properties.maxRetries() + 1;
 		WebClientResponseException.TooManyRequests last = null;
 		for (int i = 0; i < attempts; i++) {
 			try {
-				GeminiDto.Response response = geminiApi.generateContent(
-						properties.model(), properties.apiKey(), request);
-				return parseArray(response == null ? null : response.firstText());
+				return geminiApi.generateContent(properties.model(), properties.apiKey(), request);
 			} catch (WebClientResponseException.TooManyRequests e) {
 				last = e;
 				count("retry_429");
@@ -242,7 +253,8 @@ public class GeminiGenreClassifier implements GenreClassifier {
 		return 1L;
 	}
 
-	private String fallbackWith(String reason, GenreClassification input) {
+	/** 모든 폴백 경로의 단일 출구 — 반환 provider는 랜덤 분류기가 붙이는 {@link GenreProvider#RANDOM}이다. */
+	private GenreResult fallbackWith(String reason, GenreClassification input) {
 		count("fallback_" + reason);
 		return fallback.classify(input);
 	}

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import modi.backend.domain.exhibition.GenreClassification;
 import modi.backend.domain.exhibition.GenreKeyword;
+import modi.backend.domain.exhibition.GenreProvider;
 
 class RandomGenreClassifierTest {
 
@@ -18,7 +19,7 @@ class RandomGenreClassifierTest {
 		GenreClassification input = new GenreClassification("모네 특별전", "PAINTING", null, "한가람미술관", null, "전시");
 
 		for (int i = 0; i < 50; i++) {
-			assertThat(GenreKeyword.all()).contains(classifier.classify(input));
+			assertThat(GenreKeyword.all()).contains(classifier.classify(input).genreKeyword());
 		}
 	}
 
@@ -27,6 +28,14 @@ class RandomGenreClassifierTest {
 	void classify_emptyInput_returnsMasterGenre() {
 		GenreClassification empty = new GenreClassification(null, null, null, null, null, null);
 
-		assertThat(GenreKeyword.all()).contains(classifier.classify(empty));
+		assertThat(GenreKeyword.all()).contains(classifier.classify(empty).genreKeyword());
+	}
+
+	@Test
+	@DisplayName("산출물엔 provider=RANDOM이 붙는다 — 이 표식이 나중에 선별 재분류의 유일한 근거다")
+	void classify_marksProviderRandom() {
+		GenreClassification input = new GenreClassification("모네 특별전", "PAINTING", null, "한가람미술관", null, "전시");
+
+		assertThat(classifier.classify(input).provider()).isEqualTo(GenreProvider.RANDOM);
 	}
 }

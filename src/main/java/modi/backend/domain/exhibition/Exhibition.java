@@ -2,6 +2,7 @@ package modi.backend.domain.exhibition;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.hibernate.annotations.DynamicUpdate;
@@ -121,6 +122,13 @@ public class Exhibition extends BaseEntity {
 	@Column(name = "place_addr", length = 500)
 	private String placeAddr;
 
+	/**
+	 * 정준층({@code place_hours})과 이 전시를 잇는 장소 키 — {@link PlaceKey#of}가 {@code placeAddr}에서 파생한다
+	 * (지금은 원문 그대로). 산출 지점이 한 곳이라 나중에 주소 정규화를 넣을 때 그 함수만 바꾸면 된다.
+	 */
+	@Column(name = "place_key", length = 500)
+	private String placeKey;
+
 	@Column(length = 100)
 	private String phone;
 
@@ -148,18 +156,13 @@ public class Exhibition extends BaseEntity {
 	@Column(name = "our_view_count", nullable = false)
 	private long ourViewCount = 0;
 
-	/**
-	 * 장르 키워드(마스터 중 1개, {@link GenreKeyword}). {@link GenreClassifier}(랜덤/AI)가 부여한다 —
-	 * CUSTOM은 등록 시, CATALOG는 초기화 백필({@code applyGenre}) 시 채운다. 미분류(백필 전/폴백 전)는 null. 상세의 keywords로 노출.
-	 */
-	@Column(name = "genre_keyword", length = 50)
-	private String genreKeyword;
+	// genre_keyword 레거시 컬럼은 7단계(V26)에서 제거됨 — 진실 원천은 정준층 exhibition_genre다(읽기·선별·백필 전부 이관 완료).
 
 	private Exhibition(ExhibitionType type, String externalId, Long ownerId, String title, String place,
 			LocalDate startDate, LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category,
 			ExhibitionFormat format, String artist, String posterUrl, String description, String operatingHours,
 			String price, String detailUrl, String serviceName, Double gpsX, Double gpsY, String sigungu,
-			String realmName, String areaText, String genreKeyword) {
+			String realmName, String areaText) {
 		this.type = type;
 		this.externalId = externalId;
 		this.ownerId = ownerId;
@@ -182,7 +185,6 @@ public class Exhibition extends BaseEntity {
 		this.sigungu = sigungu;
 		this.realmName = realmName;
 		this.areaText = areaText;
-		this.genreKeyword = genreKeyword;
 		validatePeriod();
 		validateSoloArtist();
 	}
@@ -190,14 +192,15 @@ public class Exhibition extends BaseEntity {
 	/**
 	 * 사용자 개인 전시(CUSTOM) 등록. 제목 필수, 기간 {@code RULE: 전시 기간}·{@code RULE: 개인전 작가} 검증.
 	 * format·artist는 선택이나 {@code format=SOLO}면 artist 필수.
-	 * {@code genreKeyword}는 앱 레이어가 {@link GenreClassifier}로 산출해 넘긴다(랜덤/AI).
+	 * <p>장르는 이 엔티티에 저장하지 않는다 — 진실 원천은 정준층 {@link ExhibitionGenre}이고, 등록 유스케이스가
+	 * 전시 저장 후 별도로 정준층에 남긴다({@code ExhibitionFacade.registerCustom}). 7단계에서 레거시 컬럼을 제거했다.
 	 */
 	public static Exhibition createCustom(Long ownerId, String title, String place, LocalDate startDate,
 			LocalDate endDate, ExhibitionRegion region, ExhibitionCategory category, ExhibitionFormat format,
-			String artist, String posterUrl, String genreKeyword) {
+			String artist, String posterUrl) {
 		return new Exhibition(ExhibitionType.CUSTOM, null, ownerId, title, place, startDate, endDate,
 				region, category, format, artist, posterUrl, null, null, null, null, null, null, null, null, null,
-				null, genreKeyword);
+				null);
 	}
 
 	/** 외부 API 수집 전시(CATALOG) 생성. {@code externalId}는 동기화 upsert 기준키. */
@@ -207,17 +210,7 @@ public class Exhibition extends BaseEntity {
 			Double gpsX, Double gpsY, String sigungu, String realmName, String areaText) {
 		return new Exhibition(ExhibitionType.CATALOG, externalId, null, title, place, startDate, endDate,
 				region, category, null, null, posterUrl, description, operatingHours, price, detailUrl, serviceName,
-				gpsX, gpsY, sigungu, realmName, areaText, null);
-	}
-
-	/**
-	 * 분류기(랜덤/AI)가 산출한 장르 키워드를 부여한다(CATALOG 초기화 백필·재분류용). 공백/null은 무시해 기존 값을 지키지 않는다
-	 * — 초기화는 부가 처리라 유효한 값일 때만 반영한다.
-	 */
-	public void applyGenre(String genreKeyword) {
-		if (genreKeyword != null && !genreKeyword.isBlank()) {
-			this.genreKeyword = genreKeyword.trim();
-		}
+				gpsX, gpsY, sigungu, realmName, areaText);
 	}
 
 	/** 상세 지연수집(상세 진입 시 1회) — 목록엔 없던 필드를 채우고 동기화 시각을 기록한다. detailUrl은 값이 있을 때만 덮어쓴다. */
@@ -231,6 +224,8 @@ public class Exhibition extends BaseEntity {
 		this.imgUrl = d.imgUrl();
 		this.placeUrl = d.placeUrl();
 		this.placeAddr = d.placeAddr();
+		// place_key는 주소에서 파생한다 — 주소가 채워지는 이 자리가 유일한 산출 지점이라 둘이 갈릴 수 없다.
+		this.placeKey = PlaceKey.of(d.placeAddr());
 		this.placeSeq = d.placeSeq();
 		this.detailSyncedAt = LocalDateTime.now();
 	}
@@ -266,6 +261,34 @@ public class Exhibition extends BaseEntity {
 	 */
 	public void reparseDescription(String cleanedDescription) {
 		this.description = cleanedDescription;
+	}
+
+	/**
+	 * 관리자 수정(6단계) — 넘어온 필드만 갱신하고, <b>실제로 값이 바뀐 필드의 변경 목록</b>을 돌려준다.
+	 * "무엇이 바뀌었나"를 판단하는 건 도메인 규칙이라 Entity가 맡는다(Facade는 그 목록을 이력으로 남기기만 한다).
+	 * <p>
+	 * null 인자는 "이 필드는 건드리지 않음"이다(값을 비우는 수정은 빈 문자열로 온다 — 별개 사건). 값이 실제로
+	 * 달라진 필드만 {@link FieldChange}로 담으므로, 같은 값으로 저장해도 이력이 생기지 않는다(멱등).
+	 */
+	public List<FieldChange> applyAdminEdit(String title, String place, String price, String description) {
+		List<FieldChange> changes = new java.util.ArrayList<>();
+		if (title != null && !java.util.Objects.equals(this.title, title)) {
+			changes.add(new FieldChange("title", this.title, title));
+			this.title = title;
+		}
+		if (place != null && !java.util.Objects.equals(this.place, place)) {
+			changes.add(new FieldChange("place", this.place, place));
+			this.place = place;
+		}
+		if (price != null && !java.util.Objects.equals(this.price, price)) {
+			changes.add(new FieldChange("price", this.price, price));
+			this.price = price;
+		}
+		if (description != null && !java.util.Objects.equals(this.description, description)) {
+			changes.add(new FieldChange("description", this.description, description));
+			this.description = description;
+		}
+		return changes;
 	}
 
 	/** 우리 앱 내 조회 1회 발생 시 호출(인기순 정렬용 카운터). */

@@ -6,6 +6,8 @@ import java.util.List;
 import modi.backend.domain.exhibition.Exhibition;
 import modi.backend.domain.exhibition.ExhibitionCategory;
 import modi.backend.domain.exhibition.ExhibitionFormat;
+import modi.backend.domain.exhibition.ExhibitionGenre;
+import modi.backend.domain.exhibition.PlaceHours;
 import modi.backend.domain.exhibition.ExhibitionRegion;
 import modi.backend.domain.exhibition.ExhibitionRegionGroup;
 
@@ -60,17 +62,27 @@ public final class ExhibitionResult {
 			String address, String imgUrl, String phone, long viewCount, String sigungu, String placeUrl,
 			String artistSummary, boolean free, boolean bookmarked, boolean recorded) {
 
-		public static Detail from(Exhibition exhibition, boolean bookmarked, boolean recorded) {
+		/**
+		 * 장르는 정준층({@code exhibition_genre}), 영업시간은 정준층({@code place_hours})에서 읽는다 —
+		 * 둘 다 Facade가 조회해 넘긴다(장르는 전시 id로, 영업시간은 {@code place_key}로. 없으면 null).
+		 * {@code exhibitions.genre_keyword}·{@code operating_hours}로 폴백하지 <b>않는다</b>: 폴백을 두면 두 곳이
+		 * 갈렸을 때 어느 쪽이 진실인지 알 수 없게 되고, 정준층 쓰기가 통째로 빠져도 아무도 눈치채지 못한다.
+		 * 전 경로가 덮인다는 근거는 각각 [쓰기 이중화 + V21 백필]·[쓰기 이중화 + V23 백필]이다.
+		 */
+		public static Detail from(Exhibition exhibition, ExhibitionGenre genre, PlaceHours placeHours,
+				boolean bookmarked, boolean recorded) {
 			List<String> artists = exhibition.getArtist() == null || exhibition.getArtist().isBlank()
 					? List.of() : List.of(exhibition.getArtist());
 			// 장르 키워드(분류기가 부여)가 있으면 keywords로 노출. 미분류면 빈 배열.
-			List<String> keywords = exhibition.getGenreKeyword() == null || exhibition.getGenreKeyword().isBlank()
-					? List.of() : List.of(exhibition.getGenreKeyword());
+			List<String> keywords = genre == null || genre.getGenreKeyword() == null
+					|| genre.getGenreKeyword().isBlank()
+					? List.of() : List.of(genre.getGenreKeyword());
 			return new Detail(exhibition.getId(), exhibition.getType().name(), exhibition.getTitle(),
 					exhibition.getPosterUrl(), exhibition.getStartDate(), exhibition.getEndDate(),
 					exhibition.getPlace(), name(exhibition.getRegion()), name(exhibition.getCategory()),
 					name(exhibition.getFormat()),
-					exhibition.getDescription(), exhibition.getOperatingHours(), exhibition.getPrice(),
+					exhibition.getDescription(), placeHours == null ? null : placeHours.getFormatted(),
+					exhibition.getPrice(),
 					artists, keywords, exhibition.getServiceName(), exhibition.getDetailUrl(),
 					exhibition.getGpsX(), exhibition.getGpsY(),
 					exhibition.getPlaceAddr(), exhibition.getImgUrl(), exhibition.getPhone(),
