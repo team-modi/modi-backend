@@ -1,4 +1,4 @@
-package modi.backend.application.exhibition;
+package modi.backend.interfaces.exhibition;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.BDDMockito.given;
@@ -14,6 +14,9 @@ import org.mockito.InOrder;
 
 import modi.backend.domain.exhibition.ExhibitionErrorCode;
 import modi.backend.support.error.CoreException;
+import modi.backend.application.exhibition.CatalogEnricher;
+import modi.backend.application.exhibition.ExhibitionFacade;
+import modi.backend.application.exhibition.PlaceHoursEnricher;
 
 /**
  * ExhibitionSyncScheduler 단위 검증. 매일 자정 트리거 시 동기화(목록+상세 한 패스) → 장르 분류(신규분)를
