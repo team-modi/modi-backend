@@ -50,6 +50,12 @@ server:
 # CORS 허용 오리진 (공개 정보 — 시크릿 아님).
 # 기본(프로파일 없음) = 로컬 개발용. 운영 배포는 prod 프로파일에서 Vercel 도메인으로 override.
 app:
+  # 로컬 시드 모드(로컬 default 프로파일=true). 켜지면 부팅 시 classpath 시드 SQL로만 전시를 초기화하고,
+  #   외부 카탈로그 동기화(부팅·자정 스케줄러)는 skip한다 — application.yaml에 공공데이터 인증키 기본값이 박혀 있어도
+  #   프론트 개발자의 도커 로컬 기동이 실 data.go.kr을 호출하지 않게 한다. 운영(prod 프로파일)은 명시적으로 false.
+  local-seed:
+    enabled: ${LOCAL_SEED_ENABLED:true}
+
   cors:
     allowed-origin-patterns:
       - http://localhost:3000   # 여운 프론트 로컬
@@ -190,6 +196,9 @@ spring:
     activate:
       on-profile: prod
 app:
+  # 운영은 실 카탈로그 동기화를 쓴다 — 로컬 시드 모드 명시적 off(SPRING_PROFILES_ACTIVE=prod 주입과 이중 안전).
+  local-seed:
+    enabled: false
   exhibition:
     # 운영에서만 실제 AI(gemini) 장르 분류를 쓴다. develop·로컬(기본 프로파일)은 random(무비용). 필요 시 env로 override.
     genre:

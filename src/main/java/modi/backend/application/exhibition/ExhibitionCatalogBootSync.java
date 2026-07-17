@@ -2,6 +2,7 @@ package modi.backend.application.exhibition;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.Ordered;
@@ -30,8 +31,16 @@ public class ExhibitionCatalogBootSync implements ApplicationRunner {
 	private final ExhibitionFacade exhibitionFacade;
 	private final CatalogEnricher catalogEnricher;
 
+	/** 로컬 시드 모드면 외부 동기화를 건너뛴다(로컬 실 API 호출 0 — {@link LocalExhibitionSeeder}가 SQL로 초기화). */
+	@Value("${app.local-seed.enabled:false}")
+	private boolean localSeedEnabled;
+
 	@Override
 	public void run(ApplicationArguments args) {
+		if (localSeedEnabled) {
+			log.info("부팅 카탈로그 동기화 skip — app.local-seed.enabled=true (로컬 시드로 초기화, data.go.kr 호출 안 함)");
+			return;
+		}
 		// 목록+상세 동기화 후 장르 분류 — readiness를 막지 않도록 데몬 스레드에서 1회 수행(실패해도 자정 동기화가 재시도).
 		Thread bootSync = new Thread(() -> {
 			try {
