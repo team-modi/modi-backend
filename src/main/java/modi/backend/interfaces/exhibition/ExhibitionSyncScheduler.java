@@ -1,4 +1,4 @@
-package modi.backend.application.exhibition;
+package modi.backend.interfaces.exhibition;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,6 +7,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
+import modi.backend.application.exhibition.CatalogEnricher;
+import modi.backend.application.exhibition.ExhibitionFacade;
+import modi.backend.application.exhibition.PlaceHoursEnricher;
 
 /**
  * 공공데이터 전시 카탈로그 정기 동기화 스케줄러.
