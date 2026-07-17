@@ -87,8 +87,8 @@ class RecordV1ControllerTest {
 		bearerUser1 = "Bearer " + tokenProvider.issue(u1, "kakao").accessToken();
 		bearerUser2 = "Bearer " + tokenProvider.issue(u2, "kakao").accessToken();
 
-		Long placeId = exhibitionPlaceRepository.save(modi.backend.domain.exhibition.ExhibitionPlace.createFromList(
-				"예술의전당", null, null, null, null)).getId();
+		Long placeId = modi.backend.domain.exhibition.ExhibitionTestFactory.placeId(
+				exhibitionPlaceRepository, "예술의전당", null);
 		Exhibition exhibition = exhibitionRepository.save(Exhibition.createCatalog(
 				"RECORD-TEST-" + System.nanoTime(), "모네전", placeId, null, null, null, null, null, "기관"));
 		exhibitionId = exhibition.getId();

@@ -289,9 +289,7 @@ public class ExhibitionFacade {
 				region = venue.getRegion();
 			}
 		}
-		if (placeName == null || placeName.isBlank()) {
-			throw new CoreException(ErrorType.INVALID_INPUT, "전시 장소(place 또는 venueId)가 필요합니다.");
-		}
+		// place·venueId 모두 없으면 장소 미상 센티넬로 수렴한다(exhibition_place_id NOT NULL 지탱) — 제목만 등록도 그대로 동작한다.
 		ExhibitionPlace place = resolvePlace(placeName, region, null, null, null);
 		// 장르: 사용자가 직접 고르면 그 값(provider=USER), 미지정이면 분류기(랜덤/AI)가 부여한다(실패해도 유효 장르 반환).
 		GenreResult genre;

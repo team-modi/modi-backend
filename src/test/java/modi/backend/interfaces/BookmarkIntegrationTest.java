@@ -84,9 +84,9 @@ class BookmarkIntegrationTest {
 
 	/** 표본 CATALOG 적재(기간·조회수 제어). */
 	private Long saveCatalog(String externalId, String title, LocalDate startDate, LocalDate endDate, int views) {
-		Long placeId = exhibitionPlaceRepository.save(
-				modi.backend.domain.exhibition.ExhibitionPlace.createFromList("표본 장소@" + externalId,
-						ExhibitionRegion.SEOUL, null, null, null)).getId();
+		// 전시장은 공유(N:1) — 배너·목록의 place가 "표본 장소"로 나오게 resolve-or-create로 하나를 재사용한다.
+		Long placeId = modi.backend.domain.exhibition.ExhibitionTestFactory.placeId(
+				exhibitionPlaceRepository, "표본 장소", ExhibitionRegion.SEOUL);
 		Exhibition e = exhibitionRepository.save(Exhibition.createCatalog(externalId, title, placeId, startDate,
 				endDate, ExhibitionCategory.PAINTING, "https://poster/" + externalId + ".jpg", null, "기관"));
 		exhibitionDetailRepository.save(modi.backend.domain.exhibition.ExhibitionDetail.create(
