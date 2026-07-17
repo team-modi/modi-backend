@@ -54,6 +54,9 @@ class CultureVendorArchiveTest {
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
+	modi.backend.domain.exhibition.ExhibitionDetailRepository exhibitionDetailRepository;
+
+	@Autowired
 	CultureListResponseRepository cultureListResponseRepository;
 
 	@Autowired
@@ -175,8 +178,9 @@ class CultureVendorArchiveTest {
 		CultureDetailResponse row = detailRow(externalId);
 		assertThat(row.getStatus()).isEqualTo(CultureDetailStatus.NO_DATA);
 		assertThat(row.getPayload()).isNull();
-		// 도메인은 기존대로 "확인 완료"만 표기해 재조회를 막는다.
-		assertThat(exhibitionRepository.findByExternalId(externalId).orElseThrow().isDetailSynced()).isTrue();
+		// 도메인은 기존대로 "확인 완료"만 표기해 재조회를 막는다 — 상세 satellite 행 존재로 판정한다(연관 부재 = 미동기화).
+		Long exhibitionId = exhibitionRepository.findByExternalId(externalId).orElseThrow().getId();
+		assertThat(exhibitionDetailRepository.existsByExhibitionId(exhibitionId)).isTrue();
 	}
 
 	@Test

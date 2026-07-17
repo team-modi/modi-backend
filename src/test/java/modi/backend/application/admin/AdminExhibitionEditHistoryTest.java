@@ -43,6 +43,12 @@ class AdminExhibitionEditHistoryTest {
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
+	modi.backend.domain.exhibition.ExhibitionPlaceRepository exhibitionPlaceRepository;
+
+	@Autowired
+	modi.backend.domain.exhibition.ExhibitionDetailRepository exhibitionDetailRepository;
+
+	@Autowired
 	ExhibitionHistoryRepository exhibitionHistoryRepository;
 
 	@MockitoBean
@@ -72,7 +78,9 @@ class AdminExhibitionEditHistoryTest {
 		// 전시 자체도 바뀌었다.
 		Exhibition reloaded = exhibitionRepository.findById(e.getId()).orElseThrow();
 		assertThat(reloaded.getTitle()).isEqualTo("새제목");
-		assertThat(reloaded.getPrice()).isEqualTo("무료"); // null로 넘긴 필드는 불변
+		// price는 상세 satellite에 있고 null로 넘겼으므로 불변.
+		assertThat(exhibitionDetailRepository.findByExhibitionId(e.getId()).orElseThrow().getPrice())
+				.isEqualTo("무료");
 	}
 
 	@Test
@@ -110,9 +118,13 @@ class AdminExhibitionEditHistoryTest {
 	}
 
 	private Exhibition seed(String title, String place, String price, String description) {
-		Exhibition e = Exhibition.createCatalog("EDIT-" + SEQ.getAndIncrement(), title, place, null, null,
-				ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, description, null, price, null, "기관",
-				null, null, null, "전시", "서울");
-		return exhibitionRepository.save(e);
+		// resolve-or-create — 같은 이름을 여러 테스트가 seed해도 자연키(정규화 이름) UK를 위반하지 않게.
+		Long placeId = modi.backend.domain.exhibition.ExhibitionTestFactory.placeId(
+				exhibitionPlaceRepository, place, ExhibitionRegion.SEOUL);
+		Exhibition e = exhibitionRepository.save(Exhibition.createCatalog("EDIT-" + SEQ.getAndIncrement(), title,
+				placeId, null, null, ExhibitionCategory.PAINTING, null, null, "기관"));
+		exhibitionDetailRepository.save(modi.backend.domain.exhibition.ExhibitionDetail.create(
+				e.getId(), price, description, null, java.time.LocalDateTime.now()));
+		return e;
 	}
 }

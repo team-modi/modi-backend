@@ -47,6 +47,9 @@ class ExhibitionGenreWriteTest {
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
+	modi.backend.domain.exhibition.ExhibitionPlaceRepository exhibitionPlaceRepository;
+
+	@Autowired
 	ExhibitionGenreRepository exhibitionGenreRepository;
 
 	@MockitoBean
@@ -132,9 +135,10 @@ class ExhibitionGenreWriteTest {
 	}
 
 	private Exhibition seedCatalog() {
-		Exhibition e = Exhibition.createCatalog("GENRE-WRITE-" + SEQ.getAndIncrement(), "장르 미분류 전시", "시립미술관",
-				null, null, ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, null, null, null, null,
-				"기관", null, null, null, "전시", "서울");
+		Long placeId = modi.backend.domain.exhibition.ExhibitionTestFactory.placeId(
+				exhibitionPlaceRepository, "시립미술관", ExhibitionRegion.SEOUL);
+		Exhibition e = Exhibition.createCatalog("GENRE-WRITE-" + SEQ.getAndIncrement(), "장르 미분류 전시", placeId,
+				null, null, ExhibitionCategory.PAINTING, null, null, "기관");
 		return exhibitionRepository.save(e);
 	}
 
