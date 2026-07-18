@@ -27,8 +27,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
-import modi.backend.application.exhibition.serving.ExhibitionFacade;
+import modi.backend.application.exhibition.sync.ExhibitionIngestFacade;
+import modi.backend.application.exhibition.ExhibitionFacade;
 import modi.backend.domain.auth.TokenProvider;
 import modi.backend.domain.exhibition.sync.CatalogExhibitionData;
 import modi.backend.domain.exhibition.sync.CatalogListData;

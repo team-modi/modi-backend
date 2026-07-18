@@ -33,8 +33,8 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.jayway.jsonpath.JsonPath;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
-import modi.backend.application.exhibition.serving.ExhibitionFacade;
+import modi.backend.application.exhibition.sync.ExhibitionIngestFacade;
+import modi.backend.application.exhibition.ExhibitionFacade;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.exhibition.sync.CatalogDetailData;
 import modi.backend.domain.exhibition.sync.CatalogExhibitionData;

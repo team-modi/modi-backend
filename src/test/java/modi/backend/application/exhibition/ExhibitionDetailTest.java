@@ -1,8 +1,5 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.serving.ExhibitionCriteria;
-import modi.backend.application.exhibition.serving.ExhibitionFacade;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

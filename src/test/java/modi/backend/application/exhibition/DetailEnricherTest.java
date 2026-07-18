@@ -1,9 +1,9 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.ingest.DetailEnricher;
-import modi.backend.application.exhibition.ingest.DetailTargetState;
-import modi.backend.application.exhibition.ingest.EnrichmentJobFacade;
-import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
+import modi.backend.application.exhibition.sync.DetailEnricher;
+import modi.backend.application.exhibition.sync.DetailTargetState;
+import modi.backend.application.exhibition.sync.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.ExhibitionIngestFacade;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;

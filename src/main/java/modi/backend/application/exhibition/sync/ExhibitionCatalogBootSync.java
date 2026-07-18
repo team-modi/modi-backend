@@ -1,6 +1,4 @@
-package modi.backend.application.exhibition.ingest;
-
-import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
+package modi.backend.application.exhibition.sync;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

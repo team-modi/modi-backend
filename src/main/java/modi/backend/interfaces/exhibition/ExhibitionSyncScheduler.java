@@ -8,9 +8,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.application.exhibition.ingest.CatalogEnricher;
-import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
-import modi.backend.application.exhibition.ingest.PlaceHoursEnricher;
+import modi.backend.application.exhibition.sync.CatalogEnricher;
+import modi.backend.application.exhibition.sync.ExhibitionIngestFacade;
+import modi.backend.application.exhibition.sync.PlaceHoursEnricher;
 
 /**
  * 공공데이터 전시 카탈로그 정기 동기화 스케줄러.

@@ -8,8 +8,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.application.exhibition.ingest.DetailEnricher;
-import modi.backend.application.exhibition.ingest.PlaceHoursRefresher;
+import modi.backend.application.exhibition.sync.DetailEnricher;
+import modi.backend.application.exhibition.sync.PlaceHoursRefresher;
 
 /**
  * 통합 보강 작업큐의 <b>드레인 스케줄러</b> — 도래한(status·next_attempt_at ≤ now) 작업을 주기적으로 처리한다.

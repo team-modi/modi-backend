@@ -1,4 +1,4 @@
-package modi.backend.application.exhibition.ingest;
+package modi.backend.application.exhibition.sync;
 
 /**
  * 영업시간 보강의 한 조회 단위(= 한 전시장). 전시장의 자연키가 정규화 이름(ADR-07)으로 정해지면서 <b>장소당 1콜</b>이

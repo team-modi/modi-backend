@@ -6,8 +6,8 @@ import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.application.exhibition.serving.ExhibitionFacade;
-import modi.backend.application.exhibition.serving.ExhibitionResult;
+import modi.backend.application.exhibition.ExhibitionFacade;
+import modi.backend.application.exhibition.ExhibitionResult;
 import modi.backend.domain.ai.AiChatClient;
 import modi.backend.domain.ai.AiErrorCode;
 import modi.backend.support.error.CoreException;

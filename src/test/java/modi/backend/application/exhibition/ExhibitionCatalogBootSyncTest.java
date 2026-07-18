@@ -1,14 +1,13 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.ingest.CatalogEnricher;
-import modi.backend.application.exhibition.ingest.ExhibitionCatalogBootSync;
-import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
+import modi.backend.application.exhibition.sync.CatalogEnricher;
+import modi.backend.application.exhibition.sync.ExhibitionCatalogBootSync;
+import modi.backend.application.exhibition.sync.ExhibitionIngestFacade;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import org.junit.jupiter.api.BeforeEach;

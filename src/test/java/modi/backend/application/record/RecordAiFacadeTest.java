@@ -17,8 +17,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import modi.backend.application.exhibition.serving.ExhibitionFacade;
-import modi.backend.application.exhibition.serving.ExhibitionResult;
+import modi.backend.application.exhibition.ExhibitionFacade;
+import modi.backend.application.exhibition.ExhibitionResult;
 import modi.backend.domain.ai.AiChatClient;
 import modi.backend.support.error.CoreException;
 

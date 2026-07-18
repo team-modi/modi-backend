@@ -1,8 +1,8 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.ingest.CatalogEnricher;
-import modi.backend.application.exhibition.ingest.EnrichmentJobFacade;
-import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
+import modi.backend.application.exhibition.sync.CatalogEnricher;
+import modi.backend.application.exhibition.sync.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.ExhibitionIngestFacade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

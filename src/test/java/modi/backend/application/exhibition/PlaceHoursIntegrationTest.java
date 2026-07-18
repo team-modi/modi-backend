@@ -1,6 +1,6 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.ingest.PlaceHoursEnricher;
+import modi.backend.application.exhibition.sync.PlaceHoursEnricher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;

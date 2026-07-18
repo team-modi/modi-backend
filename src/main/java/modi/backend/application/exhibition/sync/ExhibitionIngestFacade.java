@@ -1,4 +1,4 @@
-package modi.backend.application.exhibition.ingest;
+package modi.backend.application.exhibition.sync;
 
 import java.time.LocalDateTime;
 import java.util.List;

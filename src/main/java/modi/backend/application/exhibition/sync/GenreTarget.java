@@ -1,4 +1,4 @@
-package modi.backend.application.exhibition.ingest;
+package modi.backend.application.exhibition.sync;
 
 import modi.backend.domain.exhibition.genre.GenreClassification;
 

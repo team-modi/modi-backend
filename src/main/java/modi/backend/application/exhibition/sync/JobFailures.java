@@ -1,4 +1,4 @@
-package modi.backend.application.exhibition.ingest;
+package modi.backend.application.exhibition.sync;
 
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 

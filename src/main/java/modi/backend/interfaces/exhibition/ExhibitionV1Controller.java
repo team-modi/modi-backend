@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import modi.backend.application.exhibition.serving.ExhibitionCriteria;
-import modi.backend.application.exhibition.serving.ExhibitionFacade;
-import modi.backend.application.exhibition.serving.ExhibitionResult;
+import modi.backend.application.exhibition.ExhibitionCriteria;
+import modi.backend.application.exhibition.ExhibitionFacade;
+import modi.backend.application.exhibition.ExhibitionResult;
 import modi.backend.interfaces.auth.Authentication;
 import modi.backend.interfaces.auth.LoginUser;
 import modi.backend.interfaces.auth.OptionalAuthentication;

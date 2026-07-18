@@ -14,9 +14,9 @@ import org.mockito.InOrder;
 
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.support.error.CoreException;
-import modi.backend.application.exhibition.ingest.CatalogEnricher;
-import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
-import modi.backend.application.exhibition.ingest.PlaceHoursEnricher;
+import modi.backend.application.exhibition.sync.CatalogEnricher;
+import modi.backend.application.exhibition.sync.ExhibitionIngestFacade;
+import modi.backend.application.exhibition.sync.PlaceHoursEnricher;
 
 /**
  * ExhibitionSyncScheduler 단위 검증. 매일 자정 트리거 시 동기화(목록+상세 한 패스) → 장르 분류(신규분)를
