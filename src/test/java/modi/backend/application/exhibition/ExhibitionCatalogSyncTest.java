@@ -1,5 +1,8 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.ingest.EnrichmentJobFacade;
+import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -69,7 +72,7 @@ class ExhibitionCatalogSyncTest {
 	@Mock EnrichmentJobFacade enrichmentJobFacade;
 
 	@InjectMocks
-	ExhibitionFacade facade;
+	ExhibitionIngestFacade facade;
 
 	private void stubPlaceResolveCreatesNew() {
 		given(exhibitionPlaceRepository.resolveOrCreate(any(), any(), any(), any(), any()))

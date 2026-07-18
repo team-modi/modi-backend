@@ -1,5 +1,9 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.serving.ExhibitionCriteria;
+import modi.backend.application.exhibition.serving.ExhibitionFacade;
+import modi.backend.application.exhibition.serving.ExhibitionResult;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;

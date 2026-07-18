@@ -1,4 +1,6 @@
-package modi.backend.application.exhibition;
+package modi.backend.application.exhibition.ingest;
+
+import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,7 +38,7 @@ public class PlaceHoursRefresher {
 			JobType.PLACE_HOURS_REFRESH, JobType.PLACE_HOURS_FETCH);
 
 	private final EnrichmentJobFacade enrichmentJobFacade;
-	private final ExhibitionFacade exhibitionFacade;
+	private final ExhibitionIngestFacade exhibitionIngestFacade;
 	private final PlaceHoursProvider placeHoursProvider;
 	private final OpeningHoursFormatter openingHoursFormatter;
 	private final EnrichmentProperties properties;
@@ -66,7 +68,7 @@ public class PlaceHoursRefresher {
 	/** @return true면 전이함, false면 낙관락 충돌로 skip(다른 워커가 처리). */
 	private boolean processOne(EnrichmentJob job, LocalDateTime now) {
 		String placeKey = job.getTargetKey();
-		Optional<PlaceHoursTarget> resolved = exhibitionFacade.resolvePlaceHoursTarget(placeKey);
+		Optional<PlaceHoursTarget> resolved = exhibitionIngestFacade.resolvePlaceHoursTarget(placeKey);
 		if (resolved.isEmpty()) {
 			// 그 장소를 쓰는 전시가 더는 없다 — 재검증할 대상이 없으니 성공으로 마감한다.
 			return EnrichmentJobProcessing.succeed(enrichmentJobFacade, job, now);
@@ -75,11 +77,11 @@ public class PlaceHoursRefresher {
 		try {
 			Optional<PlaceHoursData> data = placeHoursProvider.fetch(target.placeName(), target.placeAddr());
 			String formatted = data.map(d -> openingHoursFormatter.format(d.weeklyHours())).orElse(null);
-			exhibitionFacade.applyVenueHours(target, data.orElse(null), formatted, placeHoursProvider.vendor(), now);
+			exhibitionIngestFacade.applyVenueHours(target, data.orElse(null), formatted, placeHoursProvider.vendor(), now);
 		} catch (org.springframework.dao.OptimisticLockingFailureException e) {
 			return false; // 반영 중 충돌 — 다른 워커가 처리
 		} catch (RuntimeException e) {
-			exhibitionFacade.recordVenueHoursFailure(target, placeHoursProvider.vendor());
+			exhibitionIngestFacade.recordVenueHoursFailure(target, placeHoursProvider.vendor());
 			return EnrichmentJobProcessing.fail(enrichmentJobFacade, job,
 					JobFailures.classify(e), JobFailures.describe(e), now);
 		}

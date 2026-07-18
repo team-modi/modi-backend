@@ -1,0 +1,449 @@
+package modi.backend.application.exhibition.serving;
+
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.TemporalAdjusters;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.RequiredArgsConstructor;
+import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
+import modi.backend.domain.exhibition.catalog.Artist;
+import modi.backend.domain.exhibition.catalog.ArtistRepository;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionDetail;
+import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
+import modi.backend.domain.exhibition.catalog.ExhibitionFormat;
+import modi.backend.domain.exhibition.catalog.ExhibitionGenre;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionQuery;
+import modi.backend.domain.exhibition.catalog.ExhibitionQueryRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegionGroup;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionSection;
+import modi.backend.domain.exhibition.genre.GenreClassification;
+import modi.backend.domain.exhibition.genre.GenreClassifier;
+import modi.backend.domain.exhibition.genre.GenreKeyword;
+import modi.backend.domain.exhibition.genre.GenreResult;
+import modi.backend.domain.exhibition.hours.PlaceHours;
+import modi.backend.domain.exhibition.sync.CatalogDetailData;
+import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
+import modi.backend.domain.venue.Venue;
+import modi.backend.domain.venue.VenueErrorCode;
+import modi.backend.domain.venue.VenueRepository;
+import modi.backend.infra.record.RecordJpaRepository;
+import modi.backend.support.error.CoreException;
+import modi.backend.support.error.ErrorType;
+import modi.backend.support.response.Cursor;
+import modi.backend.support.time.AppTime;
+
+/**
+ * 전시 사용자 유스케이스 조율(03_전시.md) — 목록/탐색·배너·상세·개인 전시 등록/삭제. load·조율·save만 하고,
+ * 상태 변경·규칙 판단은 도메인 엔티티에 위임한다. 수집·보강 파이프라인은 {@code ingest.ExhibitionIngestFacade}가
+ * 따로 담당한다(조회 API와 배치의 결합 해소).
+ *
+ * <p>장소는 {@link ExhibitionPlace}(N:1, resolve-or-create), 상세는 satellite(1:1), 작가는 조인(N:M) —
+ * 응답 조립 시 애그리거트 루트 포트에서 읽어 모은다(API 계약 불변).
+ */
+@Service
+@RequiredArgsConstructor
+public class ExhibitionFacade {
+
+	private static final int DEFAULT_SIZE = 20;
+	private static final int MAX_SIZE = 50;
+	private static final int ENDING_SOON_DAYS = 7;
+	private static final int BANNER_LIMIT = 3;
+
+	/** 전시 애그리거트 루트 — 코어 쓰기와 부속(상세·장르·작가 조인)의 단일 진입점. */
+	private final ExhibitionRepository exhibitionRepository;
+	/** 서빙 목록/탐색 전용(쓰기=루트, 읽기=쿼리 분리 — Specification·키셋 유지). */
+	private final ExhibitionQueryRepository exhibitionQueryRepository;
+	/** 전시장 애그리거트 루트(N:1 공유) — resolve-or-create와 영업시간 정준행(1:1)의 단일 진입점(ADR-05·06·07). */
+	private final ExhibitionPlaceRepository exhibitionPlaceRepository;
+	/** 작가(정규화 이름 UK, 독립 애그리거트) — CUSTOM 등록의 artist 문자열을 resolve-or-create해 조인으로 잇는다. */
+	private final ArtistRepository artistRepository;
+	/** 상세 지연 수집(최초 상세 진입 1회)용 — 배치 동기화가 아니라 사용자 경로의 캐시 채움이다. */
+	private final ExhibitionCatalogClient catalogClient;
+	private final ExhibitionBookmarkRepository exhibitionBookmarkRepository;
+	private final VenueRepository venueRepository;
+	private final RecordJpaRepository recordJpaRepository;
+	private final GenreClassifier genreClassifier;
+
+	/** 지역 필터 그룹 목록(디자인 병합 칩). 정적 enum 메타데이터라 조회 없이 변환만 한다. */
+	public List<ExhibitionResult.RegionGroup> getRegionGroups() {
+		return ExhibitionRegionGroup.all().stream().map(ExhibitionResult.RegionGroup::from).toList();
+	}
+
+	/**
+	 * 목록/탐색(5.2). 필터 미지정 시 오늘 진행 중인 전시를 기본 노출한다. 비로그인은 CATALOG만.
+	 * place·region은 전시장 조인에서, free는 상세 가격에서 조립한다.
+	 */
+	@Transactional(readOnly = true)
+	public ExhibitionResult.ListPage search(ExhibitionCriteria.Search criteria) {
+		LocalDate today = LocalDate.now(AppTime.KST);
+		String keyword = normalizeKeyword(criteria.keyword());
+		List<ExhibitionRegion> regions = parseRegions(criteria.region());
+		List<ExhibitionCategory> categories = parseCategories(criteria.category());
+		ExhibitionSection section = ExhibitionSection.from(criteria.section());
+		String sort = canonicalSort(criteria.sort());
+		int size = clampSize(criteria.size());
+		LocalDate ongoingOn = resolveOngoingOn(criteria.date(), keyword, regions, categories, section, today);
+
+		if ("distance".equals(sort)) {
+			return searchByDistance(criteria, today, size,
+					buildQuery(keyword, ongoingOn, regions, categories, section, today, criteria.period(),
+							"distance", null, null, criteria.requesterId()));
+		}
+
+		Cursor cursor = Cursor.decode(criteria.cursor(), sort).orElse(null);
+		String cursorKey = cursor == null ? null : cursor.key();
+		Long cursorId = cursor == null ? null : cursor.lastId();
+		ExhibitionQuery query = buildQuery(keyword, ongoingOn, regions, categories, section, today,
+				criteria.period(), sort, cursorKey, cursorId, criteria.requesterId());
+
+		List<Exhibition> rows = exhibitionQueryRepository.searchSlice(query, size + 1);
+		boolean hasNext = rows.size() > size;
+		List<Exhibition> page = hasNext ? rows.subList(0, size) : rows;
+
+		List<ExhibitionResult.ListItem> content = toListItems(page, today, criteria.requesterId());
+		String nextCursor = hasNext ? encodeCursor(sort, page.get(page.size() - 1)) : null;
+		long totalCount = exhibitionQueryRepository.count(query);
+		return new ExhibitionResult.ListPage(content, nextCursor, hasNext, totalCount);
+	}
+
+	/** 페이지 전시들을 장소·상세·관심 배치 조회로 조립한 목록 항목으로 변환한다(N+1 방지). */
+	private List<ExhibitionResult.ListItem> toListItems(List<Exhibition> page, LocalDate today, Long requesterId) {
+		if (page.isEmpty()) {
+			return List.of();
+		}
+		Map<Long, ExhibitionPlace> placesById = placesByIdFor(page);
+		Map<Long, ExhibitionDetail> detailsByExhibitionId = exhibitionRepository
+				.findDetails(page.stream().map(Exhibition::getId).toList()).stream()
+				.collect(Collectors.toMap(ExhibitionDetail::getExhibitionId, d -> d, (a, b) -> a));
+		Set<Long> bookmarked = bookmarkedIds(requesterId, page);
+		return page.stream().map(e -> {
+			ExhibitionDetail detail = detailsByExhibitionId.get(e.getId());
+			boolean free = detail != null && detail.isFree();
+			return ExhibitionResult.ListItem.from(e, placesById.get(e.getExhibitionPlaceId()), today, free,
+					bookmarked.contains(e.getId()));
+		}).toList();
+	}
+
+	private Map<Long, ExhibitionPlace> placesByIdFor(List<Exhibition> exhibitions) {
+		Set<Long> placeIds = exhibitions.stream().map(Exhibition::getExhibitionPlaceId).collect(Collectors.toSet());
+		return exhibitionPlaceRepository.findAllByIds(placeIds).stream()
+				.collect(Collectors.toMap(ExhibitionPlace::getId, p -> p, (a, b) -> a));
+	}
+
+	/**
+	 * 홈 배너(E-10). 오늘 진행 중인 전시 중 조회수 상위 최대 3개를 노출한다. 진행 중 전시가 없으면 빈 배열.
+	 */
+	@Transactional(readOnly = true)
+	public List<ExhibitionResult.Banner> banners() {
+		List<Exhibition> rows = exhibitionQueryRepository.findOngoingCatalogTopByViews(LocalDate.now(AppTime.KST),
+				BANNER_LIMIT);
+		Map<Long, ExhibitionPlace> placesById = placesByIdFor(rows);
+		return rows.stream()
+				.map(e -> ExhibitionResult.Banner.from(e, placesById.get(e.getExhibitionPlaceId())))
+				.toList();
+	}
+
+	/**
+	 * 거리순(5.2, P2 best-effort). lat·lng 필수. 좌표는 전시장(exhibition_place)에서 온다 — 후보의 장소를 배치 로드해
+	 * 단순 제곱거리로 정렬(좌표 null은 뒤로)하고, 커서는 마지막 id 위치 기준으로 슬라이스한다.
+	 */
+	private ExhibitionResult.ListPage searchByDistance(ExhibitionCriteria.Search criteria, LocalDate today,
+			int size, ExhibitionQuery query) {
+		if (criteria.lat() == null || criteria.lng() == null) {
+			throw new CoreException(ErrorType.INVALID_INPUT, "거리순 정렬은 lat·lng가 필요합니다.");
+		}
+		double lat = criteria.lat();
+		double lng = criteria.lng();
+		List<Exhibition> candidates = exhibitionQueryRepository.searchAll(query);
+		Map<Long, ExhibitionPlace> placesById = placesByIdFor(candidates);
+		List<Exhibition> ordered = candidates.stream()
+				.sorted(distanceComparator(placesById, lat, lng))
+				.toList();
+
+		Cursor cursor = Cursor.decode(criteria.cursor(), "distance").orElse(null);
+		int start = cursor == null ? 0 : nextIndexAfter(ordered, cursor.lastId());
+		int end = Math.min(start + size, ordered.size());
+		List<Exhibition> page = start >= ordered.size() ? List.of() : ordered.subList(start, end);
+		boolean hasNext = end < ordered.size();
+
+		List<ExhibitionResult.ListItem> content = toListItems(page, today, criteria.requesterId());
+		String nextCursor = null;
+		if (hasNext) {
+			Exhibition last = page.get(page.size() - 1);
+			nextCursor = Cursor.of("distance",
+					String.valueOf(distanceSq(placesById.get(last.getExhibitionPlaceId()), lat, lng)), last.getId())
+					.encode();
+		}
+		return new ExhibitionResult.ListPage(content, nextCursor, hasNext, ordered.size());
+	}
+
+	/**
+	 * 상세(5.3). 없으면 404, 타인의 CUSTOM이면 403. CATALOG 최초 진입 시 상세를 1회 지연 수집해 캐시한다(상세 satellite upsert).
+	 * place·operatingHours·artists는 요청 시 조인해 조립한다.
+	 */
+	@Transactional
+	public ExhibitionResult.Detail getDetail(ExhibitionCriteria.Detail criteria) {
+		Exhibition exhibition = exhibitionRepository.findById(criteria.exhibitionId())
+				.orElseThrow(() -> new CoreException(ExhibitionErrorCode.EXHIBITION_NOT_FOUND));
+		if (!exhibition.isAccessibleBy(criteria.requesterId())) {
+			throw new CoreException(ErrorType.FORBIDDEN, "타인의 개인 전시 접근: " + criteria.exhibitionId());
+		}
+		if (exhibition.isCatalog() && !exhibitionRepository.hasDetail(exhibition.getId())) {
+			try {
+				catalogClient.fetchDetail(exhibition.getExternalId())
+						.ifPresent(d -> applyCatalogDetail(exhibition, d, LocalDateTime.now()));
+			} catch (CoreException ex) {
+				// 외부 실패 시 base 필드만 반환 — 상세행이 없어 다음 조회에서 재시도된다.
+			}
+		}
+		exhibition.increaseView();
+		exhibitionRepository.save(exhibition);
+		Long requesterId = criteria.requesterId();
+		boolean bookmarked = requesterId != null
+				&& exhibitionBookmarkRepository.existsActive(requesterId, exhibition.getId());
+		boolean recorded = requesterId != null
+				&& recordJpaRepository.existsByUserIdAndExhibitionIdAndDeletedAtIsNull(requesterId, exhibition.getId());
+		return assembleDetail(exhibition, bookmarked, recorded);
+	}
+
+	/** 스냅샷/조회용 — 조회수 증가·외부 상세수집·개인화 없이 DB에서만 전시를 읽어 반환한다(기록 생성 등 내부 사용). */
+	@Transactional(readOnly = true)
+	public ExhibitionResult.Detail getForSnapshot(Long exhibitionId, Long requesterId) {
+		Exhibition e = exhibitionRepository.findById(exhibitionId)
+				.orElseThrow(() -> new CoreException(ExhibitionErrorCode.EXHIBITION_NOT_FOUND));
+		if (!e.isAccessibleBy(requesterId)) {
+			throw new CoreException(ErrorType.FORBIDDEN, "타인의 개인 전시 접근: " + exhibitionId);
+		}
+		return assembleDetail(e, false, false);
+	}
+
+	/** 상세 응답 조립 — 장소·상세·영업시간·작가·장르를 두 애그리거트 루트에서 읽어 하나로 모은다. */
+	private ExhibitionResult.Detail assembleDetail(Exhibition exhibition, boolean bookmarked, boolean recorded) {
+		ExhibitionPlace place = exhibitionPlaceRepository.findById(exhibition.getExhibitionPlaceId()).orElse(null);
+		ExhibitionDetail detail = exhibitionRepository.findDetail(exhibition.getId()).orElse(null);
+		PlaceHours placeHours = place == null ? null
+				: exhibitionPlaceRepository.findHours(place.getId()).orElse(null);
+		List<String> artistNames = exhibitionRepository.findArtistNames(exhibition.getId());
+		return ExhibitionResult.Detail.from(exhibition, place, detail, placeHours, artistNames,
+				genreOf(exhibition.getId()), bookmarked, recorded);
+	}
+
+	private ExhibitionGenre genreOf(Long exhibitionId) {
+		return exhibitionRepository.findGenre(exhibitionId).orElse(null);
+	}
+
+	/**
+	 * 개인 전시 등록(5.4). 제목 필수·기간·개인전 작가 검증은 Entity에서. 전시장은 resolve-or-create(정규화 이름)로 확정해
+	 * {@code exhibition_place_id NOT NULL}을 지탱하고, 작가 문자열은 resolve-or-create + 조인으로 잇는다.
+	 */
+	@Transactional
+	public ExhibitionResult.Created registerCustom(ExhibitionCriteria.CustomCreate criteria) {
+		ExhibitionRegion region = criteria.region() == null ? null : ExhibitionRegion.from(criteria.region());
+		ExhibitionCategory category = criteria.category() == null ? null
+				: ExhibitionCategory.from(criteria.category());
+		ExhibitionFormat format = criteria.format() == null ? null : ExhibitionFormat.from(criteria.format());
+		String placeName = criteria.place();
+		if (criteria.venueId() != null) {
+			Venue venue = venueRepository.findById(criteria.venueId())
+					.orElseThrow(() -> new CoreException(VenueErrorCode.VENUE_NOT_FOUND));
+			placeName = venue.getName();
+			if (region == null) {
+				region = venue.getRegion();
+			}
+		}
+		// place·venueId 모두 없으면 장소 미상 센티넬로 수렴한다(exhibition_place_id NOT NULL 지탱) — 제목만 등록도 그대로 동작한다.
+		ExhibitionPlace place = exhibitionPlaceRepository.resolveOrCreate(placeName, region, null, null, null);
+		// 장르: 사용자가 직접 고르면 그 값(provider=USER), 미지정이면 분류기(랜덤/AI)가 부여한다(실패해도 유효 장르 반환).
+		GenreResult genre;
+		if (criteria.genreKeyword() != null && !criteria.genreKeyword().isBlank()) {
+			if (!GenreKeyword.contains(criteria.genreKeyword())) {
+				throw new CoreException(ErrorType.INVALID_INPUT, "정의되지 않은 장르 키워드: " + criteria.genreKeyword());
+			}
+			genre = GenreResult.user(criteria.genreKeyword());
+		} else {
+			genre = genreClassifier.classify(new GenreClassification(criteria.title(),
+					category == null ? null : category.name(), null, placeName, criteria.artist(), null));
+		}
+		Exhibition exhibition = Exhibition.createCustom(criteria.ownerId(), criteria.title(), place.getId(),
+				criteria.startDate(), criteria.endDate(), category, format, criteria.artist(), criteria.posterUrl());
+		Exhibition saved = exhibitionRepository.save(exhibition);
+		linkArtist(saved.getId(), criteria.artist());
+		exhibitionRepository.applyGenre(saved.getId(), genre, LocalDateTime.now());
+		return ExhibitionResult.Created.from(saved);
+	}
+
+	/** 작가 문자열을 resolve-or-create(정규화 이름 UK)해 전시와 조인(멱등)한다. 이름이 비면 건너뛴다. */
+	private void linkArtist(Long exhibitionId, String rawArtist) {
+		String normalized = Artist.normalize(rawArtist);
+		if (normalized == null) {
+			return;
+		}
+		Artist artist = artistRepository.findByName(normalized)
+				.orElseGet(() -> artistRepository.save(Artist.create(normalized)));
+		exhibitionRepository.linkArtist(exhibitionId, artist.getId());
+	}
+
+	/**
+	 * 개인 전시(CUSTOM) 동반 삭제 — 본인이 등록한 CUSTOM만 soft-delete(공용 CATALOG·타인 전시·이미 삭제된 전시는 무시), 멱등.
+	 */
+	@Transactional
+	public void deleteCustomOwnedBy(Long exhibitionId, Long ownerId) {
+		exhibitionRepository.findById(exhibitionId)
+				.filter(exhibition -> exhibition.isCustomOwnedBy(ownerId))
+				.ifPresent(exhibition -> {
+					exhibition.delete();
+					exhibitionRepository.save(exhibition);
+				});
+	}
+
+	/**
+	 * 상세 지연 수집의 반영 — 상세 satellite upsert(전시 애그리거트) + 전시장 보강 필드(주소/전화/홈페이지) 채움.
+	 * {@code ingest.ExhibitionIngestFacade}의 동기화 경로와 같은 두-애그리거트 조율이지만, 여기서는 사용자 최초 상세
+	 * 진입 1회의 캐시 채움이라 별도로 둔다(서빙↔파이프라인 파사드 간 의존을 만들지 않는다).
+	 */
+	private void applyCatalogDetail(Exhibition exhibition, CatalogDetailData d, LocalDateTime now) {
+		exhibitionRepository.applyDetail(exhibition.getId(), d.price(), d.description(), d.imgUrl(), now);
+		exhibitionPlaceRepository.findById(exhibition.getExhibitionPlaceId()).ifPresent(place -> {
+			place.enrichDetail(d.placeAddr(), d.phone(), d.placeUrl());
+			exhibitionPlaceRepository.save(place);
+		});
+	}
+
+	private LocalDate resolveOngoingOn(LocalDate date, String keyword, List<ExhibitionRegion> regions,
+			List<ExhibitionCategory> categories, ExhibitionSection section, LocalDate today) {
+		if (date != null) {
+			return date;
+		}
+		boolean noOtherFilter = (keyword == null || keyword.isBlank()) && regions.isEmpty()
+				&& categories.isEmpty() && section == null;
+		return noOtherFilter ? today : null;
+	}
+
+	private ExhibitionQuery buildQuery(String keyword, LocalDate ongoingOn, List<ExhibitionRegion> regions,
+			List<ExhibitionCategory> categories, ExhibitionSection section, LocalDate today, String period,
+			String sort, String cursorKey, Long cursorId, Long requesterId) {
+		LocalDate from = null;
+		LocalDate to = null;
+		if (section == ExhibitionSection.ENDING_SOON) {
+			from = today;
+			to = today.plusDays(ENDING_SOON_DAYS);
+		} else if (section == ExhibitionSection.OPENING_THIS_MONTH) {
+			if ("week".equalsIgnoreCase(period == null ? "" : period.trim())) {
+				from = today.with(DayOfWeek.MONDAY);
+				to = today.with(DayOfWeek.SUNDAY);
+			} else {
+				from = today.withDayOfMonth(1);
+				to = today.with(TemporalAdjusters.lastDayOfMonth());
+			}
+		}
+		return new ExhibitionQuery(keyword, ongoingOn, regions, categories, section, from, to, sort,
+				cursorKey, cursorId, requesterId);
+	}
+
+	private Set<Long> bookmarkedIds(Long requesterId, List<Exhibition> page) {
+		if (requesterId == null || page.isEmpty()) {
+			return Set.of();
+		}
+		List<Long> ids = page.stream().map(Exhibition::getId).toList();
+		return exhibitionBookmarkRepository.findBookmarkedExhibitionIds(requesterId, ids);
+	}
+
+	private static String encodeCursor(String sort, Exhibition last) {
+		String key = switch (sort) {
+			case "ending" -> last.getEndDate() == null ? null : last.getEndDate().toString();
+			case "popular" -> String.valueOf(last.getOurViewCount());
+			default -> last.getStartDate() == null ? null : last.getStartDate().toString();
+		};
+		return Cursor.of(sort, key, last.getId()).encode();
+	}
+
+	private static Comparator<Exhibition> distanceComparator(Map<Long, ExhibitionPlace> placesById, double lat,
+			double lng) {
+		return Comparator.comparingDouble((Exhibition e) -> distanceSq(placesById.get(e.getExhibitionPlaceId()), lat,
+				lng)).thenComparing(Exhibition::getId);
+	}
+
+	/** 단순 제곱 유클리드 거리(좌표 null은 최댓값 → 뒤로). 좌표는 전시장에서 온다. */
+	private static double distanceSq(ExhibitionPlace place, double lat, double lng) {
+		if (place == null || place.getGpsX() == null || place.getGpsY() == null) {
+			return Double.MAX_VALUE;
+		}
+		double dx = place.getGpsX() - lng;
+		double dy = place.getGpsY() - lat;
+		return dx * dx + dy * dy;
+	}
+
+	private static int nextIndexAfter(List<Exhibition> ordered, Long lastId) {
+		for (int i = 0; i < ordered.size(); i++) {
+			if (ordered.get(i).getId().equals(lastId)) {
+				return i + 1;
+			}
+		}
+		return 0;
+	}
+
+	private static String normalizeKeyword(String raw) {
+		if (raw == null) {
+			return null;
+		}
+		String trimmed = raw.trim();
+		if (trimmed.isEmpty()) {
+			return null;
+		}
+		if (trimmed.length() < 2) {
+			throw new CoreException(ErrorType.INVALID_INPUT, "검색어는 최소 2글자여야 합니다: " + raw);
+		}
+		return trimmed;
+	}
+
+	private static List<ExhibitionRegion> parseRegions(String raw) {
+		if (raw == null || raw.isBlank()) {
+			return List.of();
+		}
+		return Arrays.stream(raw.split(",")).map(String::trim).filter(s -> !s.isEmpty())
+				.map(ExhibitionRegion::from).toList();
+	}
+
+	private static List<ExhibitionCategory> parseCategories(String raw) {
+		if (raw == null || raw.isBlank()) {
+			return List.of();
+		}
+		return Arrays.stream(raw.split(",")).map(String::trim).filter(s -> !s.isEmpty())
+				.map(ExhibitionCategory::from).toList();
+	}
+
+	private static String canonicalSort(String sort) {
+		if (sort == null) {
+			return "latest";
+		}
+		return switch (sort.trim().toLowerCase()) {
+			case "ending" -> "ending";
+			case "popular" -> "popular";
+			case "distance" -> "distance";
+			default -> "latest";
+		};
+	}
+
+	private static int clampSize(Integer size) {
+		if (size == null || size < 1) {
+			return DEFAULT_SIZE;
+		}
+		return Math.min(size, MAX_SIZE);
+	}
+}

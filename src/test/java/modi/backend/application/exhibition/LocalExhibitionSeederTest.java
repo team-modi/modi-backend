@@ -1,5 +1,7 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.ingest.LocalExhibitionSeeder;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.DisplayName;

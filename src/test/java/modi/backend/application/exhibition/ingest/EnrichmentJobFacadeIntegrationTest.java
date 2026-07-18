@@ -1,4 +1,5 @@
-package modi.backend.application.exhibition;
+package modi.backend.application.exhibition.ingest;
+
 
 import static org.assertj.core.api.Assertions.assertThat;
 

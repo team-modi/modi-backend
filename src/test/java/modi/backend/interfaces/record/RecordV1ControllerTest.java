@@ -27,7 +27,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.application.exhibition.ExhibitionFacade;
+import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
+import modi.backend.application.exhibition.serving.ExhibitionFacade;
 import modi.backend.domain.auth.TokenProvider;
 import modi.backend.domain.exhibition.sync.CatalogExhibitionData;
 import modi.backend.domain.exhibition.sync.CatalogListData;
@@ -65,6 +66,9 @@ class RecordV1ControllerTest {
 
 	@Autowired
 	ExhibitionFacade exhibitionFacade;
+
+	@Autowired
+	ExhibitionIngestFacade exhibitionIngestFacade;
 
 	// 스냅샷 독립성 e2e(Task 14)에서만 사용 — CATALOG 재동기화로 원본 전시 제목을 실제로 바꿔보기 위해 수집 포트를 목으로 둔다.
 	@MockitoBean
@@ -163,7 +167,7 @@ class RecordV1ControllerTest {
 				new CatalogExhibitionData(externalId, originalTitle, "스냅샷 갤러리", today.minusDays(5),
 						today.plusDays(25), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING,
 						"https://poster/snapshot.jpg", null, "기관", null, null, null, "전시", "서울", null))));
-		exhibitionFacade.syncCatalog();
+		exhibitionIngestFacade.syncCatalog();
 		Long catalogExhibitionId = exhibitionRepository.findByExternalId(externalId).orElseThrow().getId();
 
 		// 2) 기록 작성 — RecordService.create가 이 시점의 전시 제목을 스냅샷으로 박제한다
@@ -199,7 +203,7 @@ class RecordV1ControllerTest {
 				new CatalogExhibitionData(externalId, mutatedTitle, "스냅샷 갤러리 이전", today.minusDays(5),
 						today.plusDays(25), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING,
 						"https://poster/mutated.jpg", null, "기관", null, null, null, "전시", "서울", null))));
-		exhibitionFacade.syncCatalog();
+		exhibitionIngestFacade.syncCatalog();
 
 		// 기존 전시 행이 원천 갱신본으로 덮이지 않았음을 확인한다(신규만 추가 — 재적재 갱신 없음).
 		Exhibition afterResync = exhibitionRepository.findByExternalId(externalId).orElseThrow();

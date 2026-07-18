@@ -1,4 +1,4 @@
-package modi.backend.application.exhibition;
+package modi.backend.application.exhibition.ingest;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;

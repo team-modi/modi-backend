@@ -1,5 +1,10 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.ingest.DetailEnricher;
+import modi.backend.application.exhibition.ingest.DetailTargetState;
+import modi.backend.application.exhibition.ingest.EnrichmentJobFacade;
+import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -44,7 +49,7 @@ class DetailEnricherTest {
 	@DisplayName("선별은 작업 읽기로 — 도래한 DETAIL_SYNC만 집어 상세를 채우고 성공 처리한다")
 	void 상세필요_채우고_성공() {
 		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
-		ExhibitionFacade facade = mock(ExhibitionFacade.class);
+		ExhibitionIngestFacade facade = mock(ExhibitionIngestFacade.class);
 		ExhibitionCatalogClient client = mock(ExhibitionCatalogClient.class);
 		EnrichmentJob job = detailJob("E1");
 		when(jobFacade.findDue(eq(JobType.DETAIL_SYNC), anyInt(), any())).thenReturn(List.of(job));
@@ -62,7 +67,7 @@ class DetailEnricherTest {
 	@DisplayName("상세 조회가 일시 실패하면 RETRYABLE로 기록한다(timeout/5xx류 → 백오프 재시도)")
 	void 상세실패_재시도기록() {
 		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
-		ExhibitionFacade facade = mock(ExhibitionFacade.class);
+		ExhibitionIngestFacade facade = mock(ExhibitionIngestFacade.class);
 		ExhibitionCatalogClient client = mock(ExhibitionCatalogClient.class);
 		EnrichmentJob job = detailJob("E1");
 		when(jobFacade.findDue(eq(JobType.DETAIL_SYNC), anyInt(), any())).thenReturn(List.of(job));
@@ -81,7 +86,7 @@ class DetailEnricherTest {
 	@DisplayName("이미 다른 경로가 상세를 채웠으면 외부 호출 없이 성공 처리한다")
 	void 이미완성_성공마감() {
 		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
-		ExhibitionFacade facade = mock(ExhibitionFacade.class);
+		ExhibitionIngestFacade facade = mock(ExhibitionIngestFacade.class);
 		ExhibitionCatalogClient client = mock(ExhibitionCatalogClient.class);
 		EnrichmentJob job = detailJob("E1");
 		when(jobFacade.findDue(eq(JobType.DETAIL_SYNC), anyInt(), any())).thenReturn(List.of(job));
@@ -98,7 +103,7 @@ class DetailEnricherTest {
 	@DisplayName("전시가 아직 없으면(신규 상세실패분) RETRYABLE로 두어 다음 동기화 후 재처리되게 한다")
 	void 전시미적재_재시도로_남긴다() {
 		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
-		ExhibitionFacade facade = mock(ExhibitionFacade.class);
+		ExhibitionIngestFacade facade = mock(ExhibitionIngestFacade.class);
 		ExhibitionCatalogClient client = mock(ExhibitionCatalogClient.class);
 		EnrichmentJob job = detailJob("E1");
 		when(jobFacade.findDue(eq(JobType.DETAIL_SYNC), anyInt(), any())).thenReturn(List.of(job));
@@ -115,7 +120,7 @@ class DetailEnricherTest {
 	@DisplayName("도래 작업이 없으면 외부 호출 없이 끝낸다")
 	void 도래없음_무호출() {
 		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
-		ExhibitionFacade facade = mock(ExhibitionFacade.class);
+		ExhibitionIngestFacade facade = mock(ExhibitionIngestFacade.class);
 		ExhibitionCatalogClient client = mock(ExhibitionCatalogClient.class);
 		when(jobFacade.findDue(eq(JobType.DETAIL_SYNC), anyInt(), any())).thenReturn(List.of());
 		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, client, props);

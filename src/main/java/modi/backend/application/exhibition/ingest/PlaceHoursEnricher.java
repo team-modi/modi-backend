@@ -1,4 +1,6 @@
-package modi.backend.application.exhibition;
+package modi.backend.application.exhibition.ingest;
+
+import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -35,7 +37,7 @@ public class PlaceHoursEnricher {
 
 	private static final Logger log = LoggerFactory.getLogger(PlaceHoursEnricher.class);
 
-	private final ExhibitionFacade exhibitionFacade;
+	private final ExhibitionIngestFacade exhibitionIngestFacade;
 	private final PlaceHoursProvider placeHoursProvider;
 	private final OpeningHoursFormatter openingHoursFormatter;
 	private final PlaceHoursProperties properties;
@@ -47,7 +49,7 @@ public class PlaceHoursEnricher {
 	 */
 	public int enrichPlaceHours() {
 		LocalDateTime staleBefore = LocalDateTime.now().minusDays(properties.refreshAfterDays());
-		List<PlaceHoursTarget> targets = exhibitionFacade.findPlacesNeedingHours(staleBefore, properties.maxVenuesPerRun());
+		List<PlaceHoursTarget> targets = exhibitionIngestFacade.findPlacesNeedingHours(staleBefore, properties.maxVenuesPerRun());
 		if (targets.isEmpty()) {
 			return 0;
 		}
@@ -56,13 +58,13 @@ public class PlaceHoursEnricher {
 			try {
 				Optional<PlaceHoursData> data = placeHoursProvider.fetch(target.placeName(), target.placeAddr());
 				String formatted = data.map(d -> openingHoursFormatter.format(d.weeklyHours())).orElse(null);
-				exhibitionFacade.applyVenueHours(target, data.orElse(null), formatted, placeHoursProvider.vendor(),
+				exhibitionIngestFacade.applyVenueHours(target, data.orElse(null), formatted, placeHoursProvider.vendor(),
 						LocalDateTime.now());
 				touched += 1;
 			} catch (RuntimeException e) {
 				// 전송 실패 등 — 이 장소만 건너뛰고 synced_at을 남기지 않아 다음 주기에 재시도한다(기존 동작 불변).
 				// 정준층엔 "시도했고 실패했다"를 남긴다 — 현행 스키마가 표현하지 못하던 사실이고, 표시값은 지우지 않는다.
-				exhibitionFacade.recordVenueHoursFailure(target, placeHoursProvider.vendor());
+				exhibitionIngestFacade.recordVenueHoursFailure(target, placeHoursProvider.vendor());
 				log.warn("전시 영업시간 조회 실패(장소={}, 다음 주기 재시도): {}", target.placeAddr(), e.getMessage());
 			}
 		}

@@ -1,5 +1,8 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.serving.ExhibitionCriteria;
+import modi.backend.application.exhibition.serving.ExhibitionFacade;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,8 +24,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.exhibition.catalog.ArtistRepository;
 import modi.backend.domain.exhibition.sync.CatalogDetailData;
-import modi.backend.infra.exhibition.sync.CultureDetailResponseJpaRepository;
-import modi.backend.infra.exhibition.sync.CultureListResponseJpaRepository;
 import modi.backend.domain.exhibition.catalog.Exhibition;
 import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
@@ -30,8 +31,6 @@ import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionQueryRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
-import modi.backend.infra.exhibition.hours.GooglePlaceResponseJpaRepository;
-import modi.backend.domain.exhibition.sync.SyncRunRepository;
 import modi.backend.infra.record.RecordJpaRepository;
 import modi.backend.support.error.CoreException;
 import modi.backend.support.error.ErrorType;
@@ -60,9 +59,7 @@ class ExhibitionDetailTest {
 		placeRepository = mock(ExhibitionPlaceRepository.class);
 		facade = new ExhibitionFacade(exhibitionRepository, mock(ExhibitionQueryRepository.class), placeRepository,
 				mock(ArtistRepository.class), catalogClient, bookmarkRepository, venueRepository, recordJpaRepository,
-				mock(GooglePlaceResponseJpaRepository.class), new modi.backend.infra.genre.RandomGenreClassifier(),
-				mock(CultureListResponseJpaRepository.class), mock(CultureDetailResponseJpaRepository.class),
-				mock(SyncRunRepository.class), mock(EnrichmentJobFacade.class));
+				new modi.backend.infra.genre.RandomGenreClassifier());
 		given(exhibitionRepository.save(any(Exhibition.class))).willAnswer(invocation -> invocation.getArgument(0));
 		given(placeRepository.findById(anyLong())).willReturn(Optional.of(
 				ExhibitionPlace.createFromList("장소", null, null, null, null)));

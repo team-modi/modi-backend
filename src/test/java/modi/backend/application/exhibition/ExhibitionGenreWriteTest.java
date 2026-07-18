@@ -1,5 +1,11 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.ingest.GenreTarget;
+import modi.backend.application.exhibition.serving.ExhibitionCriteria;
+import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
+import modi.backend.application.exhibition.serving.ExhibitionFacade;
+import modi.backend.application.exhibition.serving.ExhibitionResult;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
@@ -44,6 +50,9 @@ class ExhibitionGenreWriteTest {
 	ExhibitionFacade exhibitionFacade;
 
 	@Autowired
+	ExhibitionIngestFacade exhibitionIngestFacade;
+
+	@Autowired
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
@@ -86,7 +95,7 @@ class ExhibitionGenreWriteTest {
 		Exhibition seeded = seedCatalog();
 		List<GenreTarget> targets = List.of(new GenreTarget(seeded.getId(), GenreClassification.from(seeded)));
 
-		int applied = exhibitionFacade.applyGenres(targets,
+		int applied = exhibitionIngestFacade.applyGenres(targets,
 				List.of(GenreResult.ai("미디어아트", GenreProvider.GEMINI, "gemini-2.5-flash-002")),
 				LocalDateTime.now());
 
@@ -103,9 +112,9 @@ class ExhibitionGenreWriteTest {
 	void applyGenres_재분류_행추가없이_갱신() {
 		Exhibition seeded = seedCatalog();
 		List<GenreTarget> targets = List.of(new GenreTarget(seeded.getId(), GenreClassification.from(seeded)));
-		exhibitionFacade.applyGenres(targets, List.of(GenreResult.random("회화·드로잉")), LocalDateTime.now());
+		exhibitionIngestFacade.applyGenres(targets, List.of(GenreResult.random("회화·드로잉")), LocalDateTime.now());
 
-		exhibitionFacade.applyGenres(targets,
+		exhibitionIngestFacade.applyGenres(targets,
 				List.of(GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash")), LocalDateTime.now());
 
 		assertThat(exhibitionGenreRepository.findAllByExhibitionIdIn(List.of(seeded.getId()))).hasSize(1);
@@ -123,7 +132,7 @@ class ExhibitionGenreWriteTest {
 		seeded.delete();
 		exhibitionRepository.save(seeded);
 
-		int applied = exhibitionFacade.applyGenres(targets, List.of(GenreResult.random("사진")), LocalDateTime.now());
+		int applied = exhibitionIngestFacade.applyGenres(targets, List.of(GenreResult.random("사진")), LocalDateTime.now());
 
 		assertThat(applied).isZero();
 		assertThat(exhibitionGenreRepository.findByExhibitionId(seeded.getId())).isEmpty();

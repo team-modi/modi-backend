@@ -1,4 +1,4 @@
-package modi.backend.application.exhibition;
+package modi.backend.application.exhibition.serving;
 
 import java.time.LocalDate;
 import java.util.List;

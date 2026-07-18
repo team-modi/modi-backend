@@ -6,7 +6,7 @@ import java.util.List;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import modi.backend.application.exhibition.ExhibitionResult;
+import modi.backend.application.exhibition.serving.ExhibitionResult;
 
 /**
  * 전시 API 요청/응답 DTO 모음(파일 수 절감을 위해 중첩 record로 묶음).

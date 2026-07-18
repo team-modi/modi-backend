@@ -1,5 +1,9 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.ingest.CatalogEnricher;
+import modi.backend.application.exhibition.ingest.EnrichmentJobFacade;
+import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -51,7 +55,7 @@ class CatalogEnricherTest {
 	@Test
 	@DisplayName("스윕 — 미분류 CATALOG를 GENRE_CLASSIFY로 멱등 enqueue한다")
 	void enrichGenres_미분류를_작업으로_스윕() {
-		ExhibitionFacade facade = mock(ExhibitionFacade.class);
+		ExhibitionIngestFacade facade = mock(ExhibitionIngestFacade.class);
 		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
 		GenreClassifier classifier = mock(GenreClassifier.class);
 		when(facade.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of("E1", "E2"));
@@ -67,7 +71,7 @@ class CatalogEnricherTest {
 	@Test
 	@DisplayName("드레인 — 랜덤 구성에선 분류 성공분을 정준층에 쓰고 작업을 성공 처리한다(배치당 AI 1콜)")
 	void enrichGenres_드레인_성공분_반영() {
-		ExhibitionFacade facade = mock(ExhibitionFacade.class);
+		ExhibitionIngestFacade facade = mock(ExhibitionIngestFacade.class);
 		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
 		GenreClassifier classifier = mock(GenreClassifier.class);
 		EnrichmentJob j1 = genreJob("E1");
@@ -93,7 +97,7 @@ class CatalogEnricherTest {
 	@Test
 	@DisplayName("드레인 — AI(gemini) 폴백이면 정준층에 쓰지 않고 작업을 RETRYABLE로 둔다(AI 회복 후 재분류)")
 	void enrichGenres_AI폴백_재시도로_남긴다() {
-		ExhibitionFacade facade = mock(ExhibitionFacade.class);
+		ExhibitionIngestFacade facade = mock(ExhibitionIngestFacade.class);
 		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
 		GenreClassifier classifier = mock(GenreClassifier.class);
 		EnrichmentJob j1 = genreJob("E1");
@@ -115,7 +119,7 @@ class CatalogEnricherTest {
 	@Test
 	@DisplayName("드레인 — AI(gemini)가 실제로 분류하면 정준층에 쓰고 성공 처리한다")
 	void enrichGenres_AI성공_반영() {
-		ExhibitionFacade facade = mock(ExhibitionFacade.class);
+		ExhibitionIngestFacade facade = mock(ExhibitionIngestFacade.class);
 		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
 		GenreClassifier classifier = mock(GenreClassifier.class);
 		EnrichmentJob j1 = genreJob("E1");
@@ -137,7 +141,7 @@ class CatalogEnricherTest {
 	@Test
 	@DisplayName("드레인 — 이미 분류됐거나 사라진 대상은 AI 없이 작업을 성공 마감한다")
 	void enrichGenres_이미분류_AI없이_마감() {
-		ExhibitionFacade facade = mock(ExhibitionFacade.class);
+		ExhibitionIngestFacade facade = mock(ExhibitionIngestFacade.class);
 		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
 		GenreClassifier classifier = mock(GenreClassifier.class);
 		EnrichmentJob j1 = genreJob("E1");
@@ -156,7 +160,7 @@ class CatalogEnricherTest {
 	@Test
 	@DisplayName("드레인 — 도래 작업이 없으면 AI를 태우지 않고 즉시 끝낸다")
 	void enrichGenres_도래없으면_즉시종료() {
-		ExhibitionFacade facade = mock(ExhibitionFacade.class);
+		ExhibitionIngestFacade facade = mock(ExhibitionIngestFacade.class);
 		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
 		GenreClassifier classifier = mock(GenreClassifier.class);
 		when(facade.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of());

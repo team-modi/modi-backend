@@ -1,5 +1,7 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
@@ -51,7 +53,7 @@ class CultureVendorArchiveTest {
 	private static final AtomicInteger SEQ = new AtomicInteger(1);
 
 	@Autowired
-	ExhibitionFacade exhibitionFacade;
+	ExhibitionIngestFacade exhibitionIngestFacade;
 
 	@Autowired
 	ExhibitionRepository exhibitionRepository;
@@ -79,7 +81,7 @@ class CultureVendorArchiveTest {
 		given(exhibitionCatalogClient.fetchAll()).willReturn(listData(List.of(listData(externalId, "원본 적재 전시", payload))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.empty());
 
-		int inserted = exhibitionFacade.syncCatalog();
+		int inserted = exhibitionIngestFacade.syncCatalog();
 
 		// 도메인층 — 기존 동작 그대로여야 한다.
 		assertThat(inserted).isEqualTo(1);
@@ -99,12 +101,12 @@ class CultureVendorArchiveTest {
 		String payload = listPayload(externalId, "멱등 전시");
 		given(exhibitionCatalogClient.fetchAll()).willReturn(listData(List.of(listData(externalId, "멱등 전시", payload))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.empty());
-		exhibitionFacade.syncCatalog();
+		exhibitionIngestFacade.syncCatalog();
 		CultureListResponse first = listRow(externalId);
 		java.time.LocalDateTime firstSeen = first.getFirstSeenAt();
 		String firstHash = first.getPayloadHash();
 
-		exhibitionFacade.syncCatalog();
+		exhibitionIngestFacade.syncCatalog();
 
 		CultureListResponse row = listRow(externalId); // 조회 자체가 UK 1행을 전제한다(2행이면 여기서 깨진다)
 		assertThat(row.getId()).isEqualTo(first.getId()); // 새 행이 아니라 같은 행
@@ -120,14 +122,14 @@ class CultureVendorArchiveTest {
 		String before = listPayload(externalId, "정정 전 제목");
 		given(exhibitionCatalogClient.fetchAll()).willReturn(listData(List.of(listData(externalId, "정정 전 제목", before))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.empty());
-		exhibitionFacade.syncCatalog();
+		exhibitionIngestFacade.syncCatalog();
 		String hashBefore = listRow(externalId).getPayloadHash();
 
 		// 원천이 같은 external_id의 내용을 고쳐 보냈다.
 		String after = listPayload(externalId, "정정 후 제목");
 		given(exhibitionCatalogClient.fetchAll()).willReturn(listData(List.of(listData(externalId, "정정 후 제목", after))));
 
-		exhibitionFacade.syncCatalog();
+		exhibitionIngestFacade.syncCatalog();
 
 		CultureListResponse row = listRow(externalId);
 		assertThat(row.getPayload()).isEqualTo(after);
@@ -145,7 +147,7 @@ class CultureVendorArchiveTest {
 				"역전 기간 전시", "장소", today, today.minusDays(1), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING,
 				null, null, "기관", null, null, null, "전시", "서울", payload))));
 
-		int inserted = exhibitionFacade.syncCatalog();
+		int inserted = exhibitionIngestFacade.syncCatalog();
 
 		assertThat(inserted).isZero();
 		assertThat(exhibitionRepository.findByExternalId(externalId)).isEmpty(); // 도메인은 스킵
@@ -161,7 +163,7 @@ class CultureVendorArchiveTest {
 				.willReturn(listData(List.of(listData(externalId, "상세 있는 전시", listPayload(externalId, "상세 있는 전시")))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.of(detailData(detailPayload)));
 
-		exhibitionFacade.syncCatalog();
+		exhibitionIngestFacade.syncCatalog();
 
 		// 상태머신(status/attempt/next_attempt)은 enrichment_job으로 이관됐다 — 벤더 테이블엔 무손실 원본만 남는다.
 		CultureDetailResponse row = detailRow(externalId);
@@ -176,7 +178,7 @@ class CultureVendorArchiveTest {
 				.willReturn(listData(List.of(listData(externalId, "상세 없는 전시", listPayload(externalId, "상세 없는 전시")))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.empty());
 
-		exhibitionFacade.syncCatalog();
+		exhibitionIngestFacade.syncCatalog();
 
 		// 빈 응답은 보관할 원본이 없다 — 벤더 행 없음(V29에서 상태머신 제거). 도메인은 "확인 완료"만 표기해 재조회를 막는다
 		// — 상세 satellite 행 존재로 판정한다(연관 부재 = 미동기화).
@@ -194,7 +196,7 @@ class CultureVendorArchiveTest {
 		given(exhibitionCatalogClient.fetchDetail(externalId))
 				.willThrow(new CoreException(ExhibitionErrorCode.EXTERNAL_API_UNAVAILABLE, "외부 전시 API 호출 실패"));
 
-		int inserted = exhibitionFacade.syncCatalog();
+		int inserted = exhibitionIngestFacade.syncCatalog();
 
 		// 기존 동작: 불완전한 행을 적재하지 않고 이 행만 다음 주기로 연기한다.
 		assertThat(inserted).isZero();
@@ -215,7 +217,7 @@ class CultureVendorArchiveTest {
 		given(exhibitionCatalogClient.fetchAll()).willReturn(listData(List.of(listData(externalId, "조각 없는 전시", null))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.empty());
 
-		int inserted = exhibitionFacade.syncCatalog();
+		int inserted = exhibitionIngestFacade.syncCatalog();
 
 		assertThat(inserted).isEqualTo(1); // 도메인 적재는 정상 진행
 		assertThat(cultureListResponseRepository.findByExternalId(externalId)).isEmpty();

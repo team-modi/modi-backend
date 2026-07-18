@@ -2,7 +2,7 @@ package modi.backend.application.bookmark;
 
 import java.util.List;
 
-import modi.backend.application.exhibition.ExhibitionResult;
+import modi.backend.application.exhibition.serving.ExhibitionResult;
 
 /**
  * 관심 전시(북마크) 유스케이스 출력 모음. (Facade는 Result까지만)

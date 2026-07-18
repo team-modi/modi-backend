@@ -1,5 +1,9 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.ingest.CatalogEnricher;
+import modi.backend.application.exhibition.ingest.ExhibitionCatalogBootSync;
+import modi.backend.application.exhibition.ingest.ExhibitionIngestFacade;
+
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -23,37 +27,37 @@ import modi.backend.support.error.CoreException;
  */
 class ExhibitionCatalogBootSyncTest {
 
-	private ExhibitionFacade exhibitionFacade;
+	private ExhibitionIngestFacade exhibitionIngestFacade;
 	private CatalogEnricher catalogEnricher;
 	private ExhibitionCatalogBootSync bootSync;
 
 	@BeforeEach
 	void setUp() {
-		exhibitionFacade = mock(ExhibitionFacade.class);
+		exhibitionIngestFacade = mock(ExhibitionIngestFacade.class);
 		catalogEnricher = mock(CatalogEnricher.class);
-		bootSync = new ExhibitionCatalogBootSync(exhibitionFacade, catalogEnricher);
+		bootSync = new ExhibitionCatalogBootSync(exhibitionIngestFacade, catalogEnricher);
 	}
 
 	@Test
 	@DisplayName("run: 동기화(목록+상세)와 장르 분류를 별도 데몬 스레드에서 순서대로 수행한다(cold start 방지·readiness 비차단)")
 	void run_동기화후_장르트리거() {
-		given(exhibitionFacade.syncCatalog(SyncTrigger.BOOT)).willReturn(2);
+		given(exhibitionIngestFacade.syncCatalog(SyncTrigger.BOOT)).willReturn(2);
 
 		bootSync.run(new DefaultApplicationArguments());
 
 		// 동기화·장르 분류 모두 데몬 스레드에서 수행 — 비동기라 timeout으로 대기 검증.
-		verify(exhibitionFacade, timeout(2000).times(1)).syncCatalog(SyncTrigger.BOOT);
+		verify(exhibitionIngestFacade, timeout(2000).times(1)).syncCatalog(SyncTrigger.BOOT);
 		verify(catalogEnricher, timeout(2000).times(1)).enrichGenres();
 	}
 
 	@Test
 	@DisplayName("run: 동기화가 예외를 던져도 삼켜서 부팅을 막지 않는다")
 	void run_예외삼킴() {
-		given(exhibitionFacade.syncCatalog(SyncTrigger.BOOT))
+		given(exhibitionIngestFacade.syncCatalog(SyncTrigger.BOOT))
 				.willThrow(new CoreException(ExhibitionErrorCode.EXTERNAL_API_UNAVAILABLE, "외부 전시 API 호출 실패"));
 
 		assertThatCode(() -> bootSync.run(new DefaultApplicationArguments())).doesNotThrowAnyException();
 
-		verify(exhibitionFacade, timeout(2000).times(1)).syncCatalog(SyncTrigger.BOOT);
+		verify(exhibitionIngestFacade, timeout(2000).times(1)).syncCatalog(SyncTrigger.BOOT);
 	}
 }
