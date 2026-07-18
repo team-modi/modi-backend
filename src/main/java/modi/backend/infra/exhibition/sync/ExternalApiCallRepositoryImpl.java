@@ -5,7 +5,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.domain.exhibition.sync.ExternalApiCall;
+import modi.backend.domain.exhibition.sync.entity.ExternalApiCall;
 import modi.backend.domain.exhibition.sync.ExternalApiCallRepository;
 
 /**

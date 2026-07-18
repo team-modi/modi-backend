@@ -17,7 +17,7 @@ import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
 import modi.backend.config.PublicDataProperties;
 import modi.backend.domain.exhibition.sync.ExternalApi;
-import modi.backend.domain.exhibition.sync.ExternalApiCall;
+import modi.backend.domain.exhibition.sync.entity.ExternalApiCall;
 import modi.backend.domain.exhibition.sync.ExternalApiOutcome;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;

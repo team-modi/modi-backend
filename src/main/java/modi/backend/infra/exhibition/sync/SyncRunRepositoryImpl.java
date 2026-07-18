@@ -3,7 +3,7 @@ package modi.backend.infra.exhibition.sync;
 import org.springframework.stereotype.Repository;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.domain.exhibition.sync.SyncRun;
+import modi.backend.domain.exhibition.sync.entity.SyncRun;
 import modi.backend.domain.exhibition.sync.SyncRunRepository;
 
 @Repository

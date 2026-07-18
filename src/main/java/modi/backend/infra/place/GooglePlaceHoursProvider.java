@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import modi.backend.config.PlaceHoursProperties;
 import modi.backend.domain.exhibition.sync.ExternalApi;
-import modi.backend.domain.exhibition.sync.ExternalApiCall;
+import modi.backend.domain.exhibition.sync.entity.ExternalApiCall;
 import modi.backend.domain.exhibition.sync.ExternalApiCallRepository;
 import modi.backend.domain.exhibition.sync.ExternalApiOutcome;
 import modi.backend.domain.exhibition.hours.PlaceHoursData;

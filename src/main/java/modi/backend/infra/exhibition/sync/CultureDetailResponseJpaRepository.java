@@ -4,7 +4,7 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import modi.backend.domain.exhibition.sync.CultureDetailResponse;
+import modi.backend.domain.exhibition.sync.entity.CultureDetailResponse;
 
 public interface CultureDetailResponseJpaRepository extends JpaRepository<CultureDetailResponse, Long> {
 

@@ -1,4 +1,4 @@
-package modi.backend.domain.exhibition.sync;
+package modi.backend.domain.exhibition.sync.entity;
 
 import java.time.LocalDateTime;
 
@@ -13,6 +13,8 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import modi.backend.domain.exhibition.sync.ExternalApi;
+import modi.backend.domain.exhibition.sync.ExternalApiOutcome;
 
 /**
  * 외부 호출 감사(append-only) — {@code external_api_call} 매핑.

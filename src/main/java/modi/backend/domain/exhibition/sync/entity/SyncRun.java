@@ -1,4 +1,4 @@
-package modi.backend.domain.exhibition.sync;
+package modi.backend.domain.exhibition.sync.entity;
 
 import java.time.LocalDateTime;
 
@@ -13,6 +13,7 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import modi.backend.domain.exhibition.sync.SyncTrigger;
 
 /**
  * 한 번의 카탈로그 동기화 실행 기록(append-only) — {@code sync_run} 매핑.

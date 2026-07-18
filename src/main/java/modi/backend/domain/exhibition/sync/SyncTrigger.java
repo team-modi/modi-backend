@@ -1,5 +1,7 @@
 package modi.backend.domain.exhibition.sync;
 
+import modi.backend.domain.exhibition.sync.entity.SyncRun;
+
 /**
  * 카탈로그 동기화 실행({@link SyncRun})을 촉발한 계기 — {@code sync_run.trigger_type}.
  *

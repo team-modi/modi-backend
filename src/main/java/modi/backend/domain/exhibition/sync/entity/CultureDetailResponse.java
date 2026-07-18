@@ -1,4 +1,4 @@
-package modi.backend.domain.exhibition.sync;
+package modi.backend.domain.exhibition.sync.entity;
 
 import modi.backend.domain.exhibition.enrichment.EnrichmentJob;
 import modi.backend.domain.exhibition.enrichment.JobType;

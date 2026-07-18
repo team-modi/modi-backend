@@ -18,7 +18,7 @@ import modi.backend.domain.exhibition.sync.CatalogListData;
 import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.domain.exhibition.sync.ExternalApi;
-import modi.backend.domain.exhibition.sync.ExternalApiCall;
+import modi.backend.domain.exhibition.sync.entity.ExternalApiCall;
 import modi.backend.domain.exhibition.sync.ExternalApiCallRepository;
 import modi.backend.domain.exhibition.sync.ExternalApiOutcome;
 import modi.backend.support.error.CoreException;
