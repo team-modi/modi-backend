@@ -38,6 +38,11 @@ dependencies {
 	implementation('com.anthropic:anthropic-java:2.34.0') {
 		exclude group: 'io.swagger.core.v3', module: 'swagger-annotations'
 	}
+	// 장르 분류 호출 내 즉시 재시도·서킷브레이커(ADR-11 — 1차 Gemini→2차 Claude 폴백 체인).
+	//   스타터가 아니라 core 모듈만 프로그래매틱 조립(GenreConfig) — Boot 4.1 스타터 호환 리스크 회피.
+	//   아웃박스 폴러의 durable 재시도와 계층이 다르다: resilience4j=호출 내, 아웃박스=재시작을 넘는 재시도.
+	implementation 'io.github.resilience4j:resilience4j-retry:2.2.0'
+	implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
 	// OAuth 후 자체 JWT(access/refresh) 발급용
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'

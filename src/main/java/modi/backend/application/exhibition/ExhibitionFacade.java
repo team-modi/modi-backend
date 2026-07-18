@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ import modi.backend.domain.exhibition.catalog.ExhibitionRegionGroup;
 import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionSection;
 import modi.backend.domain.exhibition.sync.data.GenreClassification;
+import modi.backend.domain.exhibition.sync.port.GenreClassificationException;
 import modi.backend.domain.exhibition.sync.port.GenreClassifier;
 import modi.backend.domain.exhibition.genre.GenreKeyword;
 import modi.backend.domain.exhibition.sync.data.GenreResult;
@@ -59,6 +62,8 @@ import modi.backend.support.time.AppTime;
 @Service
 @RequiredArgsConstructor
 public class ExhibitionFacade {
+
+	private static final Logger log = LoggerFactory.getLogger(ExhibitionFacade.class);
 
 	private static final int DEFAULT_SIZE = 20;
 	private static final int MAX_SIZE = 50;
@@ -269,22 +274,30 @@ public class ExhibitionFacade {
 		}
 		// place·venueId 모두 없으면 장소 미상 센티넬로 수렴한다(exhibition_place_id NOT NULL 지탱) — 제목만 등록도 그대로 동작한다.
 		ExhibitionPlace place = exhibitionPlaceRepository.resolveOrCreate(placeName, region, null, null, null);
-		// 장르: 사용자가 직접 고르면 그 값(provider=USER), 미지정이면 분류기(랜덤/AI)가 부여한다(실패해도 유효 장르 반환).
-		GenreResult genre;
+		// 장르: 사용자가 직접 고르면 그 값(provider=USER), 미지정이면 분류기(AI 체인/mock)가 부여한다.
+		// 분류기는 이제 실패 시 예외를 던지지만(ADR-11 계약 반전), 등록은 장르(부가 기능) 때문에 깨지지 않는다 —
+		// 전 공급자 장애면 장르 없이 등록한다(기능 강등 — 미지정 CUSTOM + 전 AI 동시 장애의 교집합이라 드물다).
+		GenreResult genre = null;
 		if (criteria.genreKeyword() != null && !criteria.genreKeyword().isBlank()) {
 			if (!GenreKeyword.contains(criteria.genreKeyword())) {
 				throw new CoreException(ErrorType.INVALID_INPUT, "정의되지 않은 장르 키워드: " + criteria.genreKeyword());
 			}
 			genre = GenreResult.user(criteria.genreKeyword());
 		} else {
-			genre = genreClassifier.classify(new GenreClassification(criteria.title(),
-					category == null ? null : category.name(), null, placeName, criteria.artist(), null));
+			try {
+				genre = genreClassifier.classify(new GenreClassification(criteria.title(),
+						category == null ? null : category.name(), null, placeName, criteria.artist(), null));
+			} catch (GenreClassificationException e) {
+				log.warn("CUSTOM 등록 장르 분류 실패 — 장르 없이 등록(기능 강등): {}", e.getMessage());
+			}
 		}
 		Exhibition exhibition = Exhibition.createCustom(criteria.ownerId(), criteria.title(), place.getId(),
 				criteria.startDate(), criteria.endDate(), category, format, criteria.artist(), criteria.posterUrl());
 		Exhibition saved = exhibitionRepository.save(exhibition);
 		linkArtist(saved.getId(), criteria.artist());
-		exhibitionRepository.applyGenre(saved.getId(), genre, LocalDateTime.now());
+		if (genre != null) {
+			exhibitionRepository.applyGenre(saved.getId(), genre, LocalDateTime.now());
+		}
 		return ExhibitionResult.Created.from(saved);
 	}
 
