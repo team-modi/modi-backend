@@ -93,6 +93,7 @@ ApiResponse.failValidation(code, message, fieldErrors)
 - `infra/{d}/XxxJpaRepository` — Spring Data JPA
 - `infra/{d}/XxxRepositoryImpl` — @Repository 어댑터. JPAQueryFactory 주입해 QueryDSL 직접 작성.
 - soft-delete: 조회는 살아있는 행만 — 파생쿼리에 `...AndDeletedAtIsNull`(포트 메서드명은 그대로, Impl만 필터 호출).
+- **전시 예외(애그리거트 루트)**: 전시·전시장 부속(상세·장르·작가조인·영업시간)은 개별 리포 ❌ — 쓰기는 `ExhibitionRepository`/`ExhibitionPlaceRepository`의 `applyXxx`(루트 행 미변경 부분 갱신) 경유, 서빙 목록/탐색 조회는 `ExhibitionQueryRepository`. 부속 JpaRepo는 Impl 내부 구현 세부라 application 주입 ❌. 기록성 테이블(Culture 스테이징·History·GooglePlaceResponse)은 포트 없이 JpaRepository 직사용(단 `ExternalApiCallRepository`는 REQUIRES_NEW 감사 어댑터라 존치). application/exhibition은 `serving`(사용자 유스케이스)/`ingest`(수집 파이프라인) 파사드로 분리 — 서로 주입 ❌.
 
 ## Entity
 - 생성: 정적 팩토리 `Xxx.create(...)`
