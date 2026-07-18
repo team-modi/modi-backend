@@ -27,15 +27,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import modi.backend.TestcontainersConfiguration;
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
 import modi.backend.application.exhibition.ExhibitionFacade;
 import modi.backend.domain.auth.TokenProvider;
-import modi.backend.domain.exhibition.CatalogExhibitionData;
-import modi.backend.domain.exhibition.CatalogListData;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionRegion;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
+import modi.backend.domain.exhibition.sync.data.CatalogListData;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.domain.user.User;
 import modi.backend.domain.user.UserRepository;
 import modi.backend.infra.record.RecordJpaRepository;
@@ -61,10 +62,13 @@ class RecordV1ControllerTest {
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
-	modi.backend.domain.exhibition.ExhibitionPlaceRepository exhibitionPlaceRepository;
+	modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository exhibitionPlaceRepository;
 
 	@Autowired
 	ExhibitionFacade exhibitionFacade;
+
+	@Autowired
+	ExhibitionSyncFacade exhibitionSyncFacade;
 
 	// 스냅샷 독립성 e2e(Task 14)에서만 사용 — CATALOG 재동기화로 원본 전시 제목을 실제로 바꿔보기 위해 수집 포트를 목으로 둔다.
 	@MockitoBean
@@ -87,7 +91,7 @@ class RecordV1ControllerTest {
 		bearerUser1 = "Bearer " + tokenProvider.issue(u1, "kakao").accessToken();
 		bearerUser2 = "Bearer " + tokenProvider.issue(u2, "kakao").accessToken();
 
-		Long placeId = modi.backend.domain.exhibition.ExhibitionTestFactory.placeId(
+		Long placeId = modi.backend.domain.exhibition.catalog.ExhibitionTestFactory.placeId(
 				exhibitionPlaceRepository, "예술의전당", null);
 		Exhibition exhibition = exhibitionRepository.save(Exhibition.createCatalog(
 				"RECORD-TEST-" + System.nanoTime(), "모네전", placeId, null, null, null, null, null, "기관"));
@@ -163,7 +167,7 @@ class RecordV1ControllerTest {
 				new CatalogExhibitionData(externalId, originalTitle, "스냅샷 갤러리", today.minusDays(5),
 						today.plusDays(25), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING,
 						"https://poster/snapshot.jpg", null, "기관", null, null, null, "전시", "서울", null))));
-		exhibitionFacade.syncCatalog();
+		exhibitionSyncFacade.syncCatalog();
 		Long catalogExhibitionId = exhibitionRepository.findByExternalId(externalId).orElseThrow().getId();
 
 		// 2) 기록 작성 — RecordService.create가 이 시점의 전시 제목을 스냅샷으로 박제한다
@@ -199,7 +203,7 @@ class RecordV1ControllerTest {
 				new CatalogExhibitionData(externalId, mutatedTitle, "스냅샷 갤러리 이전", today.minusDays(5),
 						today.plusDays(25), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING,
 						"https://poster/mutated.jpg", null, "기관", null, null, null, "전시", "서울", null))));
-		exhibitionFacade.syncCatalog();
+		exhibitionSyncFacade.syncCatalog();
 
 		// 기존 전시 행이 원천 갱신본으로 덮이지 않았음을 확인한다(신규만 추가 — 재적재 갱신 없음).
 		Exhibition afterResync = exhibitionRepository.findByExternalId(externalId).orElseThrow();

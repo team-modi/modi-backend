@@ -8,9 +8,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.domain.exhibition.ExhibitionType;
+import modi.backend.domain.exhibition.catalog.ExhibitionType;
 import modi.backend.infra.activitylog.ActivityLogJpaRepository;
-import modi.backend.infra.exhibition.ExhibitionJpaRepository;
+import modi.backend.infra.exhibition.catalog.ExhibitionJpaRepository;
 import modi.backend.infra.record.RecordJpaRepository;
 import modi.backend.infra.remind.RemindJpaRepository;
 import modi.backend.infra.user.UserJpaRepository;

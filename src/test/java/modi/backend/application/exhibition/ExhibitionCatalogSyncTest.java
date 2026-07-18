@@ -1,9 +1,11 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -25,27 +27,23 @@ import org.mockito.quality.Strictness;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
-import modi.backend.domain.exhibition.ArtistRepository;
-import modi.backend.domain.exhibition.CatalogDetailData;
-import modi.backend.domain.exhibition.CatalogExhibitionData;
-import modi.backend.domain.exhibition.CatalogListData;
-import modi.backend.domain.exhibition.CultureDetailResponseRepository;
-import modi.backend.domain.exhibition.CultureListResponseRepository;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionArtistRepository;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionDetail;
-import modi.backend.domain.exhibition.ExhibitionDetailRepository;
-import modi.backend.domain.exhibition.ExhibitionGenreRepository;
-import modi.backend.domain.exhibition.ExhibitionPlace;
-import modi.backend.domain.exhibition.ExhibitionPlaceRepository;
-import modi.backend.domain.exhibition.ExhibitionRegion;
-import modi.backend.domain.exhibition.ExhibitionRepository;
-import modi.backend.domain.exhibition.GenreClassifier;
-import modi.backend.domain.exhibition.GooglePlaceResponseRepository;
-import modi.backend.domain.exhibition.PlaceHoursRepository;
-import modi.backend.domain.exhibition.SyncRunRepository;
+import modi.backend.domain.exhibition.catalog.ArtistRepository;
+import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
+import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
+import modi.backend.domain.exhibition.sync.data.CatalogListData;
+import modi.backend.infra.exhibition.sync.CultureDetailResponseJpaRepository;
+import modi.backend.infra.exhibition.sync.CultureListResponseJpaRepository;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionQueryRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
+import modi.backend.domain.exhibition.sync.port.GenreClassifier;
+import modi.backend.infra.exhibition.sync.GooglePlaceResponseJpaRepository;
+import modi.backend.domain.exhibition.sync.port.SyncRunRepository;
 import modi.backend.domain.venue.VenueRepository;
 import modi.backend.infra.record.RecordJpaRepository;
 
@@ -62,25 +60,23 @@ class ExhibitionCatalogSyncTest {
 	@Mock ExhibitionBookmarkRepository exhibitionBookmarkRepository;
 	@Mock VenueRepository venueRepository;
 	@Mock RecordJpaRepository recordJpaRepository;
-	@Mock PlaceHoursRepository placeHoursRepository;
-	@Mock GooglePlaceResponseRepository googlePlaceResponseRepository;
+	@Mock GooglePlaceResponseJpaRepository googlePlaceResponseRepository;
 	@Mock GenreClassifier genreClassifier;
-	@Mock ExhibitionGenreRepository exhibitionGenreRepository;
-	@Mock CultureListResponseRepository cultureListResponseRepository;
-	@Mock CultureDetailResponseRepository cultureDetailResponseRepository;
+	@Mock CultureListResponseJpaRepository cultureListResponseRepository;
+	@Mock CultureDetailResponseJpaRepository cultureDetailResponseRepository;
 	@Mock SyncRunRepository syncRunRepository;
 	@Mock ExhibitionPlaceRepository exhibitionPlaceRepository;
-	@Mock ExhibitionDetailRepository exhibitionDetailRepository;
+	@Mock ExhibitionQueryRepository exhibitionQueryRepository;
 	@Mock ArtistRepository artistRepository;
-	@Mock ExhibitionArtistRepository exhibitionArtistRepository;
+	@Mock EnrichmentJobFacade enrichmentJobFacade;
 
 	@InjectMocks
-	ExhibitionFacade facade;
+	ExhibitionSyncFacade facade;
 
 	private void stubPlaceResolveCreatesNew() {
-		given(exhibitionPlaceRepository.findByPlaceKey(anyString())).willReturn(Optional.empty());
-		given(exhibitionPlaceRepository.save(any(ExhibitionPlace.class)))
-				.willAnswer(inv -> withPlaceId(inv.getArgument(0), 55L));
+		given(exhibitionPlaceRepository.resolveOrCreate(any(), any(), any(), any(), any()))
+				.willAnswer(inv -> withPlaceId(ExhibitionPlace.createFromList(inv.getArgument(0),
+						inv.getArgument(1), inv.getArgument(2), inv.getArgument(3), inv.getArgument(4)), 55L));
 		given(exhibitionPlaceRepository.findById(anyLong())).willReturn(Optional.empty());
 		given(exhibitionRepository.save(any(Exhibition.class))).willAnswer(inv -> inv.getArgument(0));
 	}
@@ -96,8 +92,7 @@ class ExhibitionCatalogSyncTest {
 				data("CAT-OLD", "기존 전시(원천 갱신본)"), data("CAT-NEW", "신규 전시"))));
 		given(exhibitionRepository.findByExternalId("CAT-OLD")).willReturn(Optional.of(existing));
 		given(exhibitionRepository.findByExternalId("CAT-NEW")).willReturn(Optional.empty());
-		given(exhibitionDetailRepository.existsByExhibitionId(100L)).willReturn(false);
-		given(exhibitionDetailRepository.findByExhibitionId(anyLong())).willReturn(Optional.empty());
+		given(exhibitionRepository.hasDetail(100L)).willReturn(false);
 		given(catalogClient.fetchDetail("CAT-OLD")).willReturn(Optional.of(detail("무료")));
 		given(catalogClient.fetchDetail("CAT-NEW")).willReturn(Optional.of(detail("15,000원")));
 
@@ -105,10 +100,9 @@ class ExhibitionCatalogSyncTest {
 
 		assertThat(inserted).isEqualTo(1); // 신규만 적재 수에 잡힌다(기존 상세 완성은 별도)
 		assertThat(existing.getTitle()).isEqualTo("기존 전시"); // 제목은 원천 갱신본으로 안 바뀐다
-		ArgumentCaptor<ExhibitionDetail> detailCaptor = ArgumentCaptor.forClass(ExhibitionDetail.class);
-		verify(exhibitionDetailRepository, times(2)).save(detailCaptor.capture());
-		assertThat(detailCaptor.getAllValues()).extracting(ExhibitionDetail::getPrice)
-				.containsExactlyInAnyOrder("무료", "15,000원");
+		ArgumentCaptor<String> priceCaptor = ArgumentCaptor.forClass(String.class);
+		verify(exhibitionRepository, times(2)).applyDetail(anyLong(), priceCaptor.capture(), any(), any(), any());
+		assertThat(priceCaptor.getAllValues()).containsExactlyInAnyOrder("무료", "15,000원");
 	}
 
 	@Test
@@ -119,13 +113,13 @@ class ExhibitionCatalogSyncTest {
 				today.plusDays(5), ExhibitionCategory.PAINTING, null, null, "기관"), 200L);
 		given(catalogClient.fetchAll()).willReturn(listData(List.of(data("CAT-DONE", "완성 전시"))));
 		given(exhibitionRepository.findByExternalId("CAT-DONE")).willReturn(Optional.of(synced));
-		given(exhibitionDetailRepository.existsByExhibitionId(200L)).willReturn(true); // 상세행 존재 → 완성 상태
+		given(exhibitionRepository.hasDetail(200L)).willReturn(true); // 상세행 존재 → 완성 상태
 
 		int inserted = facade.syncCatalog();
 
 		assertThat(inserted).isZero();
 		verify(catalogClient, never()).fetchDetail(any());
-		verify(exhibitionDetailRepository, never()).save(any());
+		verify(exhibitionRepository, never()).applyDetail(anyLong(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -138,8 +132,7 @@ class ExhibitionCatalogSyncTest {
 				null, null, null, "전시", "서울", null);
 		given(catalogClient.fetchAll()).willReturn(listData(List.of(invalid, data("CAT-OK", "정상 전시"))));
 		given(exhibitionRepository.findByExternalId("CAT-OK")).willReturn(Optional.empty());
-		given(exhibitionDetailRepository.findByExhibitionId(anyLong())).willReturn(Optional.empty());
-		given(exhibitionDetailRepository.existsByExhibitionId(anyLong())).willReturn(false);
+		given(exhibitionRepository.hasDetail(anyLong())).willReturn(false);
 		given(catalogClient.fetchDetail("CAT-OK")).willReturn(Optional.empty()); // 원천 상세 없음 → 확인 완료행만
 
 		int inserted = facade.syncCatalog();

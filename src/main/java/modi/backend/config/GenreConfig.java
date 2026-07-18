@@ -1,5 +1,7 @@
 package modi.backend.config;
 
+import modi.backend.infra.exhibition.sync.gemini.GeminiDto;
+
 import java.time.Duration;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -11,10 +13,10 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.support.WebClientAdapter;
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
-import modi.backend.domain.exhibition.GenreClassifier;
-import modi.backend.infra.genre.GeminiApi;
-import modi.backend.infra.genre.GeminiGenreClassifier;
-import modi.backend.infra.genre.RandomGenreClassifier;
+import modi.backend.domain.exhibition.sync.port.GenreClassifier;
+import modi.backend.infra.exhibition.sync.gemini.GeminiApi;
+import modi.backend.infra.exhibition.sync.gemini.GeminiGenreClassifier;
+import modi.backend.infra.exhibition.sync.mock.RandomGenreClassifier;
 import reactor.netty.http.client.HttpClient;
 
 /**

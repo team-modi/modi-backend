@@ -13,17 +13,17 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionPlace;
-import modi.backend.domain.exhibition.ExhibitionPlaceRepository;
-import modi.backend.domain.exhibition.ExhibitionRegion;
-import modi.backend.domain.exhibition.ExhibitionRepository;
-import modi.backend.domain.exhibition.PlaceHours;
-import modi.backend.domain.exhibition.PlaceHoursRepository;
-import modi.backend.domain.exhibition.PlaceHoursStatus;
-import modi.backend.domain.exhibition.PlaceHoursVendor;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
+import modi.backend.domain.exhibition.hours.PlaceHours;
+import modi.backend.infra.exhibition.hours.PlaceHoursJpaRepository;
+import modi.backend.domain.exhibition.hours.PlaceHoursStatus;
+import modi.backend.domain.exhibition.hours.PlaceHoursVendor;
 
 /**
  * 상세 operatingHours <b>읽기 출처</b> 검증(@SpringBootTest + Testcontainers-MySQL).
@@ -47,7 +47,7 @@ class PlaceHoursReadSwitchTest {
 	ExhibitionPlaceRepository exhibitionPlaceRepository;
 
 	@Autowired
-	PlaceHoursRepository placeHoursRepository;
+	PlaceHoursJpaRepository placeHoursRepository;
 
 	@MockitoBean
 	ExhibitionCatalogClient exhibitionCatalogClient;

@@ -21,7 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import modi.backend.application.exhibition.ExhibitionFacade;
 import modi.backend.application.exhibition.ExhibitionResult;
-import modi.backend.domain.exhibition.ExhibitionErrorCode;
+import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.domain.record.AiStatus;
 import modi.backend.domain.record.ExhibitionSnapshot;
 import modi.backend.domain.record.Record;

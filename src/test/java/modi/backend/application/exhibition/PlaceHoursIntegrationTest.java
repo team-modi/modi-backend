@@ -1,5 +1,7 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.sync.enricher.PlaceHoursEnricher;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -21,18 +23,18 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
-import modi.backend.domain.exhibition.ExhibitionPlace;
-import modi.backend.domain.exhibition.ExhibitionPlaceRepository;
-import modi.backend.domain.exhibition.ExhibitionRegion;
-import modi.backend.domain.exhibition.PlaceHours;
-import modi.backend.domain.exhibition.PlaceHoursData;
-import modi.backend.domain.exhibition.PlaceHoursProvider;
-import modi.backend.domain.exhibition.PlaceHoursRepository;
-import modi.backend.domain.exhibition.PlaceHoursStatus;
-import modi.backend.domain.exhibition.PlaceHoursVendor;
-import modi.backend.domain.exhibition.WeeklyOpeningHours;
-import modi.backend.infra.exhibition.GooglePlaceResponseJpaRepository;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
+import modi.backend.domain.exhibition.hours.PlaceHours;
+import modi.backend.domain.exhibition.sync.data.PlaceHoursData;
+import modi.backend.domain.exhibition.sync.port.PlaceHoursProvider;
+import modi.backend.infra.exhibition.hours.PlaceHoursJpaRepository;
+import modi.backend.domain.exhibition.hours.PlaceHoursStatus;
+import modi.backend.domain.exhibition.hours.PlaceHoursVendor;
+import modi.backend.domain.exhibition.hours.WeeklyOpeningHours;
+import modi.backend.infra.exhibition.sync.GooglePlaceResponseJpaRepository;
 
 /**
  * 전시 영업시간 보강 전 경로 통합 검증(@SpringBootTest + Testcontainers-MySQL). 외부 조회기({@link PlaceHoursProvider})만 목으로 두고
@@ -57,7 +59,7 @@ class PlaceHoursIntegrationTest {
 	GooglePlaceResponseJpaRepository googlePlaceResponseJpaRepository;
 
 	@Autowired
-	PlaceHoursRepository placeHoursRepository;
+	PlaceHoursJpaRepository placeHoursRepository;
 
 	@MockitoBean
 	PlaceHoursProvider placeHoursProvider;

@@ -33,16 +33,17 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.jayway.jsonpath.JsonPath;
 
 import modi.backend.TestcontainersConfiguration;
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
 import modi.backend.application.exhibition.ExhibitionFacade;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
-import modi.backend.domain.exhibition.CatalogDetailData;
-import modi.backend.domain.exhibition.CatalogExhibitionData;
-import modi.backend.domain.exhibition.CatalogListData;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionRegion;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
+import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
+import modi.backend.domain.exhibition.sync.data.CatalogListData;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.infra.auth.KakaoApi;
 
 /**
@@ -68,13 +69,16 @@ class ExhibitionIntegrationTest {
 	ExhibitionFacade exhibitionFacade;
 
 	@Autowired
+	ExhibitionSyncFacade exhibitionSyncFacade;
+
+	@Autowired
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
-	modi.backend.domain.exhibition.ExhibitionPlaceRepository exhibitionPlaceRepository;
+	modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository exhibitionPlaceRepository;
 
 	@Autowired
-	modi.backend.domain.exhibition.ExhibitionDetailRepository exhibitionDetailRepository;
+	modi.backend.infra.exhibition.catalog.ExhibitionDetailJpaRepository exhibitionDetailRepository;
 
 	@Autowired
 	ExhibitionBookmarkRepository exhibitionBookmarkRepository;
@@ -106,7 +110,7 @@ class ExhibitionIntegrationTest {
 		given(catalogClient.fetchDetail("CAT-MONET")).willReturn(Optional.of(
 				new CatalogDetailData("성인 20,000원", "모네 특별전 설명", "https://detail/monet", "02-1234-5678",
 						"https://img/monet.jpg", "https://place/monet", "서울 어딘가", "PLACE-SEQ-1", null)));
-		exhibitionFacade.syncCatalog();
+		exhibitionSyncFacade.syncCatalog();
 	}
 
 	/**
@@ -122,12 +126,12 @@ class ExhibitionIntegrationTest {
 			ExhibitionRegion region, ExhibitionCategory category, String price, Double gpsX, Double gpsY) {
 		// 전시장은 전시마다 고유(region·gps 필터·거리순이 전시별로 갈리게) — 자연키 이름을 externalId로 유일하게.
 		Long placeId = exhibitionPlaceRepository.save(
-				modi.backend.domain.exhibition.ExhibitionPlace.createFromList(title + "@" + externalId, region, null,
+				modi.backend.domain.exhibition.catalog.ExhibitionPlace.createFromList(title + "@" + externalId, region, null,
 						gpsX, gpsY)).getId();
 		Exhibition e = exhibitionRepository.save(
 				Exhibition.createCatalog(externalId, title, placeId, startDate, endDate, category, null, null, "기관"));
 		if (price != null && !price.isBlank()) {
-			exhibitionDetailRepository.save(modi.backend.domain.exhibition.ExhibitionDetail.create(
+			exhibitionDetailRepository.save(modi.backend.domain.exhibition.catalog.ExhibitionDetail.create(
 					e.getId(), price, null, null, java.time.LocalDateTime.now()));
 		}
 		return e.getId();

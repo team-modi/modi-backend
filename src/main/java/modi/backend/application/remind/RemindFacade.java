@@ -14,8 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.domain.record.Record;
 import modi.backend.domain.record.RecordEmotion;
 import modi.backend.domain.record.RecordErrorCode;
@@ -46,8 +46,6 @@ public class RemindFacade {
 	private final RemindJpaRepository remindRepository;
 	private final RecordJpaRepository recordRepository;
 	private final ExhibitionRepository exhibitionRepository;
-	/** 작가 이름 조립 — 작가는 exhibition_artists 조인으로 이동해 전시 코어에 없다. */
-	private final modi.backend.domain.exhibition.ExhibitionArtistRepository exhibitionArtistRepository;
 	private final RemindAiSummarizer summarizer;
 	/** 소환 대상 최소 경과 시간(정식 7d, 베타는 env로 단축 — 시작값 {@link RemindProperties}, 런타임 오버라이드 {@link RemindRuntimeConfig}). */
 	private final RemindRuntimeConfig remindRuntimeConfig;
@@ -62,7 +60,7 @@ public class RemindFacade {
 		}
 		Record record = found.get(0);
 		int daysAgo = daysAgo(record.getCreatedAt());
-		List<String> artistNames = exhibitionArtistRepository.findArtistNames(record.getExhibitionId());
+		List<String> artistNames = exhibitionRepository.findArtistNames(record.getExhibitionId());
 		String artist = artistNames.isEmpty() ? null : String.join(", ", artistNames);
 		List<String> emotions = record.getEmotions().stream().map(RecordEmotion::getEmotionCode).toList();
 		// "전시 속, 그 장면"(2단계)용 — 기록에 첨부한 첫 사진. 없으면 null(FE가 포스터로 폴백).

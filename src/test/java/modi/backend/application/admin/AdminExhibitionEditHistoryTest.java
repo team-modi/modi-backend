@@ -14,13 +14,13 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionHistory;
-import modi.backend.domain.exhibition.ExhibitionHistoryRepository;
-import modi.backend.domain.exhibition.ExhibitionRegion;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionHistory;
+import modi.backend.infra.exhibition.catalog.ExhibitionHistoryJpaRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.support.error.CoreException;
 
 /**
@@ -43,13 +43,13 @@ class AdminExhibitionEditHistoryTest {
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
-	modi.backend.domain.exhibition.ExhibitionPlaceRepository exhibitionPlaceRepository;
+	modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository exhibitionPlaceRepository;
 
 	@Autowired
-	modi.backend.domain.exhibition.ExhibitionDetailRepository exhibitionDetailRepository;
+	modi.backend.infra.exhibition.catalog.ExhibitionDetailJpaRepository exhibitionDetailRepository;
 
 	@Autowired
-	ExhibitionHistoryRepository exhibitionHistoryRepository;
+	ExhibitionHistoryJpaRepository exhibitionHistoryRepository;
 
 	@MockitoBean
 	ExhibitionCatalogClient exhibitionCatalogClient;
@@ -64,7 +64,7 @@ class AdminExhibitionEditHistoryTest {
 
 		// 실제로 바뀐 3필드만 이력이 된다(price 제외).
 		assertThat(result.changedFields()).isEqualTo(3);
-		List<ExhibitionHistory> history = exhibitionHistoryRepository.findByExhibitionId(e.getId());
+		List<ExhibitionHistory> history = exhibitionHistoryRepository.findByExhibitionIdOrderByEditedAtAscIdAsc(e.getId());
 		assertThat(history).hasSize(3);
 		// 한 액션이었다 — 세 변경이 같은 editedAt으로 묶인다(field_edits가 필드별로 쪼개 잃던 묶음).
 		assertThat(history).extracting(ExhibitionHistory::getEditedAt).containsOnly(history.get(0).getEditedAt());
@@ -92,7 +92,7 @@ class AdminExhibitionEditHistoryTest {
 				"제목", "장소", "무료", "설명"); // 전부 같은 값
 
 		assertThat(result.changedFields()).isZero();
-		assertThat(exhibitionHistoryRepository.findByExhibitionId(e.getId())).isEmpty();
+		assertThat(exhibitionHistoryRepository.findByExhibitionIdOrderByEditedAtAscIdAsc(e.getId())).isEmpty();
 	}
 
 	@Test
@@ -103,7 +103,7 @@ class AdminExhibitionEditHistoryTest {
 		adminExhibitionFacade.editExhibition(e.getId(), "v1", null, null, null);
 		adminExhibitionFacade.editExhibition(e.getId(), "v2", null, null, null);
 
-		List<ExhibitionHistory> history = exhibitionHistoryRepository.findByExhibitionId(e.getId());
+		List<ExhibitionHistory> history = exhibitionHistoryRepository.findByExhibitionIdOrderByEditedAtAscIdAsc(e.getId());
 		// 같은 필드(title)를 두 번 고쳐도 두 행이 남는다 — 이력이라 최신 상태로 덮지 않는다.
 		assertThat(history).hasSize(2);
 		assertThat(history).extracting(ExhibitionHistory::getNewValue).containsExactly("v1", "v2");
@@ -119,11 +119,11 @@ class AdminExhibitionEditHistoryTest {
 
 	private Exhibition seed(String title, String place, String price, String description) {
 		// resolve-or-create — 같은 이름을 여러 테스트가 seed해도 자연키(정규화 이름) UK를 위반하지 않게.
-		Long placeId = modi.backend.domain.exhibition.ExhibitionTestFactory.placeId(
+		Long placeId = modi.backend.domain.exhibition.catalog.ExhibitionTestFactory.placeId(
 				exhibitionPlaceRepository, place, ExhibitionRegion.SEOUL);
 		Exhibition e = exhibitionRepository.save(Exhibition.createCatalog("EDIT-" + SEQ.getAndIncrement(), title,
 				placeId, null, null, ExhibitionCategory.PAINTING, null, null, "기관"));
-		exhibitionDetailRepository.save(modi.backend.domain.exhibition.ExhibitionDetail.create(
+		exhibitionDetailRepository.save(modi.backend.domain.exhibition.catalog.ExhibitionDetail.create(
 				e.getId(), price, description, null, java.time.LocalDateTime.now()));
 		return e;
 	}

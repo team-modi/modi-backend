@@ -8,9 +8,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.application.exhibition.CatalogEnricher;
-import modi.backend.application.exhibition.ExhibitionFacade;
-import modi.backend.application.exhibition.PlaceHoursEnricher;
+import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+import modi.backend.application.exhibition.sync.enricher.PlaceHoursEnricher;
 
 /**
  * 공공데이터 전시 카탈로그 정기 동기화 스케줄러.
@@ -30,7 +30,7 @@ public class ExhibitionSyncScheduler {
 
 	private static final Logger log = LoggerFactory.getLogger(ExhibitionSyncScheduler.class);
 
-	private final ExhibitionFacade exhibitionFacade;
+	private final ExhibitionSyncFacade exhibitionSyncFacade;
 	private final CatalogEnricher catalogEnricher;
 	private final PlaceHoursEnricher placeHoursEnricher;
 
@@ -46,7 +46,7 @@ public class ExhibitionSyncScheduler {
 			return;
 		}
 		try {
-			log.info("전시 정기 동기화 신규 {}건", exhibitionFacade.syncCatalog());
+			log.info("전시 정기 동기화 신규 {}건", exhibitionSyncFacade.syncCatalog());
 			catalogEnricher.enrichGenres();
 		} catch (RuntimeException e) {
 			log.warn("전시 정기 동기화/보강 실패(다음 주기 재시도): {}", e.getMessage());

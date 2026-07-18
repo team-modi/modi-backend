@@ -10,9 +10,9 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDateTime;
 
 import modi.backend.application.exhibition.ExhibitionResult;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionDetail;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionDetail;
 
 /**
  * 상세 응답 price 폴백 검증 — 원천에 가격이 없으면(null/공백) "관람료 정보 없음"으로 노출하고, 값이 있으면 그대로 보낸다.

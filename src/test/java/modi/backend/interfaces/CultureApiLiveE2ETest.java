@@ -12,8 +12,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.CatalogExhibitionData;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 
 /**
  * 실제 공공데이터 전시 API를 호출하는 E2E(ai-driven-tdd-development-skill 권장 — 실제 API 확인).

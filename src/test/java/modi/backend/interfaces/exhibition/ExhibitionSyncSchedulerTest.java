@@ -12,11 +12,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
-import modi.backend.domain.exhibition.ExhibitionErrorCode;
+import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.support.error.CoreException;
-import modi.backend.application.exhibition.CatalogEnricher;
-import modi.backend.application.exhibition.ExhibitionFacade;
-import modi.backend.application.exhibition.PlaceHoursEnricher;
+import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+import modi.backend.application.exhibition.sync.enricher.PlaceHoursEnricher;
 
 /**
  * ExhibitionSyncScheduler 단위 검증. 매일 자정 트리거 시 동기화(목록+상세 한 패스) → 장르 분류(신규분)를
@@ -26,39 +26,39 @@ import modi.backend.application.exhibition.PlaceHoursEnricher;
  */
 class ExhibitionSyncSchedulerTest {
 
-	private ExhibitionFacade exhibitionFacade;
+	private ExhibitionSyncFacade exhibitionSyncFacade;
 	private CatalogEnricher catalogEnricher;
 	private PlaceHoursEnricher placeHoursEnricher;
 	private ExhibitionSyncScheduler scheduler;
 
 	@BeforeEach
 	void setUp() {
-		exhibitionFacade = mock(ExhibitionFacade.class);
+		exhibitionSyncFacade = mock(ExhibitionSyncFacade.class);
 		catalogEnricher = mock(CatalogEnricher.class);
 		placeHoursEnricher = mock(PlaceHoursEnricher.class);
-		scheduler = new ExhibitionSyncScheduler(exhibitionFacade, catalogEnricher, placeHoursEnricher);
+		scheduler = new ExhibitionSyncScheduler(exhibitionSyncFacade, catalogEnricher, placeHoursEnricher);
 	}
 
 	@Test
 	@DisplayName("syncDaily: 동기화(목록+상세) → 장르 분류(신규분)를 순서대로 호출한다")
 	void syncDaily_동기화후_장르_순서호출() {
-		given(exhibitionFacade.syncCatalog()).willReturn(3);
+		given(exhibitionSyncFacade.syncCatalog()).willReturn(3);
 
 		scheduler.syncDaily();
 
-		InOrder order = inOrder(exhibitionFacade, catalogEnricher);
-		order.verify(exhibitionFacade, times(1)).syncCatalog();
+		InOrder order = inOrder(exhibitionSyncFacade, catalogEnricher);
+		order.verify(exhibitionSyncFacade, times(1)).syncCatalog();
 		order.verify(catalogEnricher, times(1)).enrichGenres();
 	}
 
 	@Test
 	@DisplayName("syncDaily: facade가 예외를 던져도 삼켜서 다음 주기까지 살아있는다")
 	void syncDaily_예외삼킴() {
-		given(exhibitionFacade.syncCatalog())
+		given(exhibitionSyncFacade.syncCatalog())
 				.willThrow(new CoreException(ExhibitionErrorCode.EXTERNAL_API_UNAVAILABLE, "외부 전시 API 호출 실패"));
 
 		assertThatCode(() -> scheduler.syncDaily()).doesNotThrowAnyException();
 
-		verify(exhibitionFacade, times(1)).syncCatalog();
+		verify(exhibitionSyncFacade, times(1)).syncCatalog();
 	}
 }

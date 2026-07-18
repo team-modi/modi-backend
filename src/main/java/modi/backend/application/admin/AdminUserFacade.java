@@ -15,14 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 import modi.backend.domain.activitylog.ActivityLog;
-import modi.backend.domain.exhibition.Exhibition;
+import modi.backend.domain.exhibition.catalog.Exhibition;
 import modi.backend.domain.record.Record;
 import modi.backend.domain.remind.Remind;
 import modi.backend.domain.user.SocialAccount;
 import modi.backend.domain.user.User;
 import modi.backend.infra.activitylog.ActivityLogJpaRepository;
 import modi.backend.infra.bookmark.ExhibitionBookmarkJpaRepository;
-import modi.backend.infra.exhibition.ExhibitionJpaRepository;
+import modi.backend.infra.exhibition.catalog.ExhibitionJpaRepository;
 import modi.backend.infra.record.RecordJpaRepository;
 import modi.backend.infra.remind.RemindJpaRepository;
 import modi.backend.infra.user.SocialAccountJpaRepository;

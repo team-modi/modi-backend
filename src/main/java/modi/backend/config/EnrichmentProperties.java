@@ -2,7 +2,7 @@ package modi.backend.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import modi.backend.domain.exhibition.RetryPolicy;
+import modi.backend.domain.exhibition.enrichment.RetryPolicy;
 
 /**
  * 통합 보강 작업큐({@code enrichment_job}) 설정. {@code app.exhibition.enrichment.*} 바인딩.

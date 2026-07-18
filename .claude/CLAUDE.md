@@ -93,6 +93,7 @@ ApiResponse.failValidation(code, message, fieldErrors)
 - `infra/{d}/XxxJpaRepository` — Spring Data JPA
 - `infra/{d}/XxxRepositoryImpl` — @Repository 어댑터. JPAQueryFactory 주입해 QueryDSL 직접 작성.
 - soft-delete: 조회는 살아있는 행만 — 파생쿼리에 `...AndDeletedAtIsNull`(포트 메서드명은 그대로, Impl만 필터 호출).
+- **전시 예외(애그리거트 루트)**: 전시·전시장 부속(상세·장르·작가조인·영업시간)은 개별 리포 ❌ — 쓰기는 `ExhibitionRepository`/`ExhibitionPlaceRepository`의 `applyXxx`(루트 행 미변경 부분 갱신) 경유, 서빙 목록/탐색 조회는 `ExhibitionQueryRepository`. 부속 JpaRepo는 Impl 내부 구현 세부라 application 주입 ❌. 기록성 테이블(Culture 스테이징·History·GooglePlaceResponse)은 포트 없이 JpaRepository 직사용(단 `ExternalApiCallRepository`는 REQUIRES_NEW 감사 어댑터라 존치). application/exhibition은 루트(`ExhibitionFacade`=사용자 유스케이스)와 `sync/`(`ExhibitionSyncFacade`+enricher=수집 파이프라인)로 분리 — 상호 주입 ❌. **sync 패키지 내부 구조는 기존 스타일 강제 없음**(사용자 결정 — 예: domain/exhibition/sync/entity/ 서브패키지 허용, catalog 스타일로 "교정"하지 마라). **domain/exhibition/sync = 외부 접촉면 전체**(entity/=벤더 원본, port/=infra 구현 인터페이스, data/=포트 입출력 record) — 정준층 값(PlaceHours·GenreProvider·GenreKeyword 등 서빙이 쓰는 것)만 개념 패키지(hours·genre)에 남는다. **infra 외부 어댑터 경로 규칙 = `infra/<도메인 스코프>/<기관>`**(예: infra/exhibition/sync/{culture,google,gemini,mock}, infra/ai/{claude,gemini}) — infra/genre·infra/place 같은 스코프 없는 기능 패키지 재생성 ❌.
 
 ## Entity
 - 생성: 정적 팩토리 `Xxx.create(...)`

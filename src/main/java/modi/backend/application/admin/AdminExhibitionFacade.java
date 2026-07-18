@@ -11,17 +11,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionDetail;
-import modi.backend.domain.exhibition.ExhibitionDetailRepository;
-import modi.backend.domain.exhibition.ExhibitionErrorCode;
-import modi.backend.domain.exhibition.ExhibitionHistory;
-import modi.backend.domain.exhibition.ExhibitionHistoryRepository;
-import modi.backend.domain.exhibition.ExhibitionPlace;
-import modi.backend.domain.exhibition.ExhibitionPlaceRepository;
-import modi.backend.domain.exhibition.ExhibitionRepository;
-import modi.backend.domain.exhibition.FieldChange;
-import modi.backend.domain.exhibition.PlaceKey;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.catalog.ExhibitionDetail;
+import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
+import modi.backend.domain.exhibition.catalog.ExhibitionHistory;
+import modi.backend.infra.exhibition.catalog.ExhibitionHistoryJpaRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.FieldChange;
+import modi.backend.domain.exhibition.hours.PlaceKey;
 import modi.backend.support.error.CoreException;
 import modi.backend.support.text.HtmlTextExtractor;
 
@@ -37,9 +36,8 @@ public class AdminExhibitionFacade {
 
 	private final ExhibitionRepository exhibitionRepository;
 	private final ExhibitionPlaceRepository exhibitionPlaceRepository;
-	private final ExhibitionDetailRepository exhibitionDetailRepository;
 	/** 사람 수정 이력(감사) — 실제로 바뀐 필드를 old→new로 남긴다. */
-	private final ExhibitionHistoryRepository exhibitionHistoryRepository;
+	private final ExhibitionHistoryJpaRepository exhibitionHistoryRepository;
 
 	/**
 	 * 저장된 전시 설명을 재파싱해 남아 있는 HTML/워드프레스 마크업을 벗긴다. 설명은 상세 satellite({@code exhibition_detail})로
@@ -47,13 +45,13 @@ public class AdminExhibitionFacade {
 	 */
 	@Transactional
 	public AdminExhibitionResult.DescriptionReparse reparseDescriptions() {
-		List<ExhibitionDetail> rows = exhibitionDetailRepository.findAllWithDescription();
+		List<ExhibitionDetail> rows = exhibitionRepository.findDetailsWithDescription();
 		int updated = 0;
 		for (ExhibitionDetail detail : rows) {
 			String cleaned = HtmlTextExtractor.toPlainText(detail.getDescription());
 			if (!Objects.equals(cleaned, detail.getDescription())) {
 				detail.reparseDescription(cleaned);
-				exhibitionDetailRepository.save(detail);
+				exhibitionRepository.saveDetail(detail);
 				updated++;
 			}
 		}
@@ -114,11 +112,11 @@ public class AdminExhibitionFacade {
 		if (price == null && description == null) {
 			return List.of();
 		}
-		ExhibitionDetail detail = exhibitionDetailRepository.findByExhibitionId(exhibitionId)
+		ExhibitionDetail detail = exhibitionRepository.findDetail(exhibitionId)
 				.orElseGet(() -> ExhibitionDetail.markChecked(exhibitionId, LocalDateTime.now()));
 		List<FieldChange> changes = detail.applyAdminEdit(price, description);
 		if (!changes.isEmpty()) {
-			exhibitionDetailRepository.save(detail);
+			exhibitionRepository.saveDetail(detail);
 		}
 		return changes;
 	}

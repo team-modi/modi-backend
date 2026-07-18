@@ -1,5 +1,8 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.sync.enricher.GenreTarget;
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
@@ -14,17 +17,17 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionGenre;
-import modi.backend.domain.exhibition.ExhibitionGenreRepository;
-import modi.backend.domain.exhibition.ExhibitionRegion;
-import modi.backend.domain.exhibition.ExhibitionRepository;
-import modi.backend.domain.exhibition.GenreClassification;
-import modi.backend.domain.exhibition.GenreKeyword;
-import modi.backend.domain.exhibition.GenreProvider;
-import modi.backend.domain.exhibition.GenreResult;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionGenre;
+import modi.backend.infra.exhibition.catalog.ExhibitionGenreJpaRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
+import modi.backend.domain.exhibition.sync.data.GenreClassification;
+import modi.backend.domain.exhibition.genre.GenreKeyword;
+import modi.backend.domain.exhibition.genre.GenreProvider;
+import modi.backend.domain.exhibition.sync.data.GenreResult;
 
 /**
  * 장르 <b>쓰기</b> 검증(@SpringBootTest + Testcontainers-MySQL).
@@ -44,13 +47,16 @@ class ExhibitionGenreWriteTest {
 	ExhibitionFacade exhibitionFacade;
 
 	@Autowired
+	ExhibitionSyncFacade exhibitionSyncFacade;
+
+	@Autowired
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
-	modi.backend.domain.exhibition.ExhibitionPlaceRepository exhibitionPlaceRepository;
+	modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository exhibitionPlaceRepository;
 
 	@Autowired
-	ExhibitionGenreRepository exhibitionGenreRepository;
+	ExhibitionGenreJpaRepository exhibitionGenreRepository;
 
 	@MockitoBean
 	ExhibitionCatalogClient exhibitionCatalogClient;
@@ -86,7 +92,7 @@ class ExhibitionGenreWriteTest {
 		Exhibition seeded = seedCatalog();
 		List<GenreTarget> targets = List.of(new GenreTarget(seeded.getId(), GenreClassification.from(seeded)));
 
-		int applied = exhibitionFacade.applyGenres(targets,
+		int applied = exhibitionSyncFacade.applyGenres(targets,
 				List.of(GenreResult.ai("미디어아트", GenreProvider.GEMINI, "gemini-2.5-flash-002")),
 				LocalDateTime.now());
 
@@ -103,12 +109,12 @@ class ExhibitionGenreWriteTest {
 	void applyGenres_재분류_행추가없이_갱신() {
 		Exhibition seeded = seedCatalog();
 		List<GenreTarget> targets = List.of(new GenreTarget(seeded.getId(), GenreClassification.from(seeded)));
-		exhibitionFacade.applyGenres(targets, List.of(GenreResult.random("회화·드로잉")), LocalDateTime.now());
+		exhibitionSyncFacade.applyGenres(targets, List.of(GenreResult.random("회화·드로잉")), LocalDateTime.now());
 
-		exhibitionFacade.applyGenres(targets,
+		exhibitionSyncFacade.applyGenres(targets,
 				List.of(GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash")), LocalDateTime.now());
 
-		assertThat(exhibitionGenreRepository.findAllByExhibitionIds(List.of(seeded.getId()))).hasSize(1);
+		assertThat(exhibitionGenreRepository.findAllByExhibitionIdIn(List.of(seeded.getId()))).hasSize(1);
 		ExhibitionGenre canonical = canonical(seeded.getId());
 		assertThat(canonical.getGenreKeyword()).isEqualTo("사진");
 		assertThat(canonical.getProvider()).isEqualTo(GenreProvider.GEMINI.name());
@@ -123,7 +129,7 @@ class ExhibitionGenreWriteTest {
 		seeded.delete();
 		exhibitionRepository.save(seeded);
 
-		int applied = exhibitionFacade.applyGenres(targets, List.of(GenreResult.random("사진")), LocalDateTime.now());
+		int applied = exhibitionSyncFacade.applyGenres(targets, List.of(GenreResult.random("사진")), LocalDateTime.now());
 
 		assertThat(applied).isZero();
 		assertThat(exhibitionGenreRepository.findByExhibitionId(seeded.getId())).isEmpty();
@@ -135,7 +141,7 @@ class ExhibitionGenreWriteTest {
 	}
 
 	private Exhibition seedCatalog() {
-		Long placeId = modi.backend.domain.exhibition.ExhibitionTestFactory.placeId(
+		Long placeId = modi.backend.domain.exhibition.catalog.ExhibitionTestFactory.placeId(
 				exhibitionPlaceRepository, "시립미술관", ExhibitionRegion.SEOUL);
 		Exhibition e = Exhibition.createCatalog("GENRE-WRITE-" + SEQ.getAndIncrement(), "장르 미분류 전시", placeId,
 				null, null, ExhibitionCategory.PAINTING, null, null, "기관");

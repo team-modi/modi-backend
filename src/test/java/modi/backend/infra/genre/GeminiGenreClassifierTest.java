@@ -1,5 +1,9 @@
 package modi.backend.infra.genre;
 
+import modi.backend.infra.exhibition.sync.gemini.GeminiApi;
+import modi.backend.infra.exhibition.sync.gemini.GeminiGenreClassifier;
+import modi.backend.infra.exhibition.sync.mock.RandomGenreClassifier;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
@@ -15,10 +19,10 @@ import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import modi.backend.config.GeminiProperties;
-import modi.backend.domain.exhibition.GenreClassification;
-import modi.backend.domain.exhibition.GenreKeyword;
-import modi.backend.domain.exhibition.GenreProvider;
-import modi.backend.domain.exhibition.GenreResult;
+import modi.backend.domain.exhibition.sync.data.GenreClassification;
+import modi.backend.domain.exhibition.genre.GenreKeyword;
+import modi.backend.domain.exhibition.genre.GenreProvider;
+import modi.backend.domain.exhibition.sync.data.GenreResult;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;

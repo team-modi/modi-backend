@@ -1,5 +1,7 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -18,11 +20,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.CatalogExhibitionData;
-import modi.backend.domain.exhibition.CatalogListData;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionRegion;
+import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
+import modi.backend.domain.exhibition.sync.data.CatalogListData;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 
 /**
  * 외부 호출 감사({@code external_api_call})와 동기화 실행 기록({@code sync_run}) 검증(이관 5단계).
@@ -40,7 +42,7 @@ class ExternalApiCallAuditTest {
 	private static final AtomicInteger SEQ = new AtomicInteger(1);
 
 	@Autowired
-	ExhibitionFacade exhibitionFacade;
+	ExhibitionSyncFacade exhibitionSyncFacade;
 
 	@Autowired
 	JdbcTemplate jdbcTemplate;
@@ -57,7 +59,7 @@ class ExternalApiCallAuditTest {
 		given(exhibitionCatalogClient.fetchDetail(eq(externalId))).willReturn(Optional.empty());
 		long before = countSyncRuns();
 
-		exhibitionFacade.syncCatalog();
+		exhibitionSyncFacade.syncCatalog();
 
 		assertThat(countSyncRuns()).isEqualTo(before + 1);
 		var run = latestSyncRun();
@@ -76,7 +78,7 @@ class ExternalApiCallAuditTest {
 		given(exhibitionCatalogClient.fetchAll())
 				.willReturn(new CatalogListData(List.of(listItem(nextId())), 600, true));
 
-		exhibitionFacade.syncCatalog();
+		exhibitionSyncFacade.syncCatalog();
 
 		assertThat(latestSyncRun().get("truncated")).isEqualTo(true);
 		assertThat(latestSyncRun().get("total_count")).isEqualTo(600);
@@ -88,7 +90,7 @@ class ExternalApiCallAuditTest {
 		// 0으로 적으면 "원천에 전시가 0건"이라는 거짓이 된다. 우리는 물어보지도 않았다.
 		given(exhibitionCatalogClient.fetchAll()).willReturn(CatalogListData.none());
 
-		exhibitionFacade.syncCatalog();
+		exhibitionSyncFacade.syncCatalog();
 
 		var run = latestSyncRun();
 		assertThat(run.get("total_count")).isNull();

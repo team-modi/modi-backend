@@ -1,5 +1,7 @@
 package modi.backend.config;
 
+import modi.backend.infra.exhibition.sync.culture.CultureApiMapper;
+
 import java.time.Duration;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -14,8 +16,8 @@ import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 import modi.backend.config.PublicDataProperties;
 import modi.backend.infra.auth.KakaoApi;
 import modi.backend.infra.auth.NaverApi;
-import modi.backend.infra.exhibition.CultureApi;
-import modi.backend.infra.exhibition.CultureExhibitionClient;
+import modi.backend.infra.exhibition.sync.culture.CultureApi;
+import modi.backend.infra.exhibition.sync.culture.CultureExhibitionClient;
 import reactor.netty.http.client.HttpClient;
 
 /**
@@ -37,7 +39,7 @@ public class HttpClientConfig {
 
 	/**
 	 * 공공데이터 전시 API(한눈에보는문화정보) 전용 WebClient. baseUrl은 설정(app.public-data.culture.base-url)에서 주입한다.
-	 * 응답이 XML이라 JSON 디코더는 쓰지 않는다 — 문자열로 받아 {@link modi.backend.infra.exhibition.CultureApiMapper}가 XmlMapper로 직접 파싱한다.
+	 * 응답이 XML이라 JSON 디코더는 쓰지 않는다 — 문자열로 받아 {@link modi.backend.infra.exhibition.sync.culture.CultureApiMapper}가 XmlMapper로 직접 파싱한다.
 	 * (응답 크기가 페이지당 수십~수백 KB일 수 있어 인메모리 버퍼만 넉넉히 확보한다.)
 	 * <p>
 	 * 응답 타임아웃을 반드시 건다 — 상세 백필이 단일 스케줄러 스레드에서 이 클라이언트를 반복 호출하는데,

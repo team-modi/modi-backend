@@ -13,11 +13,11 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import modi.backend.domain.exhibition.ExhibitionDetail;
-import modi.backend.domain.exhibition.ExhibitionDetailRepository;
-import modi.backend.domain.exhibition.ExhibitionHistoryRepository;
-import modi.backend.domain.exhibition.ExhibitionPlaceRepository;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionDetail;
+import modi.backend.infra.exhibition.catalog.ExhibitionDetailJpaRepository;
+import modi.backend.infra.exhibition.catalog.ExhibitionHistoryJpaRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 
 /**
  * AdminExhibitionFacade.reparseDescriptions 단위 검증 — 설명은 상세 satellite(exhibition_detail)로 이동했으므로 그 행을 대상으로,
@@ -28,13 +28,13 @@ class AdminExhibitionFacadeTest {
 	@Test
 	@DisplayName("reparseDescriptions — 태그가 남은 상세만 정리·저장하고 깨끗한 상세는 건드리지 않는다")
 	void reparse_마크업행만_갱신() {
-		ExhibitionDetailRepository detailRepo = mock(ExhibitionDetailRepository.class);
+		ExhibitionRepository exhibitionRepository = mock(ExhibitionRepository.class);
 		ExhibitionDetail markup = detail(1L,
 				"<!-- wp:paragraph --><p style=\"line-height:1.8;\"><span>배민정 작가는 AI에 입력한다.</span></p>");
 		ExhibitionDetail already = detail(2L, "이미 깨끗한 설명이에요.");
-		given(detailRepo.findAllWithDescription()).willReturn(List.of(markup, already));
-		AdminExhibitionFacade facade = new AdminExhibitionFacade(mock(ExhibitionRepository.class),
-				mock(ExhibitionPlaceRepository.class), detailRepo, mock(ExhibitionHistoryRepository.class));
+		given(exhibitionRepository.findDetailsWithDescription()).willReturn(List.of(markup, already));
+		AdminExhibitionFacade facade = new AdminExhibitionFacade(exhibitionRepository,
+				mock(ExhibitionPlaceRepository.class), mock(ExhibitionHistoryJpaRepository.class));
 
 		AdminExhibitionResult.DescriptionReparse result = facade.reparseDescriptions();
 
@@ -42,8 +42,8 @@ class AdminExhibitionFacadeTest {
 		assertThat(result.updated()).isEqualTo(1);
 		assertThat(markup.getDescription()).isEqualTo("배민정 작가는 AI에 입력한다.");
 		assertThat(already.getDescription()).isEqualTo("이미 깨끗한 설명이에요.");
-		verify(detailRepo, times(1)).save(markup);
-		verify(detailRepo, never()).save(already);
+		verify(exhibitionRepository, times(1)).saveDetail(markup);
+		verify(exhibitionRepository, never()).saveDetail(already);
 	}
 
 	private ExhibitionDetail detail(Long exhibitionId, String description) {

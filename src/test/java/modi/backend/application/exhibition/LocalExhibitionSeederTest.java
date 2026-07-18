@@ -1,5 +1,7 @@
 package modi.backend.application.exhibition;
 
+import modi.backend.application.exhibition.sync.seed.LocalExhibitionSeeder;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.DisplayName;
@@ -11,7 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 
 /**
  * 로컬 시드 적재기 검증(@SpringBootTest + Testcontainers-MySQL). 플래그 on + 빈 DB로 기동하면 부팅 시 classpath 시드 SQL이

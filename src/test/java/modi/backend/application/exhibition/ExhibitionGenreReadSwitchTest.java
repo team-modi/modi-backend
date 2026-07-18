@@ -14,14 +14,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionGenre;
-import modi.backend.domain.exhibition.ExhibitionGenreRepository;
-import modi.backend.domain.exhibition.ExhibitionRegion;
-import modi.backend.domain.exhibition.ExhibitionRepository;
-import modi.backend.domain.exhibition.GenreProvider;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionGenre;
+import modi.backend.infra.exhibition.catalog.ExhibitionGenreJpaRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
+import modi.backend.domain.exhibition.genre.GenreProvider;
 
 /**
  * 장르 <b>읽기·선별이 정준층을 본다</b>는 검증(@SpringBootTest + Testcontainers-MySQL).
@@ -45,10 +45,10 @@ class ExhibitionGenreReadSwitchTest {
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
-	modi.backend.domain.exhibition.ExhibitionPlaceRepository exhibitionPlaceRepository;
+	modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository exhibitionPlaceRepository;
 
 	@Autowired
-	ExhibitionGenreRepository exhibitionGenreRepository;
+	ExhibitionGenreJpaRepository exhibitionGenreRepository;
 
 	@MockitoBean
 	ExhibitionCatalogClient exhibitionCatalogClient;
@@ -118,7 +118,7 @@ class ExhibitionGenreReadSwitchTest {
 	}
 
 	private Exhibition seedCatalog() {
-		Long placeId = modi.backend.domain.exhibition.ExhibitionTestFactory.placeId(
+		Long placeId = modi.backend.domain.exhibition.catalog.ExhibitionTestFactory.placeId(
 				exhibitionPlaceRepository, "시립미술관", ExhibitionRegion.SEOUL);
 		Exhibition e = Exhibition.createCatalog("GENRE-READ-" + SEQ.getAndIncrement(), "장르 읽기 전시", placeId,
 				null, null, ExhibitionCategory.PAINTING, null, null, "기관");

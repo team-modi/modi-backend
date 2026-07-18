@@ -3,15 +3,15 @@ package modi.backend.application.exhibition;
 import java.time.LocalDate;
 import java.util.List;
 
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionDetail;
-import modi.backend.domain.exhibition.ExhibitionFormat;
-import modi.backend.domain.exhibition.ExhibitionGenre;
-import modi.backend.domain.exhibition.ExhibitionPlace;
-import modi.backend.domain.exhibition.ExhibitionRegion;
-import modi.backend.domain.exhibition.ExhibitionRegionGroup;
-import modi.backend.domain.exhibition.PlaceHours;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionDetail;
+import modi.backend.domain.exhibition.catalog.ExhibitionFormat;
+import modi.backend.domain.exhibition.catalog.ExhibitionGenre;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegionGroup;
+import modi.backend.domain.exhibition.hours.PlaceHours;
 
 /**
  * 전시 유스케이스 출력 모음. (Facade는 Result까지만)
