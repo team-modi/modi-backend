@@ -1,4 +1,6 @@
-package modi.backend.application.exhibition.sync;
+package modi.backend.application.exhibition.sync.seed;
+
+import modi.backend.application.exhibition.sync.ExhibitionCatalogBootSync;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;

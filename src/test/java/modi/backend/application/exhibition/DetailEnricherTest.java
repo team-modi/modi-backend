@@ -1,8 +1,8 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.DetailEnricher;
-import modi.backend.application.exhibition.sync.DetailTargetState;
-import modi.backend.application.exhibition.sync.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.enricher.DetailEnricher;
+import modi.backend.application.exhibition.sync.enricher.DetailTargetState;
+import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
 import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -21,9 +21,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import modi.backend.config.EnrichmentProperties;
-import modi.backend.domain.exhibition.sync.CatalogDetailData;
+import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
 import modi.backend.domain.exhibition.enrichment.EnrichmentJob;
-import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.domain.exhibition.enrichment.JobFailureType;
 import modi.backend.domain.exhibition.enrichment.JobType;

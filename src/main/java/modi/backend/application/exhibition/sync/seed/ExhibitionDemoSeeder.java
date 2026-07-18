@@ -1,4 +1,6 @@
-package modi.backend.application.exhibition.sync;
+package modi.backend.application.exhibition.sync.seed;
+
+import modi.backend.application.exhibition.sync.ExhibitionCatalogBootSync;
 
 import java.time.LocalDate;
 import java.util.List;

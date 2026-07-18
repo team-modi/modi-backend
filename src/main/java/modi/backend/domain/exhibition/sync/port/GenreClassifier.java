@@ -1,4 +1,7 @@
-package modi.backend.domain.exhibition.sync;
+package modi.backend.domain.exhibition.sync.port;
+
+import modi.backend.domain.exhibition.sync.data.GenreClassification;
+import modi.backend.domain.exhibition.sync.data.GenreResult;
 
 import java.util.List;
 

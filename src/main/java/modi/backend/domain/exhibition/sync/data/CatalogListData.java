@@ -1,7 +1,7 @@
-package modi.backend.domain.exhibition.sync;
+package modi.backend.domain.exhibition.sync.data;
 
-import modi.backend.domain.exhibition.sync.GenreClassifier;
-import modi.backend.domain.exhibition.sync.PlaceHoursProvider;
+import modi.backend.domain.exhibition.sync.port.GenreClassifier;
+import modi.backend.domain.exhibition.sync.port.PlaceHoursProvider;
 
 import java.util.List;
 

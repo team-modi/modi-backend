@@ -12,14 +12,14 @@ import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
 import modi.backend.config.PublicDataProperties;
-import modi.backend.domain.exhibition.sync.CatalogDetailData;
-import modi.backend.domain.exhibition.sync.CatalogExhibitionData;
-import modi.backend.domain.exhibition.sync.CatalogListData;
-import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
+import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
+import modi.backend.domain.exhibition.sync.data.CatalogListData;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.domain.exhibition.sync.ExternalApi;
 import modi.backend.domain.exhibition.sync.entity.ExternalApiCall;
-import modi.backend.domain.exhibition.sync.ExternalApiCallRepository;
+import modi.backend.domain.exhibition.sync.port.ExternalApiCallRepository;
 import modi.backend.domain.exhibition.sync.ExternalApiOutcome;
 import modi.backend.support.error.CoreException;
 

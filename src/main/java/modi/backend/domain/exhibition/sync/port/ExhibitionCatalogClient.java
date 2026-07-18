@@ -1,4 +1,7 @@
-package modi.backend.domain.exhibition.sync;
+package modi.backend.domain.exhibition.sync.port;
+
+import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
+import modi.backend.domain.exhibition.sync.data.CatalogListData;
 
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 

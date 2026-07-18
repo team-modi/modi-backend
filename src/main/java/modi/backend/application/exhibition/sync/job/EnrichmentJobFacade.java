@@ -1,4 +1,4 @@
-package modi.backend.application.exhibition.sync;
+package modi.backend.application.exhibition.sync.job;
 
 import java.time.LocalDateTime;
 import java.util.Collection;

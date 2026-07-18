@@ -1,6 +1,6 @@
-package modi.backend.application.exhibition.sync;
+package modi.backend.application.exhibition.sync.enricher;
 
-import modi.backend.domain.exhibition.sync.GenreClassification;
+import modi.backend.domain.exhibition.sync.data.GenreClassification;
 
 /**
  * 장르 백필의 한 분류 단위(= 전시 1건). {@link PlaceHoursTarget}과 동형 — 조회 트랜잭션이 <b>엔티티가 아니라 값</b>을 내보내

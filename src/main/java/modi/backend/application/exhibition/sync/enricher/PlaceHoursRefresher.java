@@ -1,4 +1,10 @@
-package modi.backend.application.exhibition.sync;
+package modi.backend.application.exhibition.sync.enricher;
+
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+
+import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.job.EnrichmentJobProcessing;
+import modi.backend.application.exhibition.sync.job.JobFailures;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -13,8 +19,8 @@ import modi.backend.config.EnrichmentProperties;
 import modi.backend.domain.exhibition.enrichment.EnrichmentJob;
 import modi.backend.domain.exhibition.enrichment.JobType;
 import modi.backend.domain.exhibition.hours.OpeningHoursFormatter;
-import modi.backend.domain.exhibition.sync.PlaceHoursData;
-import modi.backend.domain.exhibition.sync.PlaceHoursProvider;
+import modi.backend.domain.exhibition.sync.data.PlaceHoursData;
+import modi.backend.domain.exhibition.sync.port.PlaceHoursProvider;
 
 /**
  * 이벤트 구동 영업시간 재검증 처리기(설계 §4-1) — 통합 작업큐의 영업시간 작업

@@ -20,9 +20,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.exhibition.catalog.ArtistRepository;
-import modi.backend.domain.exhibition.sync.CatalogDetailData;
+import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
 import modi.backend.domain.exhibition.catalog.Exhibition;
-import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;

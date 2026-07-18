@@ -1,6 +1,6 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.PlaceHoursEnricher;
+import modi.backend.application.exhibition.sync.enricher.PlaceHoursEnricher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -23,13 +23,13 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import modi.backend.domain.exhibition.hours.PlaceHours;
-import modi.backend.domain.exhibition.sync.PlaceHoursData;
-import modi.backend.domain.exhibition.sync.PlaceHoursProvider;
+import modi.backend.domain.exhibition.sync.data.PlaceHoursData;
+import modi.backend.domain.exhibition.sync.port.PlaceHoursProvider;
 import modi.backend.infra.exhibition.hours.PlaceHoursJpaRepository;
 import modi.backend.domain.exhibition.hours.PlaceHoursStatus;
 import modi.backend.domain.exhibition.hours.PlaceHoursVendor;

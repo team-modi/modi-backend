@@ -1,4 +1,4 @@
-package modi.backend.domain.exhibition.sync;
+package modi.backend.domain.exhibition.sync.data;
 
 import modi.backend.domain.exhibition.hours.WeeklyOpeningHours;
 

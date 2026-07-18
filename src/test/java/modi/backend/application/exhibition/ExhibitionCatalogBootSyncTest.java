@@ -1,6 +1,6 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.CatalogEnricher;
+import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
 import modi.backend.application.exhibition.sync.ExhibitionCatalogBootSync;
 import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
 

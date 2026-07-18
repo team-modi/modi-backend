@@ -11,7 +11,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.support.WebClientAdapter;
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
-import modi.backend.domain.exhibition.sync.PlaceHoursProvider;
+import modi.backend.domain.exhibition.sync.port.PlaceHoursProvider;
 import modi.backend.infra.place.GoogleMapsApi;
 import modi.backend.infra.place.GooglePlaceHoursProvider;
 import modi.backend.infra.place.MockPlaceHoursProvider;

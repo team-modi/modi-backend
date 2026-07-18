@@ -1,4 +1,9 @@
-package modi.backend.application.exhibition.sync;
+package modi.backend.application.exhibition.sync.enricher;
+
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+
+import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.job.EnrichmentJobProcessing;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -14,10 +19,10 @@ import lombok.RequiredArgsConstructor;
 import modi.backend.config.CatalogEnrichProperties;
 import modi.backend.config.GenreProperties;
 import modi.backend.domain.exhibition.enrichment.EnrichmentJob;
-import modi.backend.domain.exhibition.sync.GenreClassification;
-import modi.backend.domain.exhibition.sync.GenreClassifier;
+import modi.backend.domain.exhibition.sync.data.GenreClassification;
+import modi.backend.domain.exhibition.sync.port.GenreClassifier;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.domain.exhibition.sync.GenreResult;
+import modi.backend.domain.exhibition.sync.data.GenreResult;
 import modi.backend.domain.exhibition.enrichment.JobFailureType;
 import modi.backend.domain.exhibition.enrichment.JobType;
 

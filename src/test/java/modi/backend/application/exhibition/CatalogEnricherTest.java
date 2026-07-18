@@ -1,7 +1,7 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.CatalogEnricher;
-import modi.backend.application.exhibition.sync.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
+import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
 import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,10 +28,10 @@ import org.junit.jupiter.api.Test;
 import modi.backend.config.CatalogEnrichProperties;
 import modi.backend.config.GenreProperties;
 import modi.backend.domain.exhibition.enrichment.EnrichmentJob;
-import modi.backend.domain.exhibition.sync.GenreClassification;
-import modi.backend.domain.exhibition.sync.GenreClassifier;
+import modi.backend.domain.exhibition.sync.data.GenreClassification;
+import modi.backend.domain.exhibition.sync.port.GenreClassifier;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.domain.exhibition.sync.GenreResult;
+import modi.backend.domain.exhibition.sync.data.GenreResult;
 import modi.backend.domain.exhibition.enrichment.JobFailureType;
 import modi.backend.domain.exhibition.enrichment.JobType;
 

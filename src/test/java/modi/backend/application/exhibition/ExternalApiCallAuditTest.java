@@ -20,9 +20,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.sync.CatalogExhibitionData;
-import modi.backend.domain.exhibition.sync.CatalogListData;
-import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
+import modi.backend.domain.exhibition.sync.data.CatalogListData;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 

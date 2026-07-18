@@ -1,9 +1,9 @@
-package modi.backend.domain.exhibition.sync;
+package modi.backend.domain.exhibition.sync.data;
 
 import modi.backend.domain.exhibition.catalog.Exhibition;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
-import modi.backend.domain.exhibition.sync.PlaceHoursData;
+import modi.backend.domain.exhibition.sync.data.PlaceHoursData;
 
 import java.time.LocalDate;
 

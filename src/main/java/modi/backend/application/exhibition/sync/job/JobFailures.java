@@ -1,4 +1,4 @@
-package modi.backend.application.exhibition.sync;
+package modi.backend.application.exhibition.sync.job;
 
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
@@ -16,12 +16,12 @@ import modi.backend.domain.exhibition.enrichment.JobFailureType;
  *   <li>그 외(원인 불명) → RETRYABLE(안전 기본값 — 잘못 영구 폐기하느니 재시도하고, 시도를 소진하면 어차피 PERMANENT로 승격).</li>
  * </ul>
  */
-final class JobFailures {
+public final class JobFailures {
 
 	private JobFailures() {
 	}
 
-	static JobFailureType classify(Throwable error) {
+	public static JobFailureType classify(Throwable error) {
 		for (Throwable t = error; t != null; t = t.getCause()) {
 			if (t instanceof WebClientResponseException web) {
 				int status = web.getStatusCode().value();
@@ -43,7 +43,7 @@ final class JobFailures {
 	}
 
 	/** 예외 메시지를 last_error에 남길 짧은 문자열로. */
-	static String describe(Throwable error) {
+	public static String describe(Throwable error) {
 		if (error == null) {
 			return null;
 		}

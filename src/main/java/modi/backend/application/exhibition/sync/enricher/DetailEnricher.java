@@ -1,4 +1,10 @@
-package modi.backend.application.exhibition.sync;
+package modi.backend.application.exhibition.sync.enricher;
+
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+
+import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.job.EnrichmentJobProcessing;
+import modi.backend.application.exhibition.sync.job.JobFailures;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -10,9 +16,9 @@ import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
 import modi.backend.config.EnrichmentProperties;
-import modi.backend.domain.exhibition.sync.CatalogDetailData;
+import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
 import modi.backend.domain.exhibition.enrichment.EnrichmentJob;
-import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.enrichment.JobFailureType;
 import modi.backend.domain.exhibition.enrichment.JobType;
 

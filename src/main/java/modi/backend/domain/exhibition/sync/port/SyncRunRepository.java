@@ -1,4 +1,4 @@
-package modi.backend.domain.exhibition.sync;
+package modi.backend.domain.exhibition.sync.port;
 
 import modi.backend.domain.exhibition.sync.entity.SyncRun;
 

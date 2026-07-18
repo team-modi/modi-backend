@@ -10,10 +10,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.hours.OpeningHoursFormatter;
-import modi.backend.domain.exhibition.sync.PlaceHoursData;
-import modi.backend.domain.exhibition.sync.PlaceHoursProvider;
+import modi.backend.domain.exhibition.sync.data.PlaceHoursData;
+import modi.backend.domain.exhibition.sync.port.PlaceHoursProvider;
 import modi.backend.infra.place.MockPlaceHoursProvider;
 
 /**

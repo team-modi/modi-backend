@@ -1,4 +1,6 @@
-package modi.backend.application.exhibition.sync;
+package modi.backend.application.exhibition.sync.enricher;
+
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -11,8 +13,8 @@ import org.springframework.stereotype.Component;
 import lombok.RequiredArgsConstructor;
 import modi.backend.config.PlaceHoursProperties;
 import modi.backend.domain.exhibition.hours.OpeningHoursFormatter;
-import modi.backend.domain.exhibition.sync.PlaceHoursData;
-import modi.backend.domain.exhibition.sync.PlaceHoursProvider;
+import modi.backend.domain.exhibition.sync.data.PlaceHoursData;
+import modi.backend.domain.exhibition.sync.port.PlaceHoursProvider;
 
 /**
  * 전시 영업시간(운영시간) 보강 오케스트레이션 — 장르 보강({@link CatalogEnricher})과 동형.

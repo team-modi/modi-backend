@@ -1,5 +1,7 @@
 package modi.backend.domain.exhibition.genre;
 
+import modi.backend.domain.exhibition.sync.port.GenreClassifier;
+
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 

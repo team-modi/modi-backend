@@ -1,6 +1,6 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
 import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,22 +28,22 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.exhibition.catalog.ArtistRepository;
-import modi.backend.domain.exhibition.sync.CatalogDetailData;
-import modi.backend.domain.exhibition.sync.CatalogExhibitionData;
-import modi.backend.domain.exhibition.sync.CatalogListData;
+import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
+import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
+import modi.backend.domain.exhibition.sync.data.CatalogListData;
 import modi.backend.infra.exhibition.sync.CultureDetailResponseJpaRepository;
 import modi.backend.infra.exhibition.sync.CultureListResponseJpaRepository;
 import modi.backend.domain.exhibition.catalog.Exhibition;
-import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import modi.backend.domain.exhibition.catalog.ExhibitionQueryRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
-import modi.backend.domain.exhibition.sync.GenreClassifier;
+import modi.backend.domain.exhibition.sync.port.GenreClassifier;
 import modi.backend.infra.exhibition.sync.GooglePlaceResponseJpaRepository;
-import modi.backend.domain.exhibition.sync.SyncRunRepository;
+import modi.backend.domain.exhibition.sync.port.SyncRunRepository;
 import modi.backend.domain.venue.VenueRepository;
 import modi.backend.infra.record.RecordJpaRepository;
 

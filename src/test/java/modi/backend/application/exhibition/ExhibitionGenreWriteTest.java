@@ -1,6 +1,6 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.GenreTarget;
+import modi.backend.application.exhibition.sync.enricher.GenreTarget;
 import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,16 +18,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
 import modi.backend.domain.exhibition.catalog.Exhibition;
-import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
 import modi.backend.domain.exhibition.catalog.ExhibitionGenre;
 import modi.backend.infra.exhibition.catalog.ExhibitionGenreJpaRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
-import modi.backend.domain.exhibition.sync.GenreClassification;
+import modi.backend.domain.exhibition.sync.data.GenreClassification;
 import modi.backend.domain.exhibition.genre.GenreKeyword;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.domain.exhibition.sync.GenreResult;
+import modi.backend.domain.exhibition.sync.data.GenreResult;
 
 /**
  * 장르 <b>쓰기</b> 검증(@SpringBootTest + Testcontainers-MySQL).

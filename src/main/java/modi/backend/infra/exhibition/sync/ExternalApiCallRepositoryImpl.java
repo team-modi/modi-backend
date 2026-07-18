@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 import modi.backend.domain.exhibition.sync.entity.ExternalApiCall;
-import modi.backend.domain.exhibition.sync.ExternalApiCallRepository;
+import modi.backend.domain.exhibition.sync.port.ExternalApiCallRepository;
 
 /**
  * 외부 호출 감사 어댑터.

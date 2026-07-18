@@ -1,5 +1,9 @@
 package modi.backend.application.exhibition.sync;
 
+import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
+import modi.backend.application.exhibition.sync.seed.ExhibitionDemoSeeder;
+import modi.backend.application.exhibition.sync.seed.LocalExhibitionSeeder;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;

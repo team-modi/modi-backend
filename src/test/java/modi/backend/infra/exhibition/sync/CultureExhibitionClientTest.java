@@ -15,8 +15,8 @@ import org.springframework.web.reactive.function.client.support.WebClientAdapter
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
 import modi.backend.config.PublicDataProperties;
-import modi.backend.domain.exhibition.sync.CatalogDetailData;
-import modi.backend.domain.exhibition.sync.CatalogExhibitionData;
+import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
+import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;

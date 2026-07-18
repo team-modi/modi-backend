@@ -12,8 +12,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
-import modi.backend.domain.exhibition.sync.CatalogDetailData;
-import modi.backend.domain.exhibition.sync.CatalogExhibitionData;
+import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
+import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;

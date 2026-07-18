@@ -1,6 +1,6 @@
-package modi.backend.domain.exhibition.sync;
+package modi.backend.domain.exhibition.sync.data;
 
-import modi.backend.domain.exhibition.sync.PlaceHoursData;
+import modi.backend.domain.exhibition.sync.data.PlaceHoursData;
 
 /**
  * detail2 지연 수집 필드. 목록엔 없고 상세 진입 시 채운다. 결측 잦아 전부 nullable.

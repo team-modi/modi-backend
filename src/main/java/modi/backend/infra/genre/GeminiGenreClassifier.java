@@ -14,11 +14,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import modi.backend.config.GeminiProperties;
-import modi.backend.domain.exhibition.sync.GenreClassification;
-import modi.backend.domain.exhibition.sync.GenreClassifier;
+import modi.backend.domain.exhibition.sync.data.GenreClassification;
+import modi.backend.domain.exhibition.sync.port.GenreClassifier;
 import modi.backend.domain.exhibition.genre.GenreKeyword;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.domain.exhibition.sync.GenreResult;
+import modi.backend.domain.exhibition.sync.data.GenreResult;
 
 /**
  * Gemini(무료 한도) 기반 "실제 AI" 장르 분류기. 전시 텍스트를 보고 마스터 장르 중 하나로 분류한다.

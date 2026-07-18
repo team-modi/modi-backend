@@ -11,7 +11,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.support.WebClientAdapter;
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
-import modi.backend.domain.exhibition.sync.GenreClassifier;
+import modi.backend.domain.exhibition.sync.port.GenreClassifier;
 import modi.backend.infra.genre.GeminiApi;
 import modi.backend.infra.genre.GeminiGenreClassifier;
 import modi.backend.infra.genre.RandomGenreClassifier;

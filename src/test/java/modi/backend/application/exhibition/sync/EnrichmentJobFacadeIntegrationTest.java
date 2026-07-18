@@ -1,5 +1,8 @@
 package modi.backend.application.exhibition.sync;
 
+import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.job.EnrichmentJobProcessing;
+
 
 import static org.assertj.core.api.Assertions.assertThat;
 

@@ -2,10 +2,10 @@ package modi.backend.infra.genre;
 
 import org.springframework.stereotype.Component;
 
-import modi.backend.domain.exhibition.sync.GenreClassification;
-import modi.backend.domain.exhibition.sync.GenreClassifier;
+import modi.backend.domain.exhibition.sync.data.GenreClassification;
+import modi.backend.domain.exhibition.sync.port.GenreClassifier;
 import modi.backend.domain.exhibition.genre.GenreKeyword;
-import modi.backend.domain.exhibition.sync.GenreResult;
+import modi.backend.domain.exhibition.sync.data.GenreResult;
 
 /**
  * 마스터에서 무작위로 1개를 뽑는 "가짜" 장르 분류기(기존 임시 전략). 입력을 실제로 분석하지 않는다.
