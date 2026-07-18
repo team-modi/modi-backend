@@ -10,7 +10,7 @@ import java.util.Optional;
  * 그래서 성공 여부는 HTTP 상태가 아니라 이 코드로 판정해야 한다 — 정상은 {@link #NORMAL_SERVICE}({@code "00"}) 하나뿐이다.
  * <p>
  * "한눈에보는문화정보"만의 코드가 아니라 data.go.kr 전 서비스가 공유하는 표준이며(그래서 벤더 어휘 = infra 소유,
- * 우리 도메인 ErrorCode 아님), 여기서는 <b>사람이 읽을 라벨</b> 제공이 목적이다. 재시도 분류는 {@code JobFailures},
+ * 우리 도메인 ErrorCode 아님), 여기서는 <b>사람이 읽을 라벨</b> 제공이 목적이다. 재시도 분류는 {@code OutboxFailures},
  * 감사 결과는 {@code ExternalApiOutcome}가 별도로 담당하므로 이 enum에 HTTP 상태·재시도 정책을 얹지 않는다.
  */
 public enum CultureResultCode {

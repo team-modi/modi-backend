@@ -1,6 +1,6 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+import modi.backend.application.exhibition.sync.CatalogSynchronizer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -24,10 +24,10 @@ import modi.backend.domain.exhibition.sync.data.CatalogListData;
 import modi.backend.domain.exhibition.sync.entity.CultureDetailResponse;
 import modi.backend.infra.exhibition.sync.CultureDetailResponseJpaRepository;
 import modi.backend.domain.exhibition.sync.entity.CultureListResponse;
-import modi.backend.domain.exhibition.enrichment.EnrichmentJob;
-import modi.backend.domain.exhibition.enrichment.EnrichmentJobRepository;
-import modi.backend.domain.exhibition.enrichment.JobStatus;
-import modi.backend.domain.exhibition.enrichment.JobType;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessage;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessageRepository;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessageStatus;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessageType;
 import modi.backend.infra.exhibition.sync.CultureListResponseJpaRepository;
 import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
@@ -53,7 +53,7 @@ class CultureVendorArchiveTest {
 	private static final AtomicInteger SEQ = new AtomicInteger(1);
 
 	@Autowired
-	ExhibitionSyncFacade exhibitionSyncFacade;
+	CatalogSynchronizer catalogSynchronizer;
 
 	@Autowired
 	ExhibitionRepository exhibitionRepository;
@@ -68,7 +68,7 @@ class CultureVendorArchiveTest {
 	CultureDetailResponseJpaRepository cultureDetailResponseRepository;
 
 	@Autowired
-	EnrichmentJobRepository enrichmentJobRepository;
+	OutboxMessageRepository outboxMessageRepository;
 
 	@MockitoBean
 	ExhibitionCatalogClient exhibitionCatalogClient;
@@ -81,7 +81,7 @@ class CultureVendorArchiveTest {
 		given(exhibitionCatalogClient.fetchAll()).willReturn(listData(List.of(listData(externalId, "원본 적재 전시", payload))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.empty());
 
-		int inserted = exhibitionSyncFacade.syncCatalog();
+		int inserted = catalogSynchronizer.syncCatalog();
 
 		// 도메인층 — 기존 동작 그대로여야 한다.
 		assertThat(inserted).isEqualTo(1);
@@ -101,12 +101,12 @@ class CultureVendorArchiveTest {
 		String payload = listPayload(externalId, "멱등 전시");
 		given(exhibitionCatalogClient.fetchAll()).willReturn(listData(List.of(listData(externalId, "멱등 전시", payload))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.empty());
-		exhibitionSyncFacade.syncCatalog();
+		catalogSynchronizer.syncCatalog();
 		CultureListResponse first = listRow(externalId);
 		java.time.LocalDateTime firstSeen = first.getFirstSeenAt();
 		String firstHash = first.getPayloadHash();
 
-		exhibitionSyncFacade.syncCatalog();
+		catalogSynchronizer.syncCatalog();
 
 		CultureListResponse row = listRow(externalId); // 조회 자체가 UK 1행을 전제한다(2행이면 여기서 깨진다)
 		assertThat(row.getId()).isEqualTo(first.getId()); // 새 행이 아니라 같은 행
@@ -122,14 +122,14 @@ class CultureVendorArchiveTest {
 		String before = listPayload(externalId, "정정 전 제목");
 		given(exhibitionCatalogClient.fetchAll()).willReturn(listData(List.of(listData(externalId, "정정 전 제목", before))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.empty());
-		exhibitionSyncFacade.syncCatalog();
+		catalogSynchronizer.syncCatalog();
 		String hashBefore = listRow(externalId).getPayloadHash();
 
 		// 원천이 같은 external_id의 내용을 고쳐 보냈다.
 		String after = listPayload(externalId, "정정 후 제목");
 		given(exhibitionCatalogClient.fetchAll()).willReturn(listData(List.of(listData(externalId, "정정 후 제목", after))));
 
-		exhibitionSyncFacade.syncCatalog();
+		catalogSynchronizer.syncCatalog();
 
 		CultureListResponse row = listRow(externalId);
 		assertThat(row.getPayload()).isEqualTo(after);
@@ -147,7 +147,7 @@ class CultureVendorArchiveTest {
 				"역전 기간 전시", "장소", today, today.minusDays(1), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING,
 				null, null, "기관", null, null, null, "전시", "서울", payload))));
 
-		int inserted = exhibitionSyncFacade.syncCatalog();
+		int inserted = catalogSynchronizer.syncCatalog();
 
 		assertThat(inserted).isZero();
 		assertThat(exhibitionRepository.findByExternalId(externalId)).isEmpty(); // 도메인은 스킵
@@ -163,9 +163,9 @@ class CultureVendorArchiveTest {
 				.willReturn(listData(List.of(listData(externalId, "상세 있는 전시", listPayload(externalId, "상세 있는 전시")))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.of(detailData(detailPayload)));
 
-		exhibitionSyncFacade.syncCatalog();
+		catalogSynchronizer.syncCatalog();
 
-		// 상태머신(status/attempt/next_attempt)은 enrichment_job으로 이관됐다 — 벤더 테이블엔 무손실 원본만 남는다.
+		// 상태머신(status/attempt/next_attempt)은 exhibition_outbox으로 이관됐다 — 벤더 테이블엔 무손실 원본만 남는다.
 		CultureDetailResponse row = detailRow(externalId);
 		assertThat(row.getPayload()).isEqualTo(detailPayload);
 	}
@@ -178,7 +178,7 @@ class CultureVendorArchiveTest {
 				.willReturn(listData(List.of(listData(externalId, "상세 없는 전시", listPayload(externalId, "상세 없는 전시")))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.empty());
 
-		exhibitionSyncFacade.syncCatalog();
+		catalogSynchronizer.syncCatalog();
 
 		// 빈 응답은 보관할 원본이 없다 — 벤더 행 없음(V29에서 상태머신 제거). 도메인은 "확인 완료"만 표기해 재조회를 막는다
 		// — 상세 satellite 행 존재로 판정한다(연관 부재 = 미동기화).
@@ -188,7 +188,7 @@ class CultureVendorArchiveTest {
 	}
 
 	@Test
-	@DisplayName("상세 호출 실패 — DETAIL_SYNC 작업으로 재시도가 남고(현행 최대 갭 해소), 그 행만 연기하는 기존 동작은 그대로다")
+	@DisplayName("상세 호출 실패 — FETCH_DETAIL 작업으로 재시도가 남고(현행 최대 갭 해소), 그 행만 연기하는 기존 동작은 그대로다")
 	void syncCatalog_상세실패_작업enqueue_기존동작보존() {
 		String externalId = nextId();
 		given(exhibitionCatalogClient.fetchAll())
@@ -196,15 +196,15 @@ class CultureVendorArchiveTest {
 		given(exhibitionCatalogClient.fetchDetail(externalId))
 				.willThrow(new CoreException(ExhibitionErrorCode.EXTERNAL_API_UNAVAILABLE, "외부 전시 API 호출 실패"));
 
-		int inserted = exhibitionSyncFacade.syncCatalog();
+		int inserted = catalogSynchronizer.syncCatalog();
 
 		// 기존 동작: 불완전한 행을 적재하지 않고 이 행만 다음 주기로 연기한다.
 		assertThat(inserted).isZero();
 		assertThat(exhibitionRepository.findByExternalId(externalId)).isEmpty();
 		// 진행 상태·재시도는 이제 통합 작업큐가 안다 — 벤더 테이블엔 실패 원본을 남기지 않는다(순수 원본 보관소).
-		EnrichmentJob job = enrichmentJobRepository.findByJobTypeAndTargetKey(JobType.DETAIL_SYNC, externalId)
+		OutboxMessage job = outboxMessageRepository.findByMessageTypeAndTargetKey(OutboxMessageType.FETCH_DETAIL, externalId)
 				.orElseThrow();
-		assertThat(job.getStatus()).isEqualTo(JobStatus.PENDING);
+		assertThat(job.getStatus()).isEqualTo(OutboxMessageStatus.PENDING);
 		assertThat(cultureDetailResponseRepository.findByExternalId(externalId)).isEmpty();
 		// 목록 원본은 상세 실패와 무관하게 남는다(상세보다 먼저 기록하므로).
 		assertThat(listRow(externalId)).isNotNull();
@@ -217,7 +217,7 @@ class CultureVendorArchiveTest {
 		given(exhibitionCatalogClient.fetchAll()).willReturn(listData(List.of(listData(externalId, "조각 없는 전시", null))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.empty());
 
-		int inserted = exhibitionSyncFacade.syncCatalog();
+		int inserted = catalogSynchronizer.syncCatalog();
 
 		assertThat(inserted).isEqualTo(1); // 도메인 적재는 정상 진행
 		assertThat(cultureListResponseRepository.findByExternalId(externalId)).isEmpty();

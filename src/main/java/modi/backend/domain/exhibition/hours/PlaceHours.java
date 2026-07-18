@@ -70,7 +70,7 @@ public class PlaceHours {
 	private LocalDateTime syncedAt;
 
 	/**
-	 * 다음 재시도 도래 시각. 백오프 정책은 큐(enrichment_job) 배선 단계에서 정한다 — 읽는 곳이 없는 지금 값을 지어내면,
+	 * 다음 재시도 도래 시각. 백오프 정책은 큐(exhibition_outbox) 배선 단계에서 정한다 — 읽는 곳이 없는 지금 값을 지어내면,
 	 * 나중에 그 값이 근거 있는 정책인 줄 알고 쓰게 된다.
 	 */
 	@Column(name = "next_attempt_at")

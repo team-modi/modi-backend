@@ -3,7 +3,7 @@ package modi.backend.application.exhibition.sync;
 import modi.backend.application.exhibition.sync.enricher.DetailTargetState;
 import modi.backend.application.exhibition.sync.enricher.GenreTarget;
 import modi.backend.application.exhibition.sync.enricher.PlaceHoursTarget;
-import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.outbox.ExhibitionOutboxFacade;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,7 +22,6 @@ import modi.backend.domain.exhibition.catalog.ExhibitionGenre;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
-import modi.backend.domain.exhibition.enrichment.JobType;
 import modi.backend.domain.exhibition.sync.data.GenreClassification;
 import modi.backend.domain.exhibition.sync.data.GenreResult;
 import modi.backend.domain.exhibition.sync.entity.GooglePlaceResponse;
@@ -31,24 +30,23 @@ import modi.backend.domain.exhibition.hours.PlaceHoursStatus;
 import modi.backend.domain.exhibition.hours.PlaceHoursVendor;
 import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
 import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
-import modi.backend.domain.exhibition.sync.data.CatalogListData;
 import modi.backend.domain.exhibition.sync.entity.CultureDetailResponse;
 import modi.backend.domain.exhibition.sync.entity.CultureListResponse;
-import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.sync.entity.SyncRun;
 import modi.backend.domain.exhibition.sync.port.SyncRunRepository;
-import modi.backend.domain.exhibition.sync.SyncTrigger;
 import modi.backend.infra.exhibition.sync.GooglePlaceResponseJpaRepository;
 import modi.backend.infra.exhibition.sync.CultureDetailResponseJpaRepository;
 import modi.backend.infra.exhibition.sync.CultureListResponseJpaRepository;
 
 /**
- * 전시 수집·보강 파이프라인 조율(03_전시.md) — 외부 카탈로그 동기화(syncCatalog)와 통합 작업큐 처리기(enricher)의
- * DB 경계를 맡는다. 사용자 대면 유스케이스는 {@code serving.ExhibitionFacade}가 따로 담당한다: 조회 API와 배치가
+ * 전시 수집·보강 파이프라인의 <b>DB 경계</b>(03_전시.md) — 동기화 루프({@link CatalogSynchronizer})와 아웃박스
+ * 처리기(enricher)가 트랜잭션 밖에서 외부 호출을 마친 뒤, 여기 트랜잭션 메서드로 조회/반영을 위임한다.
+ * 사용자 대면 유스케이스는 {@code serving.ExhibitionFacade}가 따로 담당한다: 조회 API와 배치가
  * 한 클래스를 공유하던 결합을 끊은 것이 이 분리의 목적이다.
  *
- * <p>enricher 지원 메서드들은 조회/반영을 값으로 주고받아 외부 호출(원천 API·AI·구글)을 트랜잭션 밖에 둔다.
+ * <p>지원 메서드들은 조회/반영을 값으로 주고받아 외부 호출(원천 API·AI·구글)을 트랜잭션 밖에 둔다.
  * 쓰기는 전부 애그리거트 루트({@link ExhibitionRepository}·{@link ExhibitionPlaceRepository}) 경유다.
+ * 상태 변경을 동반하는 반영 메서드는 후속 아웃박스 enqueue까지 <b>같은 트랜잭션</b>으로 묶는다(ADR-10 원자성).
  */
 @Service
 @RequiredArgsConstructor
@@ -60,13 +58,12 @@ public class ExhibitionSyncFacade {
 	private final ExhibitionRepository exhibitionRepository;
 	/** 전시장 애그리거트 루트 — resolve-or-create와 영업시간 정준행 upsert의 단일 진입점. */
 	private final ExhibitionPlaceRepository exhibitionPlaceRepository;
-	private final ExhibitionCatalogClient catalogClient;
 	private final GooglePlaceResponseJpaRepository googlePlaceResponseRepository;
 	private final CultureListResponseJpaRepository cultureListResponseRepository;
 	private final CultureDetailResponseJpaRepository cultureDetailResponseRepository;
 	private final SyncRunRepository syncRunRepository;
-	/** 통합 보강 작업큐 — 상세 실패 재시도·이벤트 구동 영업시간 재검증을 enqueue한다(at-least-once의 진입점). */
-	private final EnrichmentJobFacade enrichmentJobFacade;
+	/** 전시 아웃박스 — 상태 변경과 같은 트랜잭션에서 후속 메시지를 남긴다(at-least-once의 진입점). */
+	private final ExhibitionOutboxFacade exhibitionOutboxFacade;
 
 	/**
 	 * 장르 백필 1배치의 조회 단계 — 아직 장르가 없는 CATALOG 전시를 최대 {@code max}건 뽑아 분류 입력을 조립한다.
@@ -120,7 +117,7 @@ public class ExhibitionSyncFacade {
 		return applied;
 	}
 
-	/** 미분류 CATALOG 전시의 원천 식별자들(GENRE_CLASSIFY 스윕용). 대상이 "미분류 행"이라 멱등하다. */
+	/** 미분류 CATALOG 전시의 원천 식별자들(CLASSIFY_GENRE 스윕용). 대상이 "미분류 행"이라 멱등하다. */
 	@Transactional(readOnly = true)
 	public List<String> findUnclassifiedCatalogExternalIds(int limit) {
 		return exhibitionRepository.findCatalogWithoutGenre(limit).stream()
@@ -180,17 +177,21 @@ public class ExhibitionSyncFacade {
 				? DetailTargetState.ALREADY_SYNCED : DetailTargetState.NEEDS_DETAIL;
 	}
 
-	/** DETAIL 작업 반영 — 상세 satellite 채움 + 전시장 보강 + 원본 벤더층 보관. 그 전시장 자연키로 영업시간 재검증을 건다. */
+	/**
+	 * FETCH_DETAIL 메시지 반영 — 상세 satellite 채움 + 전시장 보강 + 원본 벤더층 보관 + 영업시간 재검증 enqueue가
+	 * <b>한 트랜잭션</b>이다(ADR-10 원자성 — 상세는 반영됐는데 재검증 메시지가 유실되는 창이 없다).
+	 */
 	@Transactional
 	public void applyDetailForJob(String externalId, CatalogDetailData detail) {
 		Exhibition exhibition = exhibitionRepository.findByExternalId(externalId).orElse(null);
 		if (exhibition == null || exhibitionRepository.hasDetail(exhibition.getId())) {
 			return;
 		}
-		applyCatalogDetail(exhibition, detail, LocalDateTime.now());
+		LocalDateTime now = LocalDateTime.now();
+		applyCatalogDetail(exhibition, detail, now);
 		archiveDetailOutcome(externalId, detail);
 		exhibitionPlaceRepository.findById(exhibition.getExhibitionPlaceId())
-				.ifPresent(place -> enqueueHoursRefreshBestEffort(place.getPlaceKey()));
+				.ifPresent(place -> exhibitionOutboxFacade.enqueueHoursRefresh(place.getPlaceKey(), now));
 	}
 
 	/** DETAIL 작업 반영 — 원천에 상세가 없으면(빈 응답) 확인 완료행만 남겨 재조회를 막는다(기존 동작). */
@@ -264,128 +265,40 @@ public class ExhibitionSyncFacade {
 	}
 
 	/**
-	 * 외부 전시 API 수집 → DB 적재/완성(목록+상세 한 패스). 신규는 전시장을 resolve-or-create해 상세까지 채워 적재하고,
-	 * 기존 미완성은 상세만 채운다. 루프는 트랜잭션 밖, 행 단위 save만 각자 트랜잭션으로 커밋한다.
+	 * 신규 목록 1건의 <b>영속 단계</b> — 전시장 resolve-or-create + 전시 저장 + 상세 반영(또는 무상세 확인) +
+	 * 영업시간 재검증 enqueue가 <b>한 트랜잭션</b>이다(ADR-10 원자성 — 전시는 저장됐는데 후속 메시지가 유실되는
+	 * 창이 없다. 예전엔 각 저장이 자체 트랜잭션 + enqueue는 best-effort였다).
 	 *
-	 * @return 이번 동기화로 새로 적재된 전시 수(기존 행 상세 완성 건은 제외)
+	 * <p>외부 호출(상세 조회)은 호출부({@link CatalogSynchronizer})가 트랜잭션 <b>밖</b>에서 마친 뒤 값만 넘긴다.
+	 *
+	 * @param detail 상세 값(원천에 상세가 없으면 null — 확인 완료행만 남겨 재조회를 막는다)
 	 */
-	public int syncCatalog() {
-		return syncCatalog(SyncTrigger.SCHEDULE);
-	}
-
-	/** 계기(BOOT/SCHEDULE/MANUAL)를 명시한 동기화 — sync_run.trigger_type에 남긴다("왜 이 시각에 돌았나"). */
-	public int syncCatalog(SyncTrigger trigger) {
-		// 배치 전체가 같은 last_seen_at을 공유해야 "이번 동기화에 안 보인 행"(last_seen_at < 이 시각)이 한 번에 가려진다.
-		// 아이템마다 now()를 찍으면 그 경계가 흐려진다.
-		LocalDateTime syncedAt = LocalDateTime.now();
-		SyncRun run = SyncRun.started(trigger, syncedAt);
-		CatalogListData fetched = catalogClient.fetchAll();
-		List<CatalogExhibitionData> collected = fetched.items();
-		run.fetched(fetched.totalCount(), fetched.truncated(), collected.size());
-		if (fetched.truncated()) {
-			log.warn("전시 동기화 절단 — 원천 총 {}건 중 상한(max-pages × num-of-rows)에 걸려 일부만 수집됨",
-					fetched.totalCount());
-		}
-		int inserted = 0;
-		int completed = 0;
-		int skipped = 0;
-		int deferred = 0;
-		for (CatalogExhibitionData data : collected) {
-			archiveListResponse(data, syncedAt);
-			if (!hasValidPeriod(data)) {
-				skipped++;
-				continue;
-			}
-			try {
-				switch (syncListedWithDetail(data)) {
-					case INSERTED -> inserted++;
-					case COMPLETED -> completed++;
-					case SKIPPED -> { /* 이미 완성된 행 — 변화 없음 */ }
-				}
-			} catch (RuntimeException e) {
-				deferred++;
-				log.warn("전시 동기화 단건 실패(externalId={}, 다음 주기 재시도): {}", data.externalId(), e.getMessage());
-			}
-		}
-		if (skipped > 0 || completed > 0 || deferred > 0) {
-			log.info("전시 동기화: 수집 {} / 신규적재 {} / 기존상세완성 {} / 기간스킵 {} / 실패연기 {}",
-					collected.size(), inserted, completed, skipped, deferred);
-		}
-		archiveSyncRun(run, inserted, completed, skipped, deferred);
-		return inserted;
-	}
-
-	private void archiveSyncRun(SyncRun run, int inserted, int completed, int skipped, int deferred) {
-		try {
-			run.finished(inserted, completed, skipped, deferred, LocalDateTime.now());
-			syncRunRepository.save(run);
-		} catch (RuntimeException e) {
-			log.warn("동기화 실행 기록 실패(동기화는 계속): {}", e.getMessage());
-		}
-	}
-
-	private enum SyncOutcome {
-		INSERTED, COMPLETED, SKIPPED
-	}
-
-	/** 목록 1건을 상세까지 채워 적재/완성한다. 신규는 전시장 resolve 후 새로 적재, 기존 미완성 행은 상세만 채운다. */
-	private SyncOutcome syncListedWithDetail(CatalogExhibitionData data) {
-		Exhibition existing = exhibitionRepository.findByExternalId(data.externalId()).orElse(null);
-		if (existing != null) {
-			if (exhibitionRepository.hasDetail(existing.getId())) {
-				return SyncOutcome.SKIPPED;
-			}
-			applyDetailOrCheck(existing);
-			return SyncOutcome.COMPLETED;
-		}
-		// 신규는 상세를 <b>먼저</b> 받아본다 — 상세 호출이 일시 실패하면 아무것도 적재하지 않고 이 행만 다음 주기로 연기한다
-		// (불완전한 행·전시장만 남기지 않는다). 상세가 성공/빈 응답일 때만 전시장 resolve + 전시·상세 적재로 진행한다.
-		java.util.Optional<CatalogDetailData> detail = fetchDetailDeferring(data.externalId());
+	@Transactional
+	public void applyNewListing(CatalogExhibitionData data, CatalogDetailData detail) {
 		ExhibitionPlace place = exhibitionPlaceRepository.resolveOrCreate(data.place(), data.region(), data.sigungu(),
 				data.gpsX(), data.gpsY());
 		Exhibition saved = exhibitionRepository.save(Exhibition.createCatalog(data.externalId(), data.title(),
 				place.getId(), data.startDate(), data.endDate(), data.category(), data.posterUrl(), data.detailUrl(),
 				data.serviceName()));
 		LocalDateTime now = LocalDateTime.now();
-		detail.ifPresentOrElse(d -> applyCatalogDetail(saved, d, now),
-				() -> exhibitionRepository.markDetailChecked(saved.getId(), now));
-		archiveDetailOutcome(data.externalId(), detail.orElse(null));
+		if (detail != null) {
+			applyCatalogDetail(saved, detail, now);
+		} else {
+			exhibitionRepository.markDetailChecked(saved.getId(), now);
+		}
 		// 이벤트 구동 재검증(설계 §4-1): 새 전시가 기존 장소(place_hours 존재)에 들어오면 재검증 enqueue한다. target_key는
-		// 전시장 자연키(정규화 이름). 가드(기존 장소만·최소 간격·UK 중복)는 큐 파사드가 판단한다.
-		enqueueHoursRefreshBestEffort(place.getPlaceKey());
-		return SyncOutcome.INSERTED;
+		// 전시장 자연키(정규화 이름). 가드(기존 장소만·최소 간격·UK 중복)는 아웃박스 파사드가 판단한다. REQUIRED 전파라
+		// 이 트랜잭션에 합류한다 — 같이 성공하거나 같이 실패한다.
+		exhibitionOutboxFacade.enqueueHoursRefresh(place.getPlaceKey(), now);
 	}
 
-	/** 영업시간 재검증 enqueue는 부가 작업이라 어떤 실패(큐 저장 오류 등)도 동기화를 깨지 않는다 — 이 장소만 건너뛴다. */
-	private void enqueueHoursRefreshBestEffort(String placeKey) {
-		if (placeKey == null) {
-			return;
-		}
+	/** 런 감사 기록 — 부가 기록이라 실패해도 동기화 결과를 깨지 않는다. */
+	public void archiveSyncRun(SyncRun run, int inserted, int completed, int skipped, int deferred) {
 		try {
-			enrichmentJobFacade.enqueueHoursRefresh(placeKey, LocalDateTime.now());
+			run.finished(inserted, completed, skipped, deferred, LocalDateTime.now());
+			syncRunRepository.save(run);
 		} catch (RuntimeException e) {
-			log.warn("영업시간 재검증 enqueue 실패(placeKey={}, 동기화는 계속): {}", placeKey, e.getMessage());
-		}
-	}
-
-	/** 원천 상세2를 받아 상세를 채우거나(있음), 상세 미보유(빈 응답)면 확인 완료행만 남긴다. 일시 실패는 예외로 전파된다(기존 행 완성 경로). */
-	private void applyDetailOrCheck(Exhibition exhibition) {
-		java.util.Optional<CatalogDetailData> detail = fetchDetailDeferring(exhibition.getExternalId());
-		LocalDateTime now = LocalDateTime.now();
-		detail.ifPresentOrElse(d -> applyCatalogDetail(exhibition, d, now),
-				() -> exhibitionRepository.markDetailChecked(exhibition.getId(), now));
-		archiveDetailOutcome(exhibition.getExternalId(), detail.orElse(null));
-	}
-
-	/** 상세를 조회한다. 일시 실패면 재시도 작업(DETAIL_SYNC)을 남기고 예외를 전파해 호출부가 이 행만 연기하게 한다. */
-	private java.util.Optional<CatalogDetailData> fetchDetailDeferring(String externalId) {
-		try {
-			return catalogClient.fetchDetail(externalId);
-		} catch (RuntimeException e) {
-			// 진행 상태(재시도)는 통합 작업큐가 안다 — 상세 실패는 DETAIL_SYNC 작업으로 남겨 백오프 재시도되게 한다
-			// (V29에서 culture_detail_response 상태머신은 제거됐다). 예외는 전파해 이 행만 연기하는 동작은 불변.
-			enqueueDetailRetryBestEffort(externalId);
-			throw e;
+			log.warn("동기화 실행 기록 실패(동기화는 계속): {}", e.getMessage());
 		}
 	}
 
@@ -398,7 +311,8 @@ public class ExhibitionSyncFacade {
 		});
 	}
 
-	private void archiveListResponse(CatalogExhibitionData data, LocalDateTime syncedAt) {
+	/** 벤더 목록 원본 upsert — 부가 기록이라 실패해도 동기화를 깨지 않는다(이 행 원본만 누락). */
+	public void archiveListResponse(CatalogExhibitionData data, LocalDateTime syncedAt) {
 		if (data.payload() == null) {
 			return;
 		}
@@ -418,7 +332,7 @@ public class ExhibitionSyncFacade {
 	 * 상세 원본을 벤더층에 upsert한다(순수 원본 보관소 — 설계 §2). {@code data}가 있을 때만 기록한다:
 	 * 원천에 상세가 없으면(빈 응답) 남길 원본이 없어 행을 만들지 않는다(그 사실은 상세 satellite 행 존재가 안다).
 	 */
-	private void archiveDetailOutcome(String externalId, CatalogDetailData data) {
+	public void archiveDetailOutcome(String externalId, CatalogDetailData data) {
 		if (data == null) {
 			return;
 		}
@@ -432,22 +346,6 @@ public class ExhibitionSyncFacade {
 		} catch (RuntimeException e) {
 			log.warn("상세 원본 적재 실패(externalId={}, 동기화는 계속): {}", externalId, e.getMessage());
 		}
-	}
-
-	/**
-	 * 상세 조회 실패를 재시도 작업으로 남긴다(DETAIL_SYNC). 진행 상태·재시도는 통합 작업큐가 맡으므로 벤더 테이블엔
-	 * 아무것도 쓰지 않는다. 큐 저장 실패는 동기화를 깨지 않는다 — 예외는 상위(applyDetailOrCheck)가 전파해 이 행만 연기한다.
-	 */
-	private void enqueueDetailRetryBestEffort(String externalId) {
-		try {
-			enrichmentJobFacade.enqueue(JobType.DETAIL_SYNC, externalId, LocalDateTime.now());
-		} catch (RuntimeException e) {
-			log.warn("상세 재시도 작업 enqueue 실패(externalId={}, 동기화는 계속): {}", externalId, e.getMessage());
-		}
-	}
-
-	private static boolean hasValidPeriod(CatalogExhibitionData data) {
-		return data.startDate() == null || data.endDate() == null || !data.startDate().isAfter(data.endDate());
 	}
 
 	private Map<Long, ExhibitionPlace> placesByIdFor(List<Exhibition> exhibitions) {

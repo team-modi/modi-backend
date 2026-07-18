@@ -1,7 +1,7 @@
 package modi.backend.application.exhibition.sync;
 
-import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
-import modi.backend.application.exhibition.sync.job.EnrichmentJobProcessing;
+import modi.backend.application.exhibition.sync.outbox.ExhibitionOutboxFacade;
+import modi.backend.application.exhibition.sync.outbox.OutboxProcessing;
 
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,13 +17,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.enrichment.EnrichmentJob;
-import modi.backend.domain.exhibition.enrichment.EnrichmentJobRepository;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessage;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessageRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
-import modi.backend.domain.exhibition.enrichment.JobFailureType;
-import modi.backend.domain.exhibition.enrichment.JobStatus;
-import modi.backend.domain.exhibition.enrichment.JobType;
+import modi.backend.domain.exhibition.sync.outbox.OutboxFailureType;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessageStatus;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessageType;
 import modi.backend.domain.exhibition.hours.PlaceHours;
 import modi.backend.infra.exhibition.hours.PlaceHoursJpaRepository;
 import modi.backend.domain.exhibition.hours.PlaceHoursStatus;
@@ -36,15 +36,15 @@ import modi.backend.domain.exhibition.hours.PlaceHoursVendor;
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(properties = "app.exhibition.enrich.scheduling-enabled=false")
-class EnrichmentJobFacadeIntegrationTest {
+class ExhibitionOutboxFacadeIntegrationTest {
 
 	private static final AtomicInteger SEQ = new AtomicInteger(1);
 
 	@Autowired
-	EnrichmentJobFacade enrichmentJobFacade;
+	ExhibitionOutboxFacade exhibitionOutboxFacade;
 
 	@Autowired
-	EnrichmentJobRepository enrichmentJobRepository;
+	OutboxMessageRepository outboxMessageRepository;
 
 	@Autowired
 	PlaceHoursJpaRepository placeHoursRepository;
@@ -73,10 +73,10 @@ class EnrichmentJobFacadeIntegrationTest {
 		String target = nextKey("EXT");
 		LocalDateTime now = LocalDateTime.now();
 
-		enrichmentJobFacade.enqueue(JobType.DETAIL_SYNC, target, now);
-		enrichmentJobFacade.enqueue(JobType.DETAIL_SYNC, target, now.plusMinutes(5));
+		exhibitionOutboxFacade.enqueue(OutboxMessageType.FETCH_DETAIL, target, now);
+		exhibitionOutboxFacade.enqueue(OutboxMessageType.FETCH_DETAIL, target, now.plusMinutes(5));
 
-		List<EnrichmentJob> due = enrichmentJobFacade.findDue(JobType.DETAIL_SYNC, 100, now.plusHours(1));
+		List<OutboxMessage> due = exhibitionOutboxFacade.findDue(OutboxMessageType.FETCH_DETAIL, 100, now.plusHours(1));
 		assertThat(due.stream().filter(j -> j.getTargetKey().equals(target))).hasSize(1);
 	}
 
@@ -88,20 +88,20 @@ class EnrichmentJobFacadeIntegrationTest {
 		String futureKey = nextKey("EXT");
 		String doneKey = nextKey("EXT");
 
-		enrichmentJobFacade.enqueue(JobType.DETAIL_SYNC, dueKey, now); // PENDING·now → 도래
+		exhibitionOutboxFacade.enqueue(OutboxMessageType.FETCH_DETAIL, dueKey, now); // PENDING·now → 도래
 		// 미도래: 실패로 next_attempt_at을 미래로 민다.
-		enrichmentJobFacade.enqueue(JobType.DETAIL_SYNC, futureKey, now);
-		EnrichmentJob future = enrichmentJobRepository
-				.findByJobTypeAndTargetKey(JobType.DETAIL_SYNC, futureKey).orElseThrow();
-		enrichmentJobFacade.markFailed(future, JobFailureType.RETRYABLE, "e", now);
+		exhibitionOutboxFacade.enqueue(OutboxMessageType.FETCH_DETAIL, futureKey, now);
+		OutboxMessage future = outboxMessageRepository
+				.findByMessageTypeAndTargetKey(OutboxMessageType.FETCH_DETAIL, futureKey).orElseThrow();
+		exhibitionOutboxFacade.markFailed(future, OutboxFailureType.RETRYABLE, "e", now);
 		// 종료: 성공 처리.
-		enrichmentJobFacade.enqueue(JobType.DETAIL_SYNC, doneKey, now);
-		EnrichmentJob done = enrichmentJobRepository
-				.findByJobTypeAndTargetKey(JobType.DETAIL_SYNC, doneKey).orElseThrow();
-		enrichmentJobFacade.markSucceeded(done, now);
+		exhibitionOutboxFacade.enqueue(OutboxMessageType.FETCH_DETAIL, doneKey, now);
+		OutboxMessage done = outboxMessageRepository
+				.findByMessageTypeAndTargetKey(OutboxMessageType.FETCH_DETAIL, doneKey).orElseThrow();
+		exhibitionOutboxFacade.markSucceeded(done, now);
 
-		List<String> due = enrichmentJobFacade.findDue(JobType.DETAIL_SYNC, 100, now).stream()
-				.map(EnrichmentJob::getTargetKey).toList();
+		List<String> due = exhibitionOutboxFacade.findDue(OutboxMessageType.FETCH_DETAIL, 100, now).stream()
+				.map(OutboxMessage::getTargetKey).toList();
 
 		assertThat(due).contains(dueKey).doesNotContain(futureKey, doneKey);
 	}
@@ -111,21 +111,21 @@ class EnrichmentJobFacadeIntegrationTest {
 	void 낙관락_충돌_skip() {
 		String target = nextKey("EXT");
 		LocalDateTime now = LocalDateTime.now();
-		enrichmentJobFacade.enqueue(JobType.DETAIL_SYNC, target, now);
+		exhibitionOutboxFacade.enqueue(OutboxMessageType.FETCH_DETAIL, target, now);
 
 		// 두 워커가 각자 집은 두 detached 사본(같은 version).
-		EnrichmentJob worker1 = enrichmentJobRepository
-				.findByJobTypeAndTargetKey(JobType.DETAIL_SYNC, target).orElseThrow();
-		EnrichmentJob worker2 = enrichmentJobRepository
-				.findByJobTypeAndTargetKey(JobType.DETAIL_SYNC, target).orElseThrow();
+		OutboxMessage worker1 = outboxMessageRepository
+				.findByMessageTypeAndTargetKey(OutboxMessageType.FETCH_DETAIL, target).orElseThrow();
+		OutboxMessage worker2 = outboxMessageRepository
+				.findByMessageTypeAndTargetKey(OutboxMessageType.FETCH_DETAIL, target).orElseThrow();
 
-		boolean first = EnrichmentJobProcessing.succeed(enrichmentJobFacade, worker1, now);
-		boolean second = EnrichmentJobProcessing.succeed(enrichmentJobFacade, worker2, now);
+		boolean first = OutboxProcessing.succeed(exhibitionOutboxFacade, worker1, now);
+		boolean second = OutboxProcessing.succeed(exhibitionOutboxFacade, worker2, now);
 
 		assertThat(first).isTrue(); // 이긴다
 		assertThat(second).isFalse(); // 낙관락 충돌 → skip
-		assertThat(enrichmentJobRepository.findByJobTypeAndTargetKey(JobType.DETAIL_SYNC, target)
-				.orElseThrow().getStatus()).isEqualTo(JobStatus.SUCCEEDED);
+		assertThat(outboxMessageRepository.findByMessageTypeAndTargetKey(OutboxMessageType.FETCH_DETAIL, target)
+				.orElseThrow().getStatus()).isEqualTo(OutboxMessageStatus.SUCCEEDED);
 	}
 
 	@Test
@@ -134,9 +134,9 @@ class EnrichmentJobFacadeIntegrationTest {
 		String placeKey = nextKey("PLACE");
 		LocalDateTime now = LocalDateTime.now();
 
-		enrichmentJobFacade.enqueueHoursRefresh(placeKey, now);
+		exhibitionOutboxFacade.enqueueHoursRefresh(placeKey, now);
 
-		assertThat(enrichmentJobRepository.findByJobTypeAndTargetKey(JobType.PLACE_HOURS_REFRESH, placeKey))
+		assertThat(outboxMessageRepository.findByMessageTypeAndTargetKey(OutboxMessageType.REFRESH_PLACE_HOURS, placeKey))
 				.isEmpty();
 	}
 
@@ -151,12 +151,12 @@ class EnrichmentJobFacadeIntegrationTest {
 		// 오래됨(60일 전) — 재검증 대상.
 		seedPlaceWithHours(stalePlace, now.minusDays(60));
 
-		enrichmentJobFacade.enqueueHoursRefresh(recentPlace, now);
-		enrichmentJobFacade.enqueueHoursRefresh(stalePlace, now);
+		exhibitionOutboxFacade.enqueueHoursRefresh(recentPlace, now);
+		exhibitionOutboxFacade.enqueueHoursRefresh(stalePlace, now);
 
-		assertThat(enrichmentJobRepository.findByJobTypeAndTargetKey(JobType.PLACE_HOURS_REFRESH, recentPlace))
+		assertThat(outboxMessageRepository.findByMessageTypeAndTargetKey(OutboxMessageType.REFRESH_PLACE_HOURS, recentPlace))
 				.isEmpty(); // 최소 간격 이내 → skip
-		assertThat(enrichmentJobRepository.findByJobTypeAndTargetKey(JobType.PLACE_HOURS_REFRESH, stalePlace))
+		assertThat(outboxMessageRepository.findByMessageTypeAndTargetKey(OutboxMessageType.REFRESH_PLACE_HOURS, stalePlace))
 				.isPresent(); // 오래됨 → enqueue
 	}
 
@@ -166,16 +166,16 @@ class EnrichmentJobFacadeIntegrationTest {
 		LocalDateTime now = LocalDateTime.now();
 		String placeKey = nextKey("PLACE");
 		seedPlaceWithHours(placeKey, now.minusDays(60));
-		enrichmentJobFacade.enqueueHoursRefresh(placeKey, now);
-		EnrichmentJob job = enrichmentJobRepository
-				.findByJobTypeAndTargetKey(JobType.PLACE_HOURS_REFRESH, placeKey).orElseThrow();
-		enrichmentJobFacade.markSucceeded(job, now); // 종료
+		exhibitionOutboxFacade.enqueueHoursRefresh(placeKey, now);
+		OutboxMessage job = outboxMessageRepository
+				.findByMessageTypeAndTargetKey(OutboxMessageType.REFRESH_PLACE_HOURS, placeKey).orElseThrow();
+		exhibitionOutboxFacade.markSucceeded(job, now); // 종료
 
-		enrichmentJobFacade.enqueueHoursRefresh(placeKey, now.plusDays(40)); // 다시 오래됨 → 되살아나야 한다
+		exhibitionOutboxFacade.enqueueHoursRefresh(placeKey, now.plusDays(40)); // 다시 오래됨 → 되살아나야 한다
 
-		EnrichmentJob reactivated = enrichmentJobRepository
-				.findByJobTypeAndTargetKey(JobType.PLACE_HOURS_REFRESH, placeKey).orElseThrow();
-		assertThat(reactivated.getStatus()).isEqualTo(JobStatus.PENDING);
+		OutboxMessage reactivated = outboxMessageRepository
+				.findByMessageTypeAndTargetKey(OutboxMessageType.REFRESH_PLACE_HOURS, placeKey).orElseThrow();
+		assertThat(reactivated.getStatus()).isEqualTo(OutboxMessageStatus.PENDING);
 		assertThat(reactivated.getAttemptCount()).isZero();
 	}
 }

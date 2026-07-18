@@ -32,7 +32,7 @@ public interface ExhibitionRepository {
 	/** 살아있는 전시들을 id 집합으로 일괄 조회(관심 전시 목록의 벌크 로드용). 정렬·순서 보장 없음. 빈 입력이면 빈 목록. */
 	List<Exhibition> findAllActiveByIds(Collection<Long> ids);
 
-	/** 여러 원천 식별자로 CATALOG 전시를 일괄 조회(작업큐 대상 해소용, 살아있는 행만). 빈 입력이면 빈 목록. */
+	/** 여러 원천 식별자로 CATALOG 전시를 일괄 조회(아웃박스 대상 해소용, 살아있는 행만). 빈 입력이면 빈 목록. */
 	List<Exhibition> findAllByExternalIds(Collection<String> externalIds);
 
 	/**

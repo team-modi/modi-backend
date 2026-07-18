@@ -1,13 +1,13 @@
-package modi.backend.domain.exhibition.enrichment;
+package modi.backend.domain.exhibition.sync.outbox;
 
 import java.time.LocalDateTime;
 
 /**
- * 재시도 백오프 정책(값 객체) — {@link EnrichmentJob}이 실패를 기록할 때 "다음 시도를 언제로, 몇 번까지"를 계산한다.
+ * 재시도 백오프 정책(값 객체) — {@link OutboxMessage}이 실패를 기록할 때 "다음 시도를 언제로, 몇 번까지"를 계산한다.
  *
  * <p>지수 백오프: {@code delay = min(baseBackoffSeconds × 2^(attemptCount-1), maxBackoffSeconds)}.
  * 실패가 거듭될수록 간격을 벌려(무료 AI RPM·외부 API를 지치게 하지 않게) 재시도하고, {@link #maxAttempts}를 넘기면
- * 영구 실패로 승격한다(무한 재시도 방지 — 현행이 못 하던 것). 설정값은 {@code EnrichmentProperties}에서 온다.
+ * 영구 실패로 승격한다(무한 재시도 방지 — 현행이 못 하던 것). 설정값은 {@code OutboxProperties}에서 온다.
  *
  * <p>도메인 값이라 Spring/설정에 의존하지 않는다 — 순수 계산만 한다(단위 테스트가 컨텍스트 없이 검증한다).
  */

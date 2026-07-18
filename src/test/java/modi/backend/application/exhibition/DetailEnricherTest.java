@@ -2,7 +2,7 @@ package modi.backend.application.exhibition;
 
 import modi.backend.application.exhibition.sync.enricher.DetailEnricher;
 import modi.backend.application.exhibition.sync.enricher.DetailTargetState;
-import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.outbox.ExhibitionOutboxFacade;
 import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -20,25 +20,25 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import modi.backend.config.EnrichmentProperties;
+import modi.backend.config.OutboxProperties;
 import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
-import modi.backend.domain.exhibition.enrichment.EnrichmentJob;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessage;
 import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
-import modi.backend.domain.exhibition.enrichment.JobFailureType;
-import modi.backend.domain.exhibition.enrichment.JobType;
+import modi.backend.domain.exhibition.sync.outbox.OutboxFailureType;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessageType;
 import modi.backend.support.error.CoreException;
 
 /**
  * DetailEnricher 단위 검증 — <b>현행 최대 갭 해소</b>의 핵심: 상세 재시도 선별을 통합 작업큐 <b>읽기</b>로 배선한다.
- * 도래한 DETAIL_SYNC 작업만 집어 상세를 재조회하고, 결과에 따라 성공/재시도로 전이한다. 외부 호출은 트랜잭션 밖이다.
+ * 도래한 FETCH_DETAIL 작업만 집어 상세를 재조회하고, 결과에 따라 성공/재시도로 전이한다. 외부 호출은 트랜잭션 밖이다.
  */
 class DetailEnricherTest {
 
-	private final EnrichmentProperties props = new EnrichmentProperties(5, 60L, 3600L, 50, 60000L, 30);
+	private final OutboxProperties props = new OutboxProperties(5, 60L, 3600L, 50, 60000L, 30);
 
-	private static EnrichmentJob detailJob(String externalId) {
-		return EnrichmentJob.enqueue(JobType.DETAIL_SYNC, externalId, LocalDateTime.now());
+	private static OutboxMessage detailJob(String externalId) {
+		return OutboxMessage.enqueue(OutboxMessageType.FETCH_DETAIL, externalId, LocalDateTime.now());
 	}
 
 	private static CatalogDetailData detail() {
@@ -46,13 +46,13 @@ class DetailEnricherTest {
 	}
 
 	@Test
-	@DisplayName("선별은 작업 읽기로 — 도래한 DETAIL_SYNC만 집어 상세를 채우고 성공 처리한다")
+	@DisplayName("선별은 작업 읽기로 — 도래한 FETCH_DETAIL만 집어 상세를 채우고 성공 처리한다")
 	void 상세필요_채우고_성공() {
-		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
+		ExhibitionOutboxFacade jobFacade = mock(ExhibitionOutboxFacade.class);
 		ExhibitionSyncFacade facade = mock(ExhibitionSyncFacade.class);
 		ExhibitionCatalogClient client = mock(ExhibitionCatalogClient.class);
-		EnrichmentJob job = detailJob("E1");
-		when(jobFacade.findDue(eq(JobType.DETAIL_SYNC), anyInt(), any())).thenReturn(List.of(job));
+		OutboxMessage job = detailJob("E1");
+		when(jobFacade.findDue(eq(OutboxMessageType.FETCH_DETAIL), anyInt(), any())).thenReturn(List.of(job));
 		when(facade.findDetailTargetState("E1")).thenReturn(DetailTargetState.NEEDS_DETAIL);
 		when(client.fetchDetail("E1")).thenReturn(Optional.of(detail()));
 		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, client, props);
@@ -66,11 +66,11 @@ class DetailEnricherTest {
 	@Test
 	@DisplayName("상세 조회가 일시 실패하면 RETRYABLE로 기록한다(timeout/5xx류 → 백오프 재시도)")
 	void 상세실패_재시도기록() {
-		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
+		ExhibitionOutboxFacade jobFacade = mock(ExhibitionOutboxFacade.class);
 		ExhibitionSyncFacade facade = mock(ExhibitionSyncFacade.class);
 		ExhibitionCatalogClient client = mock(ExhibitionCatalogClient.class);
-		EnrichmentJob job = detailJob("E1");
-		when(jobFacade.findDue(eq(JobType.DETAIL_SYNC), anyInt(), any())).thenReturn(List.of(job));
+		OutboxMessage job = detailJob("E1");
+		when(jobFacade.findDue(eq(OutboxMessageType.FETCH_DETAIL), anyInt(), any())).thenReturn(List.of(job));
 		when(facade.findDetailTargetState("E1")).thenReturn(DetailTargetState.NEEDS_DETAIL);
 		when(client.fetchDetail("E1"))
 				.thenThrow(new CoreException(ExhibitionErrorCode.EXTERNAL_API_UNAVAILABLE, "외부 API 실패"));
@@ -78,18 +78,18 @@ class DetailEnricherTest {
 
 		enricher.enrichDetails();
 
-		verify(jobFacade).markFailed(eq(job), eq(JobFailureType.RETRYABLE), any(), any());
+		verify(jobFacade).markFailed(eq(job), eq(OutboxFailureType.RETRYABLE), any(), any());
 		verify(facade, never()).applyDetailForJob(any(), any());
 	}
 
 	@Test
 	@DisplayName("이미 다른 경로가 상세를 채웠으면 외부 호출 없이 성공 처리한다")
 	void 이미완성_성공마감() {
-		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
+		ExhibitionOutboxFacade jobFacade = mock(ExhibitionOutboxFacade.class);
 		ExhibitionSyncFacade facade = mock(ExhibitionSyncFacade.class);
 		ExhibitionCatalogClient client = mock(ExhibitionCatalogClient.class);
-		EnrichmentJob job = detailJob("E1");
-		when(jobFacade.findDue(eq(JobType.DETAIL_SYNC), anyInt(), any())).thenReturn(List.of(job));
+		OutboxMessage job = detailJob("E1");
+		when(jobFacade.findDue(eq(OutboxMessageType.FETCH_DETAIL), anyInt(), any())).thenReturn(List.of(job));
 		when(facade.findDetailTargetState("E1")).thenReturn(DetailTargetState.ALREADY_SYNCED);
 		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, client, props);
 
@@ -102,27 +102,27 @@ class DetailEnricherTest {
 	@Test
 	@DisplayName("전시가 아직 없으면(신규 상세실패분) RETRYABLE로 두어 다음 동기화 후 재처리되게 한다")
 	void 전시미적재_재시도로_남긴다() {
-		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
+		ExhibitionOutboxFacade jobFacade = mock(ExhibitionOutboxFacade.class);
 		ExhibitionSyncFacade facade = mock(ExhibitionSyncFacade.class);
 		ExhibitionCatalogClient client = mock(ExhibitionCatalogClient.class);
-		EnrichmentJob job = detailJob("E1");
-		when(jobFacade.findDue(eq(JobType.DETAIL_SYNC), anyInt(), any())).thenReturn(List.of(job));
+		OutboxMessage job = detailJob("E1");
+		when(jobFacade.findDue(eq(OutboxMessageType.FETCH_DETAIL), anyInt(), any())).thenReturn(List.of(job));
 		when(facade.findDetailTargetState("E1")).thenReturn(DetailTargetState.MISSING);
 		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, client, props);
 
 		enricher.enrichDetails();
 
 		verify(client, never()).fetchDetail(any());
-		verify(jobFacade).markFailed(eq(job), eq(JobFailureType.RETRYABLE), any(), any());
+		verify(jobFacade).markFailed(eq(job), eq(OutboxFailureType.RETRYABLE), any(), any());
 	}
 
 	@Test
 	@DisplayName("도래 작업이 없으면 외부 호출 없이 끝낸다")
 	void 도래없음_무호출() {
-		EnrichmentJobFacade jobFacade = mock(EnrichmentJobFacade.class);
+		ExhibitionOutboxFacade jobFacade = mock(ExhibitionOutboxFacade.class);
 		ExhibitionSyncFacade facade = mock(ExhibitionSyncFacade.class);
 		ExhibitionCatalogClient client = mock(ExhibitionCatalogClient.class);
-		when(jobFacade.findDue(eq(JobType.DETAIL_SYNC), anyInt(), any())).thenReturn(List.of());
+		when(jobFacade.findDue(eq(OutboxMessageType.FETCH_DETAIL), anyInt(), any())).thenReturn(List.of());
 		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, client, props);
 
 		enricher.enrichDetails();

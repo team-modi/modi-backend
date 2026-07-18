@@ -32,7 +32,7 @@ public class ExhibitionCatalogBootSync implements ApplicationRunner {
 
 	private static final Logger log = LoggerFactory.getLogger(ExhibitionCatalogBootSync.class);
 
-	private final ExhibitionSyncFacade exhibitionSyncFacade;
+	private final CatalogSynchronizer catalogSynchronizer;
 	private final CatalogEnricher catalogEnricher;
 
 	/** 로컬 시드 모드면 외부 동기화를 건너뛴다(로컬 실 API 호출 0 — {@link LocalExhibitionSeeder}가 SQL로 초기화). */
@@ -48,7 +48,7 @@ public class ExhibitionCatalogBootSync implements ApplicationRunner {
 		// 목록+상세 동기화 후 장르 분류 — readiness를 막지 않도록 데몬 스레드에서 1회 수행(실패해도 자정 동기화가 재시도).
 		Thread bootSync = new Thread(() -> {
 			try {
-				int synced = exhibitionSyncFacade.syncCatalog(modi.backend.domain.exhibition.sync.SyncTrigger.BOOT);
+				int synced = catalogSynchronizer.syncCatalog(modi.backend.domain.exhibition.sync.SyncTrigger.BOOT);
 				log.info("부팅 시 전시 카탈로그 동기화(상세 포함) 신규 {}건", synced);
 			} catch (RuntimeException e) {
 				log.warn("부팅 시 전시 카탈로그 동기화 스킵(외부 불가) — {}", e.getMessage());
