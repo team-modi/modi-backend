@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import modi.backend.domain.exhibition.catalog.ExhibitionDetail;
 import modi.backend.domain.exhibition.catalog.ExhibitionDetailRepository;
-import modi.backend.domain.exhibition.catalog.ExhibitionHistoryRepository;
+import modi.backend.infra.exhibition.catalog.ExhibitionHistoryJpaRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 
@@ -34,7 +34,7 @@ class AdminExhibitionFacadeTest {
 		ExhibitionDetail already = detail(2L, "이미 깨끗한 설명이에요.");
 		given(detailRepo.findAllWithDescription()).willReturn(List.of(markup, already));
 		AdminExhibitionFacade facade = new AdminExhibitionFacade(mock(ExhibitionRepository.class),
-				mock(ExhibitionPlaceRepository.class), detailRepo, mock(ExhibitionHistoryRepository.class));
+				mock(ExhibitionPlaceRepository.class), detailRepo, mock(ExhibitionHistoryJpaRepository.class));
 
 		AdminExhibitionResult.DescriptionReparse result = facade.reparseDescriptions();
 

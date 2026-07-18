@@ -16,7 +16,7 @@ import modi.backend.domain.exhibition.catalog.ExhibitionDetail;
 import modi.backend.domain.exhibition.catalog.ExhibitionDetailRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.domain.exhibition.catalog.ExhibitionHistory;
-import modi.backend.domain.exhibition.catalog.ExhibitionHistoryRepository;
+import modi.backend.infra.exhibition.catalog.ExhibitionHistoryJpaRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
@@ -39,7 +39,7 @@ public class AdminExhibitionFacade {
 	private final ExhibitionPlaceRepository exhibitionPlaceRepository;
 	private final ExhibitionDetailRepository exhibitionDetailRepository;
 	/** 사람 수정 이력(감사) — 실제로 바뀐 필드를 old→new로 남긴다. */
-	private final ExhibitionHistoryRepository exhibitionHistoryRepository;
+	private final ExhibitionHistoryJpaRepository exhibitionHistoryRepository;
 
 	/**
 	 * 저장된 전시 설명을 재파싱해 남아 있는 HTML/워드프레스 마크업을 벗긴다. 설명은 상세 satellite({@code exhibition_detail})로

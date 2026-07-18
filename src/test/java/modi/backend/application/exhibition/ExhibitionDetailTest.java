@@ -21,8 +21,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.exhibition.catalog.ArtistRepository;
 import modi.backend.domain.exhibition.sync.CatalogDetailData;
-import modi.backend.domain.exhibition.sync.CultureDetailResponseRepository;
-import modi.backend.domain.exhibition.sync.CultureListResponseRepository;
+import modi.backend.infra.exhibition.sync.CultureDetailResponseJpaRepository;
+import modi.backend.infra.exhibition.sync.CultureListResponseJpaRepository;
 import modi.backend.domain.exhibition.catalog.Exhibition;
 import modi.backend.domain.exhibition.catalog.ExhibitionArtistRepository;
 import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
@@ -34,7 +34,7 @@ import modi.backend.domain.exhibition.catalog.ExhibitionGenreRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
-import modi.backend.domain.exhibition.hours.GooglePlaceResponseRepository;
+import modi.backend.infra.exhibition.hours.GooglePlaceResponseJpaRepository;
 import modi.backend.domain.exhibition.hours.PlaceHoursRepository;
 import modi.backend.domain.exhibition.sync.SyncRunRepository;
 import modi.backend.infra.record.RecordJpaRepository;
@@ -72,9 +72,9 @@ class ExhibitionDetailTest {
 		exhibitionArtistRepository = mock(ExhibitionArtistRepository.class);
 		exhibitionGenreRepository = mock(ExhibitionGenreRepository.class);
 		facade = new ExhibitionFacade(exhibitionRepository, catalogClient, bookmarkRepository, venueRepository,
-				recordJpaRepository, placeHoursRepository, mock(GooglePlaceResponseRepository.class),
+				recordJpaRepository, placeHoursRepository, mock(GooglePlaceResponseJpaRepository.class),
 				new modi.backend.infra.genre.RandomGenreClassifier(), exhibitionGenreRepository,
-				mock(CultureListResponseRepository.class), mock(CultureDetailResponseRepository.class),
+				mock(CultureListResponseJpaRepository.class), mock(CultureDetailResponseJpaRepository.class),
 				mock(SyncRunRepository.class), placeRepository, detailRepository, mock(ArtistRepository.class),
 				exhibitionArtistRepository, mock(EnrichmentJobFacade.class));
 		given(exhibitionRepository.save(any(Exhibition.class))).willAnswer(invocation -> invocation.getArgument(0));

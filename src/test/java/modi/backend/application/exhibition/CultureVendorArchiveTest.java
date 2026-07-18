@@ -20,13 +20,13 @@ import modi.backend.domain.exhibition.sync.CatalogDetailData;
 import modi.backend.domain.exhibition.sync.CatalogExhibitionData;
 import modi.backend.domain.exhibition.sync.CatalogListData;
 import modi.backend.domain.exhibition.sync.CultureDetailResponse;
-import modi.backend.domain.exhibition.sync.CultureDetailResponseRepository;
+import modi.backend.infra.exhibition.sync.CultureDetailResponseJpaRepository;
 import modi.backend.domain.exhibition.sync.CultureListResponse;
 import modi.backend.domain.exhibition.enrichment.EnrichmentJob;
 import modi.backend.domain.exhibition.enrichment.EnrichmentJobRepository;
 import modi.backend.domain.exhibition.enrichment.JobStatus;
 import modi.backend.domain.exhibition.enrichment.JobType;
-import modi.backend.domain.exhibition.sync.CultureListResponseRepository;
+import modi.backend.infra.exhibition.sync.CultureListResponseJpaRepository;
 import modi.backend.domain.exhibition.sync.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
@@ -60,10 +60,10 @@ class CultureVendorArchiveTest {
 	modi.backend.domain.exhibition.catalog.ExhibitionDetailRepository exhibitionDetailRepository;
 
 	@Autowired
-	CultureListResponseRepository cultureListResponseRepository;
+	CultureListResponseJpaRepository cultureListResponseRepository;
 
 	@Autowired
-	CultureDetailResponseRepository cultureDetailResponseRepository;
+	CultureDetailResponseJpaRepository cultureDetailResponseRepository;
 
 	@Autowired
 	EnrichmentJobRepository enrichmentJobRepository;
