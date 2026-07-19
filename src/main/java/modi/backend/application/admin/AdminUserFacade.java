@@ -19,6 +19,7 @@ import modi.backend.domain.exhibition.catalog.Exhibition;
 import modi.backend.domain.record.Record;
 import modi.backend.domain.remind.Remind;
 import modi.backend.domain.user.SocialAccount;
+import modi.backend.support.time.AppTime;
 import modi.backend.domain.user.User;
 import modi.backend.infra.activitylog.ActivityLogJpaRepository;
 import modi.backend.infra.bookmark.ExhibitionBookmarkJpaRepository;
@@ -170,6 +171,7 @@ public class AdminUserFacade {
 	}
 
 	// max(createdAt)의 반환 타입이 드라이버/하이버네이트 버전에 따라 다를 수 있어 방어적으로 변환.
+	// ⚠️ 저장 시간대가 KST라 LocalDateTime(=시간대 없는 벽시계)을 UTC로 읽으면 9시간 어긋난다 → KST로 해석한다.
 	private static ZonedDateTime toZonedDateTime(Object value) {
 		if (value == null) {
 			return null;
@@ -181,13 +183,13 @@ public class AdminUserFacade {
 			return o.toZonedDateTime();
 		}
 		if (value instanceof java.time.Instant i) {
-			return i.atZone(java.time.ZoneOffset.UTC);
+			return i.atZone(AppTime.KST);
 		}
 		if (value instanceof java.sql.Timestamp t) {
-			return t.toInstant().atZone(java.time.ZoneOffset.UTC);
+			return t.toInstant().atZone(AppTime.KST);
 		}
 		if (value instanceof java.time.LocalDateTime l) {
-			return l.atZone(java.time.ZoneOffset.UTC);
+			return l.atZone(AppTime.KST);
 		}
 		return null;
 	}

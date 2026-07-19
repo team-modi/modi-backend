@@ -5,7 +5,7 @@ spring:
   main:
     web-application-type: servlet
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/mydatabase}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/mydatabase?connectionTimeZone=Asia/Seoul&forceConnectionTimeZoneToSession=true}
     username: ${SPRING_DATASOURCE_USERNAME:myuser}
     password: ${SPRING_DATASOURCE_PASSWORD:secret}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -16,6 +16,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        timezone:
+          default_storage: NORMALIZE
   flyway:
     enabled: true
 

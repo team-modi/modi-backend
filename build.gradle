@@ -71,7 +71,7 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
-	jvmArgs '-Duser.timezone=UTC'
+	jvmArgs '-Duser.timezone=Asia/Seoul'
 	finalizedBy tasks.named('jacocoTestReport')
 }
 

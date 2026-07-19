@@ -18,6 +18,13 @@ RUN ./gradlew --no-daemon clean bootJar -x test
 FROM eclipse-temurin:21-jre-jammy AS runtime
 WORKDIR /app
 
+# OS 타임존도 KST로 맞춘다(앱은 코드에서 한 번 더 고정 — BackendApplication 참고).
+ENV TZ=Asia/Seoul
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tzdata \
+ && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
+ && rm -rf /var/lib/apt/lists/*
+
 # Run as an unprivileged user
 RUN groupadd --system spring && useradd --system --gid spring spring
 USER spring

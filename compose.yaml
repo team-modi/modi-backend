@@ -9,12 +9,15 @@ services:
   mysql:
     image: 'mysql:8.4'
     container_name: modi-mysql
+    # DB 서버 세션 시간대도 KST(앱 저장값과 정렬 — NOW()·직접 조회 시 헷갈리지 않게).
+    command: ['--default-time-zone=+09:00']
     logging: *default-logging
     environment:
       - 'MYSQL_DATABASE=mydatabase'
       - 'MYSQL_PASSWORD=secret'
       - 'MYSQL_ROOT_PASSWORD=verysecret'
       - 'MYSQL_USER=myuser'
+      - 'TZ=Asia/Seoul'
     ports:
       - '3306:3306'
     volumes:
@@ -39,7 +42,8 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      - 'SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/mydatabase'
+      - 'SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/mydatabase?connectionTimeZone=Asia/Seoul&forceConnectionTimeZoneToSession=true'
+      - 'TZ=Asia/Seoul'
       - 'SPRING_DATASOURCE_USERNAME=myuser'
       - 'SPRING_DATASOURCE_PASSWORD=secret'
       # 비어 있으면 default 프로파일(=로컬 CORS). 운영 배포는 .env로 prod 주입(=Vercel CORS).
