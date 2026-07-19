@@ -12,9 +12,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -27,7 +29,7 @@ import modi.backend.support.error.CoreException;
 
 /**
  * {@link AiChatClient}의 Gemini(Google Generative Language API) 어댑터.
- * 키리스 SDK 없이 WebClient로 REST {@code generateContent}를 호출한다. {@code app.ai.provider=gemini}일 때만 빈 등록.
+ * 키리스 SDK 없이 RestClient로 REST {@code generateContent}를 호출한다. {@code app.ai.provider=gemini}일 때만 빈 등록.
  * api-key 미설정이면 클라이언트를 만들지 않고, 호출 시 {@link AiErrorCode#AI_DISABLED}를 던진다(AI만 비활성, 나머지 정상).
  * 구조화 출력({@code completeStructured})은 {@code responseMimeType=application/json + responseSchema}로 형태를 강제한 뒤
  * Jackson으로 스키마 타입에 역직렬화한다. 모델·max-tokens·타임아웃은 {@link AiProperties} 설정값을 사용한다.
@@ -43,7 +45,7 @@ public class GeminiAiChatClient implements AiChatClient {
 	private final AiProperties properties;
 	private final MeterRegistry meterRegistry;
 	private final ObjectMapper objectMapper;
-	private final WebClient webClient; // api-key 미설정 시 null
+	private final RestClient restClient; // api-key 미설정 시 null
 
 	// 생성자가 둘(운영·테스트)이라 Spring이 주입 생성자를 못 고른다 → 운영용 public을 @Autowired로 명시.
 	@Autowired
@@ -56,12 +58,18 @@ public class GeminiAiChatClient implements AiChatClient {
 		this.properties = properties;
 		this.meterRegistry = meterRegistry;
 		this.objectMapper = objectMapper;
-		this.webClient = properties.isConfigured()
-				? WebClient.builder()
-						.baseUrl(baseUrl)
-						.defaultHeader("x-goog-api-key", properties.apiKey()) // 키를 URL이 아닌 헤더로(로그 노출 방지)
-						.build()
-				: null;
+		if (properties.isConfigured()) {
+			// 응답 상한은 요청 팩토리 읽기 타임아웃으로 건다(과거 block(Duration)의 대체 — 커넥션 계층에서 끊겨 더 정확).
+			JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory();
+			requestFactory.setReadTimeout(Duration.ofSeconds(properties.timeoutSeconds()));
+			this.restClient = RestClient.builder()
+					.baseUrl(baseUrl)
+					.defaultHeader("x-goog-api-key", properties.apiKey()) // 키를 URL이 아닌 헤더로(로그 노출 방지)
+					.requestFactory(requestFactory)
+					.build();
+		} else {
+			this.restClient = null;
+		}
 	}
 
 	@Override
@@ -83,13 +91,12 @@ public class GeminiAiChatClient implements AiChatClient {
 
 	/** generateContent 단일 호출(재시도 없음). 성공 시 사용량을 기록하고 원시 응답을 반환한다. */
 	private JsonNode callOnce(Map<String, Object> body) {
-		JsonNode response = webClient.post()
+		JsonNode response = restClient.post()
 				.uri("/models/{model}:generateContent", properties.model())
 				.contentType(MediaType.APPLICATION_JSON)
-				.bodyValue(body)
+				.body(body)
 				.retrieve()
-				.bodyToMono(JsonNode.class)
-				.block(Duration.ofSeconds(properties.timeoutSeconds()));
+				.body(JsonNode.class);
 		if (response == null) {
 			throw new CoreException(AiErrorCode.AI_GENERATION_FAILED, "빈 응답");
 		}
@@ -110,14 +117,14 @@ public class GeminiAiChatClient implements AiChatClient {
 		for (int i = 0; i < attempts; i++) {
 			try {
 				return attempt.get();
-			} catch (WebClientResponseException.TooManyRequests e) {
+			} catch (HttpClientErrorException.TooManyRequests e) {
 				log.warn("AI 호출 429(무료 한도) 시도 {}/{}", i + 1, attempts);
 				if (i < attempts - 1) {
-					backoff(e.getHeaders());
+					backoff(e.getResponseHeaders());
 					continue;
 				}
 				throw new CoreException(AiErrorCode.AI_RATE_LIMITED, "AI 무료 한도 초과(429)");
-			} catch (WebClientResponseException e) {
+			} catch (RestClientResponseException e) {
 				if (e.getStatusCode().is5xxServerError() && i < attempts - 1) {
 					log.warn("AI 호출 5xx({}) 재시도 {}/{}", e.getStatusCode().value(), i + 1, attempts);
 					fixedBackoff(i);
@@ -226,7 +233,7 @@ public class GeminiAiChatClient implements AiChatClient {
 	}
 
 	private void requireEnabled() {
-		if (webClient == null) {
+		if (restClient == null) {
 			throw new CoreException(AiErrorCode.AI_DISABLED);
 		}
 	}

@@ -11,7 +11,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "app.oauth")
 public record OAuthProperties(String redirectUri, List<String> allowedRedirectUris,
-							  Provider kakao, Provider google) {
+							  Provider kakao, Provider naver) {
 
 	public OAuthProperties {
 		if (allowedRedirectUris == null) {

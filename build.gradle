@@ -26,8 +26,7 @@ dependencies {
 	// DB 마이그레이션(기록 아카이브 등) — flyway
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	implementation 'org.flywaydb:flyway-mysql'
-	// WebClient + HTTP Interface(@HttpExchange) 선언형 클라이언트용 (서블릿 앱이라 web-application-type=servlet 유지)
-	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+	// 외부 호출은 RestClient + HTTP Interface(@HttpExchange) 선언형 클라이언트(ADR-09) — spring-web(webmvc 포함)만으로 동작
 	// Swagger/OpenAPI 문서 (springdoc 3.x = Spring Boot 4 라인)
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 	// 한눈에보는문화정보(15138937) 응답 포맷=XML 파싱용
@@ -39,6 +38,11 @@ dependencies {
 	implementation('com.anthropic:anthropic-java:2.34.0') {
 		exclude group: 'io.swagger.core.v3', module: 'swagger-annotations'
 	}
+	// 장르 분류 호출 내 즉시 재시도·서킷브레이커(ADR-11 — 1차 Gemini→2차 Claude 폴백 체인).
+	//   스타터가 아니라 core 모듈만 프로그래매틱 조립(GenreConfig) — Boot 4.1 스타터 호환 리스크 회피.
+	//   아웃박스 폴러의 durable 재시도와 계층이 다르다: resilience4j=호출 내, 아웃박스=재시작을 넘는 재시도.
+	implementation 'io.github.resilience4j:resilience4j-retry:2.2.0'
+	implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
 	// OAuth 후 자체 JWT(access/refresh) 발급용
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'

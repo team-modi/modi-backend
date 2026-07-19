@@ -14,8 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.domain.record.Record;
 import modi.backend.domain.record.RecordEmotion;
 import modi.backend.domain.record.RecordErrorCode;
@@ -60,10 +60,8 @@ public class RemindFacade {
 		}
 		Record record = found.get(0);
 		int daysAgo = daysAgo(record.getCreatedAt());
-		String artist = exhibitionRepository.findById(record.getExhibitionId())
-				.map(Exhibition::getArtist)
-				.filter(a -> a != null && !a.isBlank())
-				.orElse(null);
+		List<String> artistNames = exhibitionRepository.findArtistNames(record.getExhibitionId());
+		String artist = artistNames.isEmpty() ? null : String.join(", ", artistNames);
 		List<String> emotions = record.getEmotions().stream().map(RecordEmotion::getEmotionCode).toList();
 		// "전시 속, 그 장면"(2단계)용 — 기록에 첨부한 첫 사진. 없으면 null(FE가 포스터로 폴백).
 		String sceneImageUrl = record.getMedia().stream()

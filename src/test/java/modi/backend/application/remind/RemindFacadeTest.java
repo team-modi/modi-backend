@@ -26,7 +26,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import modi.backend.config.RemindProperties;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.domain.record.AiStatus;
 import modi.backend.domain.record.ExhibitionSnapshot;
 import modi.backend.domain.record.Record;

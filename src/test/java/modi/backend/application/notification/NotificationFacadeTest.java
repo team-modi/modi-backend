@@ -22,8 +22,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import modi.backend.application.remind.RemindFacade;
 import modi.backend.application.remind.RemindResult;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.domain.notification.Notification;
 import modi.backend.domain.notification.NotificationRepository;
 import modi.backend.domain.notification.NotificationType;
@@ -222,8 +222,8 @@ class NotificationFacadeTest {
 	/** 테스트용 전시 — id는 영속 전 엔티티라 리플렉션으로 부여(엔티티에 setter를 만들지 않기 위함). */
 	private Exhibition exhibition(Long id, String title, LocalDate endDate) {
 		LocalDate startDate = LocalDate.now(AppTime.KST).minusDays(30);
-		Exhibition exhibition = Exhibition.createCustom(99L, title, "갤러리", startDate, endDate,
-				null, null, null, null, "https://img/" + id + "-poster.jpg", null);
+		Exhibition exhibition = Exhibition.createCustom(99L, title, 1L, startDate, endDate,
+				null, null, null, "https://img/" + id + "-poster.jpg");
 		ReflectionTestUtils.setField(exhibition, "id", id);
 		return exhibition;
 	}

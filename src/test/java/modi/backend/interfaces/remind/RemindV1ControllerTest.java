@@ -25,8 +25,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import modi.backend.TestcontainersConfiguration;
 import modi.backend.domain.auth.TokenProvider;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.domain.record.AiStatus;
 import modi.backend.domain.record.ExhibitionSnapshot;
 import modi.backend.domain.record.Record;
@@ -55,6 +55,15 @@ class RemindV1ControllerTest {
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
+	modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository exhibitionPlaceRepository;
+
+	@Autowired
+	modi.backend.domain.exhibition.catalog.ArtistRepository artistRepository;
+
+	@Autowired
+	modi.backend.infra.exhibition.catalog.ExhibitionArtistJpaRepository exhibitionArtistRepository;
+
+	@Autowired
 	UserRepository userRepository;
 
 	@Autowired
@@ -76,9 +85,19 @@ class RemindV1ControllerTest {
 		bearerUser1 = "Bearer " + tokenProvider.issue(u1, "kakao").accessToken();
 		bearerUser2 = "Bearer " + tokenProvider.issue(u2, "kakao").accessToken();
 
+		Long placeId = modi.backend.domain.exhibition.catalog.ExhibitionTestFactory.placeId(
+				exhibitionPlaceRepository, "동작아트갤러리", null);
 		Exhibition exhibition = exhibitionRepository.save(Exhibition.createCustom(
-				u1.getId(), "조용한 호숫가", "동작아트갤러리", LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30),
-				null, null, null, "김미경 외 10인", "http://poster/lake.jpg", null));
+				u1.getId(), "조용한 호숫가", placeId, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30),
+				null, null, "김미경 외 10인", "http://poster/lake.jpg"));
+		// 작가는 조인(N:M)에서 조립되므로 명시적으로 연결한다(리마인드 응답 artist 조립 경로 검증). resolve-or-create로 UK 충돌 방지.
+		String artistName = modi.backend.domain.exhibition.catalog.Artist.normalize("김미경 외 10인");
+		modi.backend.domain.exhibition.catalog.Artist artist = artistRepository.findByName(artistName)
+				.orElseGet(() -> artistRepository.save(modi.backend.domain.exhibition.catalog.Artist.create(artistName)));
+		if (!exhibitionArtistRepository.existsByExhibitionIdAndArtistId(exhibition.getId(), artist.getId())) {
+			exhibitionArtistRepository.save(
+					modi.backend.domain.exhibition.catalog.ExhibitionArtist.of(exhibition.getId(), artist.getId()));
+		}
 
 		Record record = Record.create(u1.getId(), exhibition.getId(),
 				new ExhibitionSnapshot("조용한 호숫가", "CUSTOM", "http://poster/lake.jpg", "동작아트갤러리",

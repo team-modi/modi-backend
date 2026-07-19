@@ -48,7 +48,7 @@ public class AuthFacade {
 	@Transactional
 	public AuthResult.Login login(AuthCriteria.Login criteria) {
 		Provider target = Provider.from(criteria.provider());
-		OAuthUserInfo info = client(target).fetchUserInfo(criteria.code(), criteria.redirectUri());
+		OAuthUserInfo info = client(target).fetchUserInfo(criteria.code(), criteria.redirectUri(), criteria.state());
 
 		// (provider, providerUserId)로 기존 연결 조회 → 있으면 그 User, 없으면 신규 가입
 		SocialAccount social = socialAccountRepository

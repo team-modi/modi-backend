@@ -1,5 +1,7 @@
 package modi.backend.application.admin;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -9,12 +11,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.catalog.ExhibitionDetail;
+import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
+import modi.backend.domain.exhibition.catalog.ExhibitionHistory;
+import modi.backend.infra.exhibition.catalog.ExhibitionHistoryJpaRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.FieldChange;
+import modi.backend.domain.exhibition.hours.PlaceKey;
+import modi.backend.support.error.CoreException;
 import modi.backend.support.text.HtmlTextExtractor;
 
 /**
  * 관리자 전시 유지보수(내부 운영용). 프론트 비노출 — 수집 파이프라인과 별개로 기존 데이터를 손보는 일회성/운영성 작업을 담는다.
+ * 이관 후 수정 대상이 세 엔티티로 나뉜다: title=코어, place=전시장(resolve-or-create 재지정), price·description=상세 satellite.
  */
 @Service
 @RequiredArgsConstructor
@@ -23,24 +35,89 @@ public class AdminExhibitionFacade {
 	private static final Logger log = LoggerFactory.getLogger(AdminExhibitionFacade.class);
 
 	private final ExhibitionRepository exhibitionRepository;
+	private final ExhibitionPlaceRepository exhibitionPlaceRepository;
+	/** 사람 수정 이력(감사) — 실제로 바뀐 필드를 old→new로 남긴다. */
+	private final ExhibitionHistoryJpaRepository exhibitionHistoryRepository;
 
 	/**
-	 * 저장된 CATALOG 전시 설명을 재파싱해 남아 있는 HTML/워드프레스 마크업을 벗긴다(최초 수집 파싱과 동일 규칙 {@link HtmlTextExtractor}).
-	 * 외부 재조회 없이 저장값만 정리하며, 실질 변경이 있는 행만 저장한다(멱등 — 이미 깨끗한 행은 건너뜀).
+	 * 저장된 전시 설명을 재파싱해 남아 있는 HTML/워드프레스 마크업을 벗긴다. 설명은 상세 satellite({@code exhibition_detail})로
+	 * 이동했으므로 그 행을 대상으로 한다. 외부 재조회 없이 저장값만 정리하며, 실질 변경이 있는 행만 저장한다(멱등).
 	 */
 	@Transactional
 	public AdminExhibitionResult.DescriptionReparse reparseDescriptions() {
-		List<Exhibition> rows = exhibitionRepository.findCatalogWithDescription();
+		List<ExhibitionDetail> rows = exhibitionRepository.findDetailsWithDescription();
 		int updated = 0;
-		for (Exhibition exhibition : rows) {
-			String cleaned = HtmlTextExtractor.toPlainText(exhibition.getDescription());
-			if (!Objects.equals(cleaned, exhibition.getDescription())) {
-				exhibition.reparseDescription(cleaned);
-				exhibitionRepository.save(exhibition);
+		for (ExhibitionDetail detail : rows) {
+			String cleaned = HtmlTextExtractor.toPlainText(detail.getDescription());
+			if (!Objects.equals(cleaned, detail.getDescription())) {
+				detail.reparseDescription(cleaned);
+				exhibitionRepository.saveDetail(detail);
 				updated++;
 			}
 		}
 		log.info("전시 설명 재파싱: 검사 {}건 / 갱신 {}건", rows.size(), updated);
 		return new AdminExhibitionResult.DescriptionReparse(rows.size(), updated);
+	}
+
+	/**
+	 * 전시 필드를 수정하고, 실제로 바뀐 필드마다 이력을 남긴다(감사). 각 엔티티가 자기 변경을 판단하고(무엇이 바뀌었나 = 도메인
+	 * 규칙), Facade는 세 엔티티에 걸친 변경을 한 {@code editedAt}으로 묶어 이력에 적재하는 조율만 한다.
+	 * 값이 그대로면 변경 목록이 비어 이력이 생기지 않는다(멱등).
+	 */
+	@Transactional
+	public AdminExhibitionResult.Edited editExhibition(Long exhibitionId, String title, String place, String price,
+			String description) {
+		Exhibition exhibition = exhibitionRepository.findById(exhibitionId)
+				.orElseThrow(() -> new CoreException(ExhibitionErrorCode.EXHIBITION_NOT_FOUND));
+		List<FieldChange> changes = new ArrayList<>();
+
+		exhibition.applyTitleEdit(title).ifPresent(changes::add);
+		applyPlaceEdit(exhibition, place).ifPresent(changes::add);
+		changes.addAll(applyDetailEdit(exhibitionId, price, description));
+
+		if (changes.isEmpty()) {
+			return new AdminExhibitionResult.Edited(exhibitionId, 0);
+		}
+		exhibitionRepository.save(exhibition);
+		LocalDateTime editedAt = LocalDateTime.now();
+		for (FieldChange change : changes) {
+			exhibitionHistoryRepository.save(ExhibitionHistory.of(exhibitionId, change, editedAt));
+		}
+		log.info("전시 수정: id={} 변경필드 {}개", exhibitionId, changes.size());
+		return new AdminExhibitionResult.Edited(exhibitionId, changes.size());
+	}
+
+	/** 장소명 수정 — 새 이름으로 전시장을 resolve-or-create하고 재지정한다(자연키가 이름이라 이름 변경 = 다른 전시장). */
+	private java.util.Optional<FieldChange> applyPlaceEdit(Exhibition exhibition, String place) {
+		if (place == null) {
+			return java.util.Optional.empty();
+		}
+		ExhibitionPlace current = exhibitionPlaceRepository.findById(exhibition.getExhibitionPlaceId()).orElse(null);
+		String currentName = current == null ? null : current.getName();
+		if (Objects.equals(currentName, PlaceKey.of(place))) {
+			return java.util.Optional.empty();
+		}
+		ExhibitionPlace resolved = exhibitionPlaceRepository.findByPlaceKey(PlaceKey.of(place))
+				.orElseGet(() -> exhibitionPlaceRepository.save(
+						ExhibitionPlace.createFromList(place, current == null ? null : current.getRegion(),
+								current == null ? null : current.getSigungu(),
+								current == null ? null : current.getGpsX(),
+								current == null ? null : current.getGpsY())));
+		exhibition.reassignPlace(resolved.getId());
+		return java.util.Optional.of(new FieldChange("place", currentName, resolved.getName()));
+	}
+
+	/** price·description 수정 — 상세 satellite에 반영. 상세행이 없으면 만든다(수정으로 상세가 생김). */
+	private List<FieldChange> applyDetailEdit(Long exhibitionId, String price, String description) {
+		if (price == null && description == null) {
+			return List.of();
+		}
+		ExhibitionDetail detail = exhibitionRepository.findDetail(exhibitionId)
+				.orElseGet(() -> ExhibitionDetail.markChecked(exhibitionId, LocalDateTime.now()));
+		List<FieldChange> changes = detail.applyAdminEdit(price, description);
+		if (!changes.isEmpty()) {
+			exhibitionRepository.saveDetail(detail);
+		}
+		return changes;
 	}
 }

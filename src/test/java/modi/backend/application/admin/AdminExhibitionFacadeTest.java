@@ -7,30 +7,34 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionRegion;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionDetail;
+import modi.backend.infra.exhibition.catalog.ExhibitionDetailJpaRepository;
+import modi.backend.infra.exhibition.catalog.ExhibitionHistoryJpaRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 
 /**
- * AdminExhibitionFacade.reparseDescriptions 단위 검증 — 마크업이 남은 설명만 평문으로 정리·저장하고 이미 깨끗한 행은 건너뛴다(멱등).
+ * AdminExhibitionFacade.reparseDescriptions 단위 검증 — 설명은 상세 satellite(exhibition_detail)로 이동했으므로 그 행을 대상으로,
+ * 마크업이 남은 설명만 평문으로 정리·저장하고 이미 깨끗한 행은 건너뛴다(멱등).
  */
 class AdminExhibitionFacadeTest {
 
 	@Test
-	@DisplayName("reparseDescriptions — 태그가 남은 행만 정리·저장하고 깨끗한 행은 건드리지 않는다")
+	@DisplayName("reparseDescriptions — 태그가 남은 상세만 정리·저장하고 깨끗한 상세는 건드리지 않는다")
 	void reparse_마크업행만_갱신() {
-		ExhibitionRepository repo = mock(ExhibitionRepository.class);
-		Exhibition markup = catalog("<!-- wp:paragraph --><p style=\"line-height:1.8;\"><span>배민정 작가는 AI에 입력한다.</span></p>");
-		Exhibition already = catalog("이미 깨끗한 설명이에요.");
-		given(repo.findCatalogWithDescription()).willReturn(List.of(markup, already));
-		AdminExhibitionFacade facade = new AdminExhibitionFacade(repo);
+		ExhibitionRepository exhibitionRepository = mock(ExhibitionRepository.class);
+		ExhibitionDetail markup = detail(1L,
+				"<!-- wp:paragraph --><p style=\"line-height:1.8;\"><span>배민정 작가는 AI에 입력한다.</span></p>");
+		ExhibitionDetail already = detail(2L, "이미 깨끗한 설명이에요.");
+		given(exhibitionRepository.findDetailsWithDescription()).willReturn(List.of(markup, already));
+		AdminExhibitionFacade facade = new AdminExhibitionFacade(exhibitionRepository,
+				mock(ExhibitionPlaceRepository.class), mock(ExhibitionHistoryJpaRepository.class));
 
 		AdminExhibitionResult.DescriptionReparse result = facade.reparseDescriptions();
 
@@ -38,14 +42,11 @@ class AdminExhibitionFacadeTest {
 		assertThat(result.updated()).isEqualTo(1);
 		assertThat(markup.getDescription()).isEqualTo("배민정 작가는 AI에 입력한다.");
 		assertThat(already.getDescription()).isEqualTo("이미 깨끗한 설명이에요.");
-		verify(repo, times(1)).save(markup);
-		verify(repo, never()).save(already);
+		verify(exhibitionRepository, times(1)).saveDetail(markup);
+		verify(exhibitionRepository, never()).saveDetail(already);
 	}
 
-	private Exhibition catalog(String description) {
-		LocalDate today = LocalDate.now();
-		return Exhibition.createCatalog("CAT-" + description.hashCode(), "제목", "장소", today.minusDays(1),
-				today.plusDays(10), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, description, null,
-				null, null, "기관", null, null, null, "전시", "서울");
+	private ExhibitionDetail detail(Long exhibitionId, String description) {
+		return ExhibitionDetail.create(exhibitionId, null, description, null, LocalDateTime.now());
 	}
 }

@@ -60,14 +60,14 @@ class AuthFacadeTest {
 	@Test
 	@DisplayName("login: 기존 연결 없으면 User+SocialAccount 신규 생성")
 	void login_신규가입() {
-		given(kakaoClient.fetchUserInfo(anyString(), anyString()))
+		given(kakaoClient.fetchUserInfo(anyString(), anyString(), any()))
 				.willReturn(new OAuthUserInfo("sub-1", "a@b.com", "홍길동", "진", AgeGroup.TWENTIES, 1993));
 		given(socialAccountRepository.findByProviderAndProviderUserId("kakao", "sub-1"))
 				.willReturn(Optional.empty());
 		given(userRepository.save(any(User.class))).willAnswer(inv -> inv.getArgument(0));
 		given(socialAccountRepository.save(any(SocialAccount.class))).willAnswer(inv -> inv.getArgument(0));
 
-		AuthResult.Login result = authFacade.login(new AuthCriteria.Login("kakao", "code", "https://app/cb"));
+		AuthResult.Login result = authFacade.login(new AuthCriteria.Login("kakao", "code", "https://app/cb", "state"));
 
 		assertThat(result.provider()).isEqualTo("kakao");
 		assertThat(result.email()).isEqualTo("a@b.com");
@@ -79,7 +79,7 @@ class AuthFacadeTest {
 	@Test
 	@DisplayName("login: 기존 연결 있으면 그 User로 로그인, 신규 가입 없음")
 	void login_기존연결() {
-		given(kakaoClient.fetchUserInfo(anyString(), anyString()))
+		given(kakaoClient.fetchUserInfo(anyString(), anyString(), any()))
 				.willReturn(new OAuthUserInfo("sub-1", "new@b.com", "홍길동", "진", AgeGroup.UNSPECIFIED, null));
 		SocialAccount existing = SocialAccount.create(5L, "kakao", "sub-1", "old@b.com");
 		given(socialAccountRepository.findByProviderAndProviderUserId("kakao", "sub-1"))
@@ -87,7 +87,7 @@ class AuthFacadeTest {
 		given(socialAccountRepository.save(existing)).willReturn(existing);
 		given(userRepository.findById(5L)).willReturn(Optional.of(User.createFromSocial("진")));
 
-		AuthResult.Login result = authFacade.login(new AuthCriteria.Login("kakao", "code", "https://app/cb"));
+		AuthResult.Login result = authFacade.login(new AuthCriteria.Login("kakao", "code", "https://app/cb", "state"));
 
 		assertThat(result.provider()).isEqualTo("kakao");
 		assertThat(existing.getEmail()).isEqualTo("new@b.com"); // 이메일 최신화
@@ -97,7 +97,7 @@ class AuthFacadeTest {
 	@Test
 	@DisplayName("login: 미지원 provider면 UNSUPPORTED_PROVIDER")
 	void login_미지원provider() {
-		assertThatThrownBy(() -> authFacade.login(new AuthCriteria.Login("naver", "code", "https://app/cb")))
+		assertThatThrownBy(() -> authFacade.login(new AuthCriteria.Login("facebook", "code", "https://app/cb", "state")))
 				.isInstanceOf(CoreException.class)
 				.extracting(e -> ((CoreException) e).errorCode())
 				.isEqualTo(AuthErrorCode.UNSUPPORTED_PROVIDER);

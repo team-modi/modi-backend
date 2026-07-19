@@ -31,10 +31,10 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.jayway.jsonpath.JsonPath;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionRegion;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.domain.venue.Venue;
 import modi.backend.domain.venue.VenueRepository;
 import modi.backend.infra.auth.KakaoApi;
@@ -58,6 +58,12 @@ class BookmarkIntegrationTest {
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
+	modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository exhibitionPlaceRepository;
+
+	@Autowired
+	modi.backend.infra.exhibition.catalog.ExhibitionDetailJpaRepository exhibitionDetailRepository;
+
+	@Autowired
 	VenueRepository venueRepository;
 
 	@MockitoBean
@@ -78,9 +84,13 @@ class BookmarkIntegrationTest {
 
 	/** 표본 CATALOG 적재(기간·조회수 제어). */
 	private Long saveCatalog(String externalId, String title, LocalDate startDate, LocalDate endDate, int views) {
-		Exhibition e = exhibitionRepository.save(Exhibition.createCatalog(externalId, title, "표본 장소", startDate,
-				endDate, ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, "https://poster/" + externalId + ".jpg",
-				null, null, "무료", null, "기관", null, null, null, "전시", null));
+		// 전시장은 공유(N:1) — 배너·목록의 place가 "표본 장소"로 나오게 resolve-or-create로 하나를 재사용한다.
+		Long placeId = modi.backend.domain.exhibition.catalog.ExhibitionTestFactory.placeId(
+				exhibitionPlaceRepository, "표본 장소", ExhibitionRegion.SEOUL);
+		Exhibition e = exhibitionRepository.save(Exhibition.createCatalog(externalId, title, placeId, startDate,
+				endDate, ExhibitionCategory.PAINTING, "https://poster/" + externalId + ".jpg", null, "기관"));
+		exhibitionDetailRepository.save(modi.backend.domain.exhibition.catalog.ExhibitionDetail.create(
+				e.getId(), "무료", null, null, java.time.LocalDateTime.now()));
 		if (views > 0) {
 			for (int i = 0; i < views; i++) {
 				e.increaseView();

@@ -45,7 +45,8 @@ public class AuthV1Controller implements AuthV1ApiSpec {
 		if (!oauthProperties.isAllowedRedirectUri(request.redirectUri())) {
 			throw new CoreException(AuthErrorCode.INVALID_REDIRECT_URI, "허용 외 redirectUri: " + request.redirectUri());
 		}
-		AuthResult.Login result = authFacade.login(new AuthCriteria.Login(provider, request.code(), request.redirectUri()));
+		AuthResult.Login result = authFacade.login(
+				new AuthCriteria.Login(provider, request.code(), request.redirectUri(), request.state()));
 		setAuthCookies(response, result);
 		return ResponseEntity.ok(ApiResponse.success(AuthDto.TokenResponse.from(result)));
 	}

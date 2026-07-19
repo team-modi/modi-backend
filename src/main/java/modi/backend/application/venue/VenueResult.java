@@ -2,7 +2,7 @@ package modi.backend.application.venue;
 
 import java.util.List;
 
-import modi.backend.domain.exhibition.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import modi.backend.domain.venue.Venue;
 
 /**

@@ -33,15 +33,21 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.jayway.jsonpath.JsonPath;
 
 import modi.backend.TestcontainersConfiguration;
+import modi.backend.ingestion.application.CatalogSynchronizer;
+import modi.backend.ingestion.application.enricher.GenreEnricher;
+import modi.backend.ingestion.application.enricher.DraftPromoter;
+import modi.backend.ingestion.application.enricher.DetailEnricher;
 import modi.backend.application.exhibition.ExhibitionFacade;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
-import modi.backend.domain.exhibition.CatalogDetailData;
-import modi.backend.domain.exhibition.CatalogExhibitionData;
-import modi.backend.domain.exhibition.Exhibition;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
-import modi.backend.domain.exhibition.ExhibitionCategory;
-import modi.backend.domain.exhibition.ExhibitionRegion;
-import modi.backend.domain.exhibition.ExhibitionRepository;
+import modi.backend.domain.exhibition.catalog.CatalogDetailData;
+import modi.backend.ingestion.domain.data.CatalogExhibitionData;
+import modi.backend.ingestion.domain.data.DetailFetch;
+import modi.backend.ingestion.domain.data.CatalogListData;
+import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.ingestion.domain.port.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.infra.auth.KakaoApi;
 
 /**
@@ -67,7 +73,25 @@ class ExhibitionIntegrationTest {
 	ExhibitionFacade exhibitionFacade;
 
 	@Autowired
+	CatalogSynchronizer catalogSynchronizer;
+
+	@Autowired
+	DetailEnricher detailEnricher;
+
+	@Autowired
+	GenreEnricher genreEnricher;
+
+	@Autowired
+	DraftPromoter draftPromoter;
+
+	@Autowired
 	ExhibitionRepository exhibitionRepository;
+
+	@Autowired
+	modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository exhibitionPlaceRepository;
+
+	@Autowired
+	modi.backend.infra.exhibition.catalog.ExhibitionDetailJpaRepository exhibitionDetailRepository;
 
 	@Autowired
 	ExhibitionBookmarkRepository exhibitionBookmarkRepository;
@@ -82,31 +106,51 @@ class ExhibitionIntegrationTest {
 	@BeforeEach
 	void seedCatalog() {
 		LocalDate today = LocalDate.now();
-		given(catalogClient.fetchAll()).willReturn(List.of(
+		given(catalogClient.fetchAll()).willReturn(listData(List.of(
 				new CatalogExhibitionData("CAT-MONET", MONET, "예술의전당", today.minusDays(10), today.plusDays(30),
 						ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, "https://poster/monet.jpg",
 						"https://culture.go.kr/monet", "한국문화정보원", 126.980781, 37.578608,
-						"종로구", "전시", "서울"),
+						"종로구", "전시", "서울", null),
 				new CatalogExhibitionData("CAT-PICASSO", PICASSO, "시립미술관", today.minusDays(100),
 						today.minusDays(50), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, null,
 						"기관", null, null,
-						null, "전시", "서울"),
+						null, "전시", "서울", null),
 				new CatalogExhibitionData("CAT-PHOTO", PHOTO_SHOW, "성수 갤러리", today.minusDays(5),
 						today.plusDays(15), ExhibitionRegion.SEOUL, ExhibitionCategory.PHOTO, null, null,
 						"기관", null, null,
-						null, "사진", "서울")));
+						null, "사진", "서울", null))));
 		// syncCatalog가 적재 시점에 상세2까지 함께 채운다 — CAT-MONET만 상세를 준다(나머지는 상세 없음 → 목록 필드만).
-		given(catalogClient.fetchDetail("CAT-MONET")).willReturn(Optional.of(
+		given(catalogClient.fetchDetailSnapshot("CAT-MONET")).willReturn(Optional.of(new DetailFetch(
 				new CatalogDetailData("성인 20,000원", "모네 특별전 설명", "https://detail/monet", "02-1234-5678",
-						"https://img/monet.jpg", "https://place/monet", "서울 어딘가", "PLACE-SEQ-1")));
-		exhibitionFacade.syncCatalog();
+						"https://img/monet.jpg", "https://place/monet", "서울 어딘가", "PLACE-SEQ-1"), null)));
+		catalogSynchronizer.syncCatalog();
+		detailEnricher.enrichDetails(); // 스테이징 → 상세 해소(ADR-10 — 전시는 승격 후에만 나타난다)
+		genreEnricher.enrichGenres();
+		draftPromoter.promoteReady(); // 승격 소비(ADR-12) // 장르 분류(테스트 기본 mock) + 승격
+	}
+
+	/**
+	 * 목록 수집 결과 래퍼 — 포트가 이제 "원천이 말한 총 건수·절단 여부"까지 돌려준다(이관 5단계, ingestion_run이 채울 값).
+	 * 이 테스트들의 관심사가 아니라 아이템만 담고 totalCount는 수집 수와 같게 둔다(= 절단 없음).
+	 */
+	private static CatalogListData listData(java.util.List<CatalogExhibitionData> items) {
+		return new CatalogListData(items, items.size(), false);
 	}
 
 	/** 표본 CATALOG를 리포지토리로 직접 적재(가격·좌표·기간 제어). 기본 startDate는 과거로 둬 최신순 상단을 침범하지 않게 한다. */
 	private Long saveCatalog(String externalId, String title, LocalDate startDate, LocalDate endDate,
 			ExhibitionRegion region, ExhibitionCategory category, String price, Double gpsX, Double gpsY) {
-		return exhibitionRepository.save(Exhibition.createCatalog(externalId, title, "표본 장소", startDate, endDate,
-				region, category, null, null, null, price, null, "기관", gpsX, gpsY, null, "전시", null)).getId();
+		// 전시장은 전시마다 고유(region·gps 필터·거리순이 전시별로 갈리게) — 자연키 이름을 externalId로 유일하게.
+		Long placeId = exhibitionPlaceRepository.save(
+				modi.backend.domain.exhibition.catalog.ExhibitionPlace.createFromList(title + "@" + externalId, region, null,
+						gpsX, gpsY)).getId();
+		Exhibition e = exhibitionRepository.save(
+				Exhibition.createCatalog(externalId, title, placeId, startDate, endDate, category, null, null, "기관"));
+		if (price != null && !price.isBlank()) {
+			exhibitionDetailRepository.save(modi.backend.domain.exhibition.catalog.ExhibitionDetail.create(
+					e.getId(), price, null, null, java.time.LocalDateTime.now()));
+		}
+		return e.getId();
 	}
 
 	private String loginAndGetAccessToken(long providerUserId, String nickname) throws Exception {
@@ -407,7 +451,8 @@ class ExhibitionIntegrationTest {
 				.andExpect(jsonPath("$.data.artists").isArray())
 				.andExpect(jsonPath("$.data.artists").isEmpty())
 				.andExpect(jsonPath("$.data.keywords").isArray())
-				.andExpect(jsonPath("$.data.keywords").isEmpty())
+				// 승격 게이트에 장르가 필수라(ADR-10) CATALOG는 이제 항상 분류돼 나타난다(테스트 기본 mock — 결정적).
+				.andExpect(jsonPath("$.data.keywords").isNotEmpty())
 				// CATALOG의 artistSummary는 null, 비로그인이라 bookmarked·recorded false
 				.andExpect(jsonPath("$.data.artistSummary").doesNotExist())
 				.andExpect(jsonPath("$.data.free").isBoolean())

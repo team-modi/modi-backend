@@ -10,11 +10,11 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.ExhibitionCatalogClient;
-import modi.backend.domain.exhibition.OpeningHoursFormatter;
-import modi.backend.domain.exhibition.PlaceHoursData;
-import modi.backend.domain.exhibition.PlaceHoursProvider;
-import modi.backend.infra.place.MockPlaceHoursProvider;
+import modi.backend.ingestion.domain.port.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.hours.OpeningHoursFormatter;
+import modi.backend.domain.exhibition.hours.PlaceHoursData;
+import modi.backend.ingestion.domain.port.PlaceHoursProvider;
+import modi.backend.ingestion.infra.mock.MockPlaceHoursProvider;
 
 /**
  * 게이팅 기본값 검증 — 설정 미주입(로컬·CI·develop)에서 주 조회기가 {@link MockPlaceHoursProvider}로 선택되어 유료 실호출이 0임을 보장한다.
@@ -38,8 +38,11 @@ class PlaceHoursProviderSelectionTest {
 	void 기본은_mock() {
 		assertThat(placeHoursProvider).isInstanceOf(MockPlaceHoursProvider.class);
 
-		PlaceHoursData data = placeHoursProvider.fetch("부산현대미술관", "부산광역시 사하구 낙동남로 1191").orElseThrow();
-		assertThat(data.source()).isEqualTo("MOCK");
+		// 벤더 표기는 결과가 아니라 포트가 밝힌다 — 미발견·실패 때도 "누가"를 남겨야 하기 때문이다(이관 4단계).
+		assertThat(placeHoursProvider.vendor())
+				.isEqualTo(modi.backend.domain.exhibition.hours.PlaceHoursVendor.MOCK);
+
+		PlaceHoursData data = placeHoursProvider.fetch("부산현대미술관", "부산광역시 사하구 낙동남로 1191").orElseThrow().data();
 		assertThat(openingHoursFormatter.format(data.weeklyHours())).isEqualTo("매일 10:00 ~ 18:00\n월 휴무");
 	}
 }

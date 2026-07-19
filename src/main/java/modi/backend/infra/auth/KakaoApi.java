@@ -10,7 +10,7 @@ import org.springframework.web.service.annotation.GetExchange;
 import org.springframework.web.service.annotation.PostExchange;
 
 /**
- * 카카오 REST 엔드포인트 선언형 클라이언트(HTTP Interface, WebClient 백엔드).
+ * 카카오 REST 엔드포인트 선언형 클라이언트(HTTP Interface, RestClient 백엔드).
  */
 public interface KakaoApi {
 

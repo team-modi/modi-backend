@@ -93,6 +93,12 @@ ApiResponse.failValidation(code, message, fieldErrors)
 - `infra/{d}/XxxJpaRepository` — Spring Data JPA
 - `infra/{d}/XxxRepositoryImpl` — @Repository 어댑터. JPAQueryFactory 주입해 QueryDSL 직접 작성.
 - soft-delete: 조회는 살아있는 행만 — 파생쿼리에 `...AndDeletedAtIsNull`(포트 메서드명은 그대로, Impl만 필터 호출).
+- **전시 예외(애그리거트 루트)**: 전시·전시장 부속(상세·장르·작가조인·영업시간)은 개별 리포 ❌ — 쓰기는 `ExhibitionRepository`/`ExhibitionPlaceRepository`의 `applyXxx`(루트 행 미변경 부분 갱신) 경유, 서빙 목록/탐색 조회는 `ExhibitionQueryRepository`. 부속 JpaRepo는 Impl 내부 구현 세부라 application 주입 ❌. 기록성 테이블(벤더 Snapshot·History)은 포트 없이 JpaRepository 직사용(단 `ExternalApiCallLogRepository`는 REQUIRES_NEW 감사 어댑터라 존치).
+- **전시 수집 = `modi.backend.ingestion` 수직 슬라이스**(자체 {domain,application,infra,interfaces,config} 4계층 미러 — ADR-12). 수집·승격·아웃박스·벤더 스냅샷·릴레이·스케줄러가 전부 이 안이다("싱크 건드릴 땐 이 폴더만"). 내부 구조는 기존 스타일 강제 없음(사용자 결정 — catalog 스타일로 "교정"하지 마라).
+- **ingestion→코어 접근은 `application/exhibition/contract/` 인터페이스만**(ExhibitionRegistrar=승격 등록·ExhibitionBackfill=레거시 뒤채움·PlaceHoursBackfill=영업시간 정준) — 코어 리포 직주입 ❌. 계약 어휘는 코어 소유(원시값·코어 enum — ingestion record가 경계 넘기 ❌). 코어→ingestion 참조 ❌(javadoc @link 포함).
+- **승격 = EXHIBITION_READY 원자 발행 + Registrar 멱등 소비**(ADR-12): 마지막 스텝 tx는 코어를 직접 쓰지 않고 메시지만 원자 기록, `DraftPromoter`가 드레인. 인메모리 사가(한 메서드 완주) ❌ — 스텝별 아웃박스 메시지로 전진. draft 흐름 "읽기"는 `DraftEnrichmentService`(스텝 3박자)·`DraftStep` 파생 enum. 장르는 **draft당 개별 분류**(classifyAll 배치 삭제 — 재도입 ❌). 장르 분류 포트(GenreClassifier)·영업시간 어휘는 코어 소유(CUSTOM 등록도 사용), 구현은 ingestion infra.
+- **벤더 스냅샷 = `~Snapshot`**(CultureListSnapshot·CultureDetailSnapshot·GooglePlaceSnapshot — ADR-13): 응답 구조 필드로 적재(payload 문자열 ❌), 값은 원문 verbatim(타입 정제·평문 추출은 도메인 몫). 깊은 중첩(구글 영업시간)만 구조 보존 JSON 컬럼.
+- **infra 외부 어댑터 경로 규칙 = `<슬라이스/도메인 스코프>/<기관>`**(예: ingestion/infra/{culture,google,gemini,claude,mock,failover}, infra/ai/{claude,gemini}=record·remind 공유) — infra/genre·infra/place 같은 스코프 없는 기능 패키지 재생성 ❌.
 
 ## Entity
 - 생성: 정적 팩토리 `Xxx.create(...)`

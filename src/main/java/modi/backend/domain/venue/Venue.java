@@ -8,7 +8,7 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import modi.backend.domain.exhibition.ExhibitionRegion;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import modi.backend.support.entity.BaseEntity;
 
 /**
