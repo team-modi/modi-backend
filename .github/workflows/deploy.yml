@@ -51,6 +51,10 @@ jobs:
           # record-AI 감상문/질문 AI = Claude(Anthropic, 유료). 아래 .env의 AI_PROVIDER=claude와 짝을 이룬다.
           #   무료 한도 소진으로 유료 전환(장르 분류는 계속 무료 Gemini). 개인 .env 의존 금지 → 이 시크릿에서만 주입.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # 장르 분류 2차 공급자(Claude Haiku) 전용 키. 감상문용 ANTHROPIC_API_KEY와 버킷을 분리해
+          #   장르 백필이 감상문 한도를 태우지 않게 한다(app.exhibition.genre.claude.api-key).
+          #   미주입이면 1차 Gemini 실패 시 폴백이 없어 아웃박스가 RETRYABLE로 쌓인다.
+          GENRE_CLAUDE_API_KEY: ${{ secrets.GENRE_CLAUDE_API_KEY }}
           # Grafana Cloud(관측). GC_API_KEY가 있으면 obs 프로파일이 켜진다(메트릭). 미설정이면 앱만 배포.
           GC_PROM_URL: ${{ secrets.GC_PROM_URL }}
           GC_PROM_USER: ${{ secrets.GC_PROM_USER }}
@@ -76,7 +80,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           command_timeout: 20m
           # GitHub Actions secrets를 원격 SSH 세션 환경변수로 전달
-          envs: KAKAO_CLIENT_SECRET,NAVER_CLIENT_ID,NAVER_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY,GOOGLE_MAPS_API_KEY,ANTHROPIC_API_KEY,GC_PROM_URL,GC_PROM_USER,GC_API_KEY,GC_LOKI_URL,GC_LOKI_USER,CF_TUNNEL_TOKEN,MB_SITE_URL,CF_QUICK_TUNNEL,ENABLE_METABASE,ADMIN_EMAILS,ADMIN_PASSWORD
+          envs: KAKAO_CLIENT_SECRET,NAVER_CLIENT_ID,NAVER_CLIENT_SECRET,JWT_SECRET,GEMINI_API_KEY,GOOGLE_MAPS_API_KEY,ANTHROPIC_API_KEY,GENRE_CLAUDE_API_KEY,GC_PROM_URL,GC_PROM_USER,GC_API_KEY,GC_LOKI_URL,GC_LOKI_USER,CF_TUNNEL_TOKEN,MB_SITE_URL,CF_QUICK_TUNNEL,ENABLE_METABASE,ADMIN_EMAILS,ADMIN_PASSWORD
           script: |
             set -e
             cd ~/modi-backend
@@ -107,6 +111,9 @@ jobs:
             AI_MODEL=claude-sonnet-5
             ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
             AI_API_KEY=${ANTHROPIC_API_KEY}
+            # 장르 분류 폴백 체인 2차 = Claude Haiku(app.exhibition.genre.claude). 감상문 키와 분리된 버킷.
+            #   모델은 application.yaml 기본값(claude-haiku-4-5-20251001) — 교체 시 GENRE_CLAUDE_MODEL 추가.
+            GENRE_CLAUDE_API_KEY=${GENRE_CLAUDE_API_KEY}
             # 관리자 콘솔 로그인(이메일 화이트리스트 + 공용 비번). 시크릿에서만 주입(레포 PUBLIC).
             ADMIN_EMAILS=${ADMIN_EMAILS}
             ADMIN_PASSWORD=${ADMIN_PASSWORD}
