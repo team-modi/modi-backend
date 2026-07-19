@@ -59,18 +59,18 @@ public class AuthFacade {
 				})
 				.orElse(null);
 
-		User user;
-		if (social != null) {
-			Long userId = social.getUserId();
-			user = userRepository.findById(userId)
-					.orElseThrow(() -> new CoreException(AuthErrorCode.SOCIAL_ACCOUNT_LINK_BROKEN,
-							"연결된 사용자 없음: " + userId));
-		} else {
+		// 연결이 있어도 그 사용자가 탈퇴(soft-delete)했으면 살아있는 행이 없다 → "가입 이력 없음"과 같게 본다.
+		// (예전엔 여기서 SOCIAL_ACCOUNT_LINK_BROKEN을 던져 탈퇴자가 영구히 재가입할 수 없었다)
+		User user = social == null ? null : userRepository.findById(social.getUserId()).orElse(null);
+
+		if (user == null) {
 			// 신규 가입: 소셜 동의항목의 이름·연령대·출생연도까지 반영(재로그인 시엔 사용자 편집을 덮지 않도록 미반영).
 			user = userRepository.save(
 					User.createFromSocial(info.nickname(), info.name(), info.ageGroup(), info.birthYear()));
-			social = socialAccountRepository.save(
-					SocialAccount.create(user.getId(), target.code(), info.sub(), info.email()));
+			// 탈퇴 후 재가입이면 유니크 제약(provider, providerUserId) 때문에 새 행을 못 넣는다 → 잔존 연결을 새 사용자로 이관.
+			social = socialAccountRepository.save(social == null
+					? SocialAccount.create(user.getId(), target.code(), info.sub(), info.email())
+					: relinked(social, user.getId()));
 		}
 
 		AuthTokens tokens = tokenProvider.issue(user, target.code());
@@ -101,16 +101,17 @@ public class AuthFacade {
 	@Transactional
 	public AuthResult.Login guestPhoneLogin(String rawPhoneNumber) {
 		String phone = PhoneNumber.of(rawPhoneNumber).value();
-		User user = socialAccountRepository.findByProviderAndProviderUserId(PHONE_PROVIDER, phone)
-				.map(social -> userRepository.findById(social.getUserId())
-						.orElseThrow(() -> new CoreException(AuthErrorCode.SOCIAL_ACCOUNT_LINK_BROKEN,
-								"연결된 사용자 없음: " + social.getUserId())))
-				.orElseGet(() -> {
-					User created = userRepository.save(User.createGuest());
-					socialAccountRepository.save(
-							SocialAccount.create(created.getId(), PHONE_PROVIDER, phone, null));
-					return created;
-				});
+		SocialAccount social = socialAccountRepository
+				.findByProviderAndProviderUserId(PHONE_PROVIDER, phone).orElse(null);
+		// 소셜 로그인과 같은 규칙: 연결이 있어도 그 사용자가 탈퇴했으면 새 게스트로 재가입시킨다.
+		User user = social == null ? null : userRepository.findById(social.getUserId()).orElse(null);
+
+		if (user == null) {
+			user = userRepository.save(User.createGuest());
+			socialAccountRepository.save(social == null
+					? SocialAccount.create(user.getId(), PHONE_PROVIDER, phone, null)
+					: relinked(social, user.getId()));
+		}
 		AuthTokens tokens = tokenProvider.issue(user, GUEST_PROVIDER);
 		refreshTokenStore.save(user.getId(), tokens.refreshToken());
 		return AuthResult.Login.of(user, GUEST_PROVIDER, null, tokens);
@@ -158,6 +159,12 @@ public class AuthFacade {
 
 	public long refreshTtlSeconds() {
 		return tokenProvider.refreshTtlSeconds();
+	}
+
+	/** 탈퇴자의 잔존 연결을 새 사용자로 이관한다(상태 변경은 Entity 메서드에 위임). */
+	private static SocialAccount relinked(SocialAccount social, Long newUserId) {
+		social.relinkTo(newUserId);
+		return social;
 	}
 
 	private OAuthClient client(Provider provider) {

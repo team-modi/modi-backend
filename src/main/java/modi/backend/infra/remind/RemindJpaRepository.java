@@ -56,4 +56,7 @@ public interface RemindJpaRepository extends JpaRepository<Remind, Long> {
 	/** 유저ID들의 리마인드 수(관리자 목록 벌크). Object[]{userId, count}. */
 	@Query("select rm.userId, count(rm) from Remind rm where rm.userId in :userIds and rm.deletedAt is null group by rm.userId")
 	List<Object[]> countByUserIds(@Param("userIds") List<Long> userIds);
+
+	/** 탈퇴 cascade용: 사용자의 살아있는 리마인드 전부. */
+	List<Remind> findByUserIdAndDeletedAtIsNull(Long userId);
 }

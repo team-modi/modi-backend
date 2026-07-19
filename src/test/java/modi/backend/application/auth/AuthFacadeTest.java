@@ -141,4 +141,57 @@ class AuthFacadeTest {
 				.isInstanceOf(CoreException.class);
 		verify(userRepository, never()).save(any(User.class));
 	}
+
+	/*
+	 * 탈퇴(soft-delete) 후 재로그인.
+	 *
+	 * 탈퇴는 User만 soft-delete하고 SocialAccount 연결은 그대로 남긴다. 그래서 같은 소셜로 다시 로그인하면
+	 * 연결은 살아 있는 채로 조회되는데(userRepository.findById는 살아있는 행만 반환) 사용자가 없어
+	 * SOCIAL_ACCOUNT_LINK_BROKEN(500)으로 영구히 재가입이 막혔다(2026-07-19 운영 리포트).
+	 *
+	 * 기대 동작: 탈퇴한 계정의 잔존 연결은 "가입 이력 없음"과 같게 보고 새 계정으로 재가입시킨다.
+	 * (탈퇴한 기존 사용자의 데이터는 되살리지 않는다 — 탈퇴 의미 보존)
+	 */
+
+	@Test
+	@DisplayName("login: 탈퇴한 사용자가 같은 소셜로 다시 로그인하면 새 계정으로 재가입된다")
+	void login_탈퇴후_재로그인_새계정으로_재가입() {
+		SocialAccount orphaned = SocialAccount.create(42L, "kakao", "sub-1", "a@b.com");
+		given(kakaoClient.fetchUserInfo(anyString(), anyString(), any()))
+				.willReturn(new OAuthUserInfo("sub-1", "a@b.com", "홍길동", "진", AgeGroup.TWENTIES, 1993));
+		given(socialAccountRepository.findByProviderAndProviderUserId("kakao", "sub-1"))
+				.willReturn(Optional.of(orphaned));
+		given(userRepository.findById(42L)).willReturn(Optional.empty()); // 탈퇴 → 살아있는 행 없음
+		given(userRepository.save(any(User.class))).willAnswer(inv -> inv.getArgument(0));
+		given(socialAccountRepository.save(any(SocialAccount.class))).willAnswer(inv -> inv.getArgument(0));
+
+		AuthResult.Login result = authFacade
+				.login(new AuthCriteria.Login("kakao", "code", "https://app/cb", "state"));
+
+		assertThat(result.accessToken()).isEqualTo("access");
+		verify(userRepository).save(any(User.class)); // 새 사용자 생성
+		// 유니크 제약(provider, providerUserId) 때문에 새 행을 넣을 수 없다 → 기존 연결을 새 사용자로 재연결
+		assertThat(orphaned.getUserId())
+				.as("잔존 연결이 새 사용자로 재연결돼야 한다")
+				.isNotEqualTo(42L);
+	}
+
+	@Test
+	@DisplayName("guestPhoneLogin: 탈퇴한 사용자가 같은 번호로 다시 로그인하면 새 계정으로 재가입된다")
+	void 전화게스트_탈퇴후_재로그인_새계정으로_재가입() {
+		SocialAccount orphaned = SocialAccount.create(42L, "phone", "01012345678", null);
+		given(socialAccountRepository.findByProviderAndProviderUserId("phone", "01012345678"))
+				.willReturn(Optional.of(orphaned));
+		given(userRepository.findById(42L)).willReturn(Optional.empty()); // 탈퇴 → 살아있는 행 없음
+		given(userRepository.save(any(User.class))).willAnswer(inv -> inv.getArgument(0));
+		given(socialAccountRepository.save(any(SocialAccount.class))).willAnswer(inv -> inv.getArgument(0));
+
+		AuthResult.Login result = authFacade.guestPhoneLogin("010-1234-5678");
+
+		assertThat(result.accessToken()).isEqualTo("access");
+		verify(userRepository).save(any(User.class));
+		assertThat(orphaned.getUserId())
+				.as("잔존 연결이 새 사용자로 재연결돼야 한다")
+				.isNotEqualTo(42L);
+	}
 }

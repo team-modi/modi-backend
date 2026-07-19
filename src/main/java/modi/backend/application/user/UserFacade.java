@@ -6,7 +6,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.domain.auth.RefreshTokenStore;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.user.AgeGroup;
 import modi.backend.domain.user.ResidenceRegion;
@@ -28,7 +27,6 @@ public class UserFacade {
 	private final ExhibitionBookmarkRepository exhibitionBookmarkRepository;
 	// 크로스 도메인 실용 조회: 프로필 통계(기록 수·다녀온 전시 수)·감정 키워드 집계를 위해 record의 Spring Data 리포지토리를 직접 읽는다.
 	private final RecordJpaRepository recordJpaRepository;
-	private final RefreshTokenStore refreshTokenStore;
 
 	/** 내 프로필 + 감정 키워드 + 활동 통계 조회. 기록 수·다녀온 전시 수·감정 키워드는 record 도메인에서, 북마크 수는 bookmark 도메인에서 실집계. */
 	@Transactional(readOnly = true)
@@ -58,16 +56,6 @@ public class UserFacade {
 				.orElseThrow(() -> new CoreException(UserErrorCode.USER_NOT_FOUND));
 		user.updateNotificationSettings(criteria.remindEnabled(), criteria.noticeEnabled());
 		return UserResult.NotificationSettings.from(userRepository.save(user));
-	}
-
-	/** 회원 탈퇴: soft-delete 후 refresh 토큰 무효화. 이미 탈퇴한 사용자는 조회되지 않아 USER_NOT_FOUND. */
-	@Transactional
-	public void withdraw(Long userId) {
-		User user = userRepository.findById(userId)
-				.orElseThrow(() -> new CoreException(UserErrorCode.USER_NOT_FOUND));
-		user.delete();
-		userRepository.save(user);
-		refreshTokenStore.remove(userId);
 	}
 
 	/** 프로필 부분 갱신(전달된 필드만). enum 필드는 여기서 검증·변환한 뒤 Entity에 위임. */

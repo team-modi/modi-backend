@@ -92,4 +92,7 @@ public interface RecordJpaRepository extends JpaRepository<Record, Long> {
 
 	/** 사용자 상세: 최근 기록(페이지). */
 	Page<Record> findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(Long userId, Pageable pageable);
+
+	/** 탈퇴 cascade용: 사용자의 살아있는 기록 전부. */
+	List<Record> findByUserIdAndDeletedAtIsNull(Long userId);
 }

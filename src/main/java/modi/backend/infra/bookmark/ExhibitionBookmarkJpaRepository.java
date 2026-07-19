@@ -30,4 +30,7 @@ public interface ExhibitionBookmarkJpaRepository extends JpaRepository<Exhibitio
 	@Query("select b.userId, count(b) from ExhibitionBookmark b "
 			+ "where b.userId in :userIds and b.deletedAt is null group by b.userId")
 	List<Object[]> countByUserIds(@Param("userIds") List<Long> userIds);
+
+	/** 탈퇴 cascade용: 사용자의 살아있는 북마크 전부. */
+	List<ExhibitionBookmark> findByUserIdAndDeletedAtIsNull(Long userId);
 }

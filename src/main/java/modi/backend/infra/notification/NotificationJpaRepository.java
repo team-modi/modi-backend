@@ -46,4 +46,7 @@ public interface NotificationJpaRepository extends JpaRepository<Notification, L
 			@Param("cursorCreatedAt") ZonedDateTime cursorCreatedAt,
 			@Param("cursorId") Long cursorId,
 			Pageable pageable);
+
+	/** 탈퇴 cascade용: 사용자의 살아있는 알림 전부. */
+	List<Notification> findByUserIdAndDeletedAtIsNull(Long userId);
 }

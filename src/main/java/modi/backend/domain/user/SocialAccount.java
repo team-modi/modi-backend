@@ -48,4 +48,15 @@ public class SocialAccount extends BaseEntity {
 	public void updateEmail(String email) {
 		this.email = email;
 	}
+
+	/**
+	 * 탈퇴한 사용자의 잔존 연결을 새로 가입한 사용자로 옮긴다.
+	 *
+	 * <p>탈퇴는 User만 soft-delete하고 이 연결은 남긴다. 그런데 (provider, providerUserId)에 유니크 제약이
+	 * 걸려 있어 같은 소셜로 재가입할 때 <b>새 행을 넣을 수 없다</b> — 그래서 기존 행의 소유자를 갈아끼운다.
+	 * (탈퇴한 사용자의 데이터를 되살리는 게 아니라, 새 User를 만들어 그쪽으로 연결을 옮기는 것)
+	 */
+	public void relinkTo(Long userId) {
+		this.userId = userId;
+	}
 }

@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import modi.backend.application.user.UserCriteria;
 import modi.backend.application.user.UserFacade;
+import modi.backend.application.user.UserWithdrawalFacade;
 import modi.backend.application.user.UserResult;
 import modi.backend.interfaces.auth.Authentication;
 import modi.backend.interfaces.auth.LoginUser;
@@ -28,6 +29,7 @@ import modi.backend.support.response.ApiResponse;
 public class UserV1Controller implements UserV1ApiSpec {
 
 	private final UserFacade userFacade;
+	private final UserWithdrawalFacade userWithdrawalFacade;
 
 	/** 내 프로필 + 취향 키워드 + 활동 통계 조회. */
 	@Override
@@ -74,7 +76,7 @@ public class UserV1Controller implements UserV1ApiSpec {
 	@Override
 	@DeleteMapping("/me")
 	public ResponseEntity<ApiResponse<Object>> withdraw(@Authentication LoginUser user) {
-		userFacade.withdraw(user.userId());
+		userWithdrawalFacade.withdraw(user.userId());
 		return ResponseEntity.ok(ApiResponse.success());
 	}
 }
