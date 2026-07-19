@@ -1,6 +1,6 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+import modi.backend.application.exhibition.sync.CatalogSynchronizer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -42,7 +42,7 @@ class ExternalApiCallAuditTest {
 	private static final AtomicInteger SEQ = new AtomicInteger(1);
 
 	@Autowired
-	ExhibitionSyncFacade exhibitionSyncFacade;
+	CatalogSynchronizer catalogSynchronizer;
 
 	@Autowired
 	JdbcTemplate jdbcTemplate;
@@ -59,7 +59,7 @@ class ExternalApiCallAuditTest {
 		given(exhibitionCatalogClient.fetchDetail(eq(externalId))).willReturn(Optional.empty());
 		long before = countSyncRuns();
 
-		exhibitionSyncFacade.syncCatalog();
+		catalogSynchronizer.syncCatalog();
 
 		assertThat(countSyncRuns()).isEqualTo(before + 1);
 		var run = latestSyncRun();
@@ -78,7 +78,7 @@ class ExternalApiCallAuditTest {
 		given(exhibitionCatalogClient.fetchAll())
 				.willReturn(new CatalogListData(List.of(listItem(nextId())), 600, true));
 
-		exhibitionSyncFacade.syncCatalog();
+		catalogSynchronizer.syncCatalog();
 
 		assertThat(latestSyncRun().get("truncated")).isEqualTo(true);
 		assertThat(latestSyncRun().get("total_count")).isEqualTo(600);
@@ -90,7 +90,7 @@ class ExternalApiCallAuditTest {
 		// 0으로 적으면 "원천에 전시가 0건"이라는 거짓이 된다. 우리는 물어보지도 않았다.
 		given(exhibitionCatalogClient.fetchAll()).willReturn(CatalogListData.none());
 
-		exhibitionSyncFacade.syncCatalog();
+		catalogSynchronizer.syncCatalog();
 
 		var run = latestSyncRun();
 		assertThat(run.get("total_count")).isNull();

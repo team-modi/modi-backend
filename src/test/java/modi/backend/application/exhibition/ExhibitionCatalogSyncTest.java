@@ -1,6 +1,7 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
+import modi.backend.application.exhibition.sync.CatalogSynchronizer;
+import modi.backend.application.exhibition.sync.outbox.ExhibitionOutboxFacade;
 import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -50,6 +51,8 @@ import modi.backend.infra.record.RecordJpaRepository;
 /**
  * syncCatalog 적재 정책 단위 검증 — 목록+상세를 한 패스로 채운다: 신규는 전시장 resolve 후 상세까지 채워 적재하고,
  * 기존 미완성은 상세만 채워 완성하며(상세 satellite 생성), 이미 상세행이 있는 기존은 상세 재호출·저장 없이 건너뛴다.
+ * 루프는 {@link CatalogSynchronizer}(트랜잭션 밖 조율자), 영속 단계는 {@link ExhibitionSyncFacade} — 실물 둘을
+ * 함께 조립해 정책을 검증한다(리포지토리·클라이언트만 모킹).
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -68,10 +71,15 @@ class ExhibitionCatalogSyncTest {
 	@Mock ExhibitionPlaceRepository exhibitionPlaceRepository;
 	@Mock ExhibitionQueryRepository exhibitionQueryRepository;
 	@Mock ArtistRepository artistRepository;
-	@Mock EnrichmentJobFacade enrichmentJobFacade;
+	@Mock ExhibitionOutboxFacade exhibitionOutboxFacade;
 
 	@InjectMocks
 	ExhibitionSyncFacade facade;
+
+	/** 동기화 루프 실물 — 파사드 실물 + 모킹된 클라이언트/아웃박스로 조립한다(@InjectMocks 이후 초기화 필요라 lazy). */
+	private CatalogSynchronizer synchronizer() {
+		return new CatalogSynchronizer(facade, exhibitionOutboxFacade, catalogClient);
+	}
 
 	private void stubPlaceResolveCreatesNew() {
 		given(exhibitionPlaceRepository.resolveOrCreate(any(), any(), any(), any(), any()))
@@ -96,7 +104,7 @@ class ExhibitionCatalogSyncTest {
 		given(catalogClient.fetchDetail("CAT-OLD")).willReturn(Optional.of(detail("무료")));
 		given(catalogClient.fetchDetail("CAT-NEW")).willReturn(Optional.of(detail("15,000원")));
 
-		int inserted = facade.syncCatalog();
+		int inserted = synchronizer().syncCatalog();
 
 		assertThat(inserted).isEqualTo(1); // 신규만 적재 수에 잡힌다(기존 상세 완성은 별도)
 		assertThat(existing.getTitle()).isEqualTo("기존 전시"); // 제목은 원천 갱신본으로 안 바뀐다
@@ -115,7 +123,7 @@ class ExhibitionCatalogSyncTest {
 		given(exhibitionRepository.findByExternalId("CAT-DONE")).willReturn(Optional.of(synced));
 		given(exhibitionRepository.hasDetail(200L)).willReturn(true); // 상세행 존재 → 완성 상태
 
-		int inserted = facade.syncCatalog();
+		int inserted = synchronizer().syncCatalog();
 
 		assertThat(inserted).isZero();
 		verify(catalogClient, never()).fetchDetail(any());
@@ -135,7 +143,7 @@ class ExhibitionCatalogSyncTest {
 		given(exhibitionRepository.hasDetail(anyLong())).willReturn(false);
 		given(catalogClient.fetchDetail("CAT-OK")).willReturn(Optional.empty()); // 원천 상세 없음 → 확인 완료행만
 
-		int inserted = facade.syncCatalog();
+		int inserted = synchronizer().syncCatalog();
 
 		assertThat(inserted).isEqualTo(1);
 		verify(exhibitionRepository, times(1)).save(any());

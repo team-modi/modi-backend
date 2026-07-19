@@ -1,7 +1,7 @@
 package modi.backend.domain.exhibition.sync.entity;
 
-import modi.backend.domain.exhibition.enrichment.EnrichmentJob;
-import modi.backend.domain.exhibition.enrichment.JobType;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessage;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessageType;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -18,13 +18,13 @@ import lombok.NoArgsConstructor;
  *
  * <p><b>순수 원본 보관소로 회귀했다</b>(설계 §2, ADR-01). 예전엔 이 테이블이 상태머신
  * ({@code status/attempt_count/next_attempt_at})까지 이고 있었는데 <b>그 컬럼은 쓰기만 되고 아무도 읽지 않았다</b>
- * (현행 최대 갭). 진행 상태·재시도는 통합 작업큐({@link EnrichmentJob}, {@link JobType#DETAIL_SYNC})로 이관했고
+ * (현행 최대 갭). 진행 상태·재시도는 전시 아웃박스({@link OutboxMessage}, {@link OutboxMessageType#FETCH_DETAIL})로 이관했고
  * (V27 create → V28 backfill → V29 drop), 벤더 테이블은 "원천이 뭐라고 답했나"의 무손실 원본만 남긴다.
  *
  * <p>{@code payload}는 응답 아이템을 매핑해 직렬화한 JSON이다 — 특히 상세의 {@code contents1}은 원천이
  * 워드프레스 블록/HTML로 내려주는데 그 <b>원문이 그대로 보존</b>되므로, 평문 추출 규칙이 바뀌면 여기서 재추출한다
  * (원천 재호출 없이). 원본이 없는 응답(원천에 상세가 없거나 조회 실패)은 남길 원본이 없어 <b>행을 만들지 않는다</b>
- * (그 사실은 각각 {@code exhibitions.detail_synced_at}과 DETAIL_SYNC 작업이 안다).
+ * (그 사실은 각각 {@code exhibitions.detail_synced_at}과 FETCH_DETAIL 작업이 안다).
  */
 @Entity
 @Table(name = "culture_detail_response")

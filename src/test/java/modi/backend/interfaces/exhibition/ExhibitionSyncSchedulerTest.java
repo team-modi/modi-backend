@@ -15,7 +15,7 @@ import org.mockito.InOrder;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.support.error.CoreException;
 import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
-import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+import modi.backend.application.exhibition.sync.CatalogSynchronizer;
 import modi.backend.application.exhibition.sync.enricher.PlaceHoursEnricher;
 
 /**
@@ -26,39 +26,39 @@ import modi.backend.application.exhibition.sync.enricher.PlaceHoursEnricher;
  */
 class ExhibitionSyncSchedulerTest {
 
-	private ExhibitionSyncFacade exhibitionSyncFacade;
+	private CatalogSynchronizer catalogSynchronizer;
 	private CatalogEnricher catalogEnricher;
 	private PlaceHoursEnricher placeHoursEnricher;
 	private ExhibitionSyncScheduler scheduler;
 
 	@BeforeEach
 	void setUp() {
-		exhibitionSyncFacade = mock(ExhibitionSyncFacade.class);
+		catalogSynchronizer = mock(CatalogSynchronizer.class);
 		catalogEnricher = mock(CatalogEnricher.class);
 		placeHoursEnricher = mock(PlaceHoursEnricher.class);
-		scheduler = new ExhibitionSyncScheduler(exhibitionSyncFacade, catalogEnricher, placeHoursEnricher);
+		scheduler = new ExhibitionSyncScheduler(catalogSynchronizer, catalogEnricher, placeHoursEnricher);
 	}
 
 	@Test
 	@DisplayName("syncDaily: 동기화(목록+상세) → 장르 분류(신규분)를 순서대로 호출한다")
 	void syncDaily_동기화후_장르_순서호출() {
-		given(exhibitionSyncFacade.syncCatalog()).willReturn(3);
+		given(catalogSynchronizer.syncCatalog()).willReturn(3);
 
 		scheduler.syncDaily();
 
-		InOrder order = inOrder(exhibitionSyncFacade, catalogEnricher);
-		order.verify(exhibitionSyncFacade, times(1)).syncCatalog();
+		InOrder order = inOrder(catalogSynchronizer, catalogEnricher);
+		order.verify(catalogSynchronizer, times(1)).syncCatalog();
 		order.verify(catalogEnricher, times(1)).enrichGenres();
 	}
 
 	@Test
 	@DisplayName("syncDaily: facade가 예외를 던져도 삼켜서 다음 주기까지 살아있는다")
 	void syncDaily_예외삼킴() {
-		given(exhibitionSyncFacade.syncCatalog())
+		given(catalogSynchronizer.syncCatalog())
 				.willThrow(new CoreException(ExhibitionErrorCode.EXTERNAL_API_UNAVAILABLE, "외부 전시 API 호출 실패"));
 
 		assertThatCode(() -> scheduler.syncDaily()).doesNotThrowAnyException();
 
-		verify(exhibitionSyncFacade, times(1)).syncCatalog();
+		verify(catalogSynchronizer, times(1)).syncCatalog();
 	}
 }

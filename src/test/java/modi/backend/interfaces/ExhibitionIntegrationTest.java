@@ -33,7 +33,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.jayway.jsonpath.JsonPath;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+import modi.backend.application.exhibition.sync.CatalogSynchronizer;
 import modi.backend.application.exhibition.ExhibitionFacade;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
@@ -69,7 +69,7 @@ class ExhibitionIntegrationTest {
 	ExhibitionFacade exhibitionFacade;
 
 	@Autowired
-	ExhibitionSyncFacade exhibitionSyncFacade;
+	CatalogSynchronizer catalogSynchronizer;
 
 	@Autowired
 	ExhibitionRepository exhibitionRepository;
@@ -110,7 +110,7 @@ class ExhibitionIntegrationTest {
 		given(catalogClient.fetchDetail("CAT-MONET")).willReturn(Optional.of(
 				new CatalogDetailData("성인 20,000원", "모네 특별전 설명", "https://detail/monet", "02-1234-5678",
 						"https://img/monet.jpg", "https://place/monet", "서울 어딘가", "PLACE-SEQ-1", null)));
-		exhibitionSyncFacade.syncCatalog();
+		catalogSynchronizer.syncCatalog();
 	}
 
 	/**

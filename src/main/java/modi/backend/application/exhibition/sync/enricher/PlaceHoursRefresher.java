@@ -2,9 +2,9 @@ package modi.backend.application.exhibition.sync.enricher;
 
 import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
 
-import modi.backend.application.exhibition.sync.job.EnrichmentJobFacade;
-import modi.backend.application.exhibition.sync.job.EnrichmentJobProcessing;
-import modi.backend.application.exhibition.sync.job.JobFailures;
+import modi.backend.application.exhibition.sync.outbox.ExhibitionOutboxFacade;
+import modi.backend.application.exhibition.sync.outbox.OutboxProcessing;
+import modi.backend.application.exhibition.sync.outbox.OutboxFailures;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,16 +15,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.config.EnrichmentProperties;
-import modi.backend.domain.exhibition.enrichment.EnrichmentJob;
-import modi.backend.domain.exhibition.enrichment.JobType;
+import modi.backend.config.OutboxProperties;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessage;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessageType;
 import modi.backend.domain.exhibition.hours.OpeningHoursFormatter;
 import modi.backend.domain.exhibition.sync.data.PlaceHoursData;
 import modi.backend.domain.exhibition.sync.port.PlaceHoursProvider;
 
 /**
- * 이벤트 구동 영업시간 재검증 처리기(설계 §4-1) — 통합 작업큐의 영업시간 작업
- * ({@link JobType#PLACE_HOURS_REFRESH}·{@link JobType#PLACE_HOURS_FETCH})을 드레인한다.
+ * 이벤트 구동 영업시간 재검증 처리기(설계 §4-1) — 전시 아웃박스의 영업시간 메시지
+ * ({@link OutboxMessageType#REFRESH_PLACE_HOURS}·{@link OutboxMessageType#FETCH_PLACE_HOURS})을 드레인한다.
  *
  * <p>재검증 enqueue는 카탈로그 sync가 "새 전시가 기존 장소에 유입"될 때 걸고(가드: 기존 장소만·최소 간격·UK 중복),
  * 여기서 도래한 작업을 집어 그 장소의 영업시간을 다시 조회한다 — 같은 큐·같은 at-least-once·같은 비용상한이다.
@@ -38,14 +38,14 @@ public class PlaceHoursRefresher {
 	private static final Logger log = LoggerFactory.getLogger(PlaceHoursRefresher.class);
 
 	/** 최초 조회(FETCH)는 현재 {@link PlaceHoursEnricher}가 직접 하지만, 큐로 들어온 FETCH도 같은 경로로 처리한다. */
-	private static final List<JobType> HOURS_JOB_TYPES = List.of(
-			JobType.PLACE_HOURS_REFRESH, JobType.PLACE_HOURS_FETCH);
+	private static final List<OutboxMessageType> HOURS_JOB_TYPES = List.of(
+			OutboxMessageType.REFRESH_PLACE_HOURS, OutboxMessageType.FETCH_PLACE_HOURS);
 
-	private final EnrichmentJobFacade enrichmentJobFacade;
+	private final ExhibitionOutboxFacade exhibitionOutboxFacade;
 	private final ExhibitionSyncFacade exhibitionSyncFacade;
 	private final PlaceHoursProvider placeHoursProvider;
 	private final OpeningHoursFormatter openingHoursFormatter;
-	private final EnrichmentProperties properties;
+	private final OutboxProperties properties;
 
 	/**
 	 * 도래한 영업시간 작업(재검증·최초조회)을 배치로 처리한다. 도래 작업이 없으면 외부 호출 없이 끝난다.
@@ -55,9 +55,9 @@ public class PlaceHoursRefresher {
 	public int refreshDueHours() {
 		LocalDateTime now = LocalDateTime.now();
 		int processed = 0;
-		for (JobType jobType : HOURS_JOB_TYPES) {
-			List<EnrichmentJob> jobs = enrichmentJobFacade.findDue(jobType, properties.jobBatchSize(), now);
-			for (EnrichmentJob job : jobs) {
+		for (OutboxMessageType messageType : HOURS_JOB_TYPES) {
+			List<OutboxMessage> jobs = exhibitionOutboxFacade.findDue(messageType, properties.batchSize(), now);
+			for (OutboxMessage job : jobs) {
 				if (processOne(job, now)) {
 					processed++;
 				}
@@ -70,12 +70,12 @@ public class PlaceHoursRefresher {
 	}
 
 	/** @return true면 전이함, false면 낙관락 충돌로 skip(다른 워커가 처리). */
-	private boolean processOne(EnrichmentJob job, LocalDateTime now) {
+	private boolean processOne(OutboxMessage job, LocalDateTime now) {
 		String placeKey = job.getTargetKey();
 		Optional<PlaceHoursTarget> resolved = exhibitionSyncFacade.resolvePlaceHoursTarget(placeKey);
 		if (resolved.isEmpty()) {
 			// 그 장소를 쓰는 전시가 더는 없다 — 재검증할 대상이 없으니 성공으로 마감한다.
-			return EnrichmentJobProcessing.succeed(enrichmentJobFacade, job, now);
+			return OutboxProcessing.succeed(exhibitionOutboxFacade, job, now);
 		}
 		PlaceHoursTarget target = resolved.get();
 		try {
@@ -86,9 +86,9 @@ public class PlaceHoursRefresher {
 			return false; // 반영 중 충돌 — 다른 워커가 처리
 		} catch (RuntimeException e) {
 			exhibitionSyncFacade.recordVenueHoursFailure(target, placeHoursProvider.vendor());
-			return EnrichmentJobProcessing.fail(enrichmentJobFacade, job,
-					JobFailures.classify(e), JobFailures.describe(e), now);
+			return OutboxProcessing.fail(exhibitionOutboxFacade, job,
+					OutboxFailures.classify(e), OutboxFailures.describe(e), now);
 		}
-		return EnrichmentJobProcessing.succeed(enrichmentJobFacade, job, now);
+		return OutboxProcessing.succeed(exhibitionOutboxFacade, job, now);
 	}
 }

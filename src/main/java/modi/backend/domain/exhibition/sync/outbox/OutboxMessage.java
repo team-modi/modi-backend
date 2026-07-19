@@ -1,4 +1,4 @@
-package modi.backend.domain.exhibition.enrichment;
+package modi.backend.domain.exhibition.sync.outbox;
 
 import java.time.LocalDateTime;
 
@@ -18,29 +18,32 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 통합 보강 작업큐(인박스 패턴) — {@code enrichment_job} 매핑. <b>이 설계의 심장</b>이다(설계 §2).
+ * 전시 초기화 트랜잭션 아웃박스 메시지 — {@code exhibition_outbox} 매핑. <b>이 설계의 심장</b>이다(ADR-10).
+ *
+ * <p><b>아웃박스의 본질은 원자성이다</b>: 메시지는 그것을 필요하게 만든 상태 변경과 <b>같은 트랜잭션</b>에서
+ * 기록된다 — 전시(또는 draft)는 저장됐는데 후속 작업 기록이 유실되는 창이 없다. 스프링 이벤트는 커밋 직후
+ * 드레인을 앞당기는 글루일 뿐이고(비durable — 크래시 유실·재시도 없음), durability·재시도는 이 테이블과
+ * 릴레이 폴러가 진다("이벤트=글루, 테이블=엔진").
  *
  * <p><b>at-least-once는 코드가 아니라 테이블이다</b>: "조금 늦어도 최소 1회 무조건"은 진행 상태가 DB에 남아야만
- * 보장된다(재시작 생존). 현행은 상태머신이 축마다 흩어져 있어(상세=벤더 테이블 반쪽, 영업시간=정준 테이블 반쪽,
- * AI=없음) 요구사항을 3벌 구현해야 했다. 여기 하나로 모은다 — 벤더 테이블은 원본만, 정준 테이블은 결과만,
- * <b>진행 상태는 이 테이블만 안다</b>.
+ * 보장된다(재시작 생존). 벤더 테이블은 원본만, 정준 테이블은 결과만, <b>진행 상태는 이 테이블만 안다</b>.
  *
- * <p><b>멱등 enqueue</b>: UK{@code (job_type, target_key)}라 같은 대상에 중복 작업이 생기지 않는다(예: 한 번의
- * 카탈로그 sync에서 같은 장소에 전시가 여럿 들어와도 HOURS_REFRESH는 1건). <b>선별</b>: 인덱스
+ * <p><b>멱등 enqueue</b>: UK{@code (message_type, target_key)}라 같은 대상에 중복 메시지가 생기지 않는다(예: 한 번의
+ * 카탈로그 sync에서 같은 장소에 전시가 여럿 들어와도 REFRESH_PLACE_HOURS는 1건). <b>선별</b>: 인덱스
  * {@code (status, next_attempt_at)}로 폴링 쿼리({@code status IN (PENDING, RETRYABLE) AND next_attempt_at <= now})가
- * 풀스캔 없이 도래한 작업만 집는다.
+ * 풀스캔 없이 도래한 메시지만 집는다.
  *
- * <p><b>낙관락({@link Version})</b>: 스케줄러와 수동 트리거가 같은 작업을 동시에 집으면, 종료 전이 저장에서 한쪽만
- * 이기고 다른 쪽은 {@code OptimisticLockException}으로 밀린다 = 다른 워커가 선점 = 정상 skip.
+ * <p><b>낙관락({@link Version})</b>: 릴레이(스케줄)와 이벤트 드레인이 같은 메시지를 동시에 집으면, 종료 전이 저장에서
+ * 한쪽만 이기고 다른 쪽은 {@code OptimisticLockException}으로 밀린다 = 다른 워커가 선점 = 정상 skip.
  *
  * <p>재생성될 수 있는 파이프라인 테이블이라 {@code BaseEntity}(soft delete·감사)를 상속하지 않고
  * {@code created_at/updated_at}만 자체 관리한다(다른 벤더·정준 테이블과 같은 규율).
  */
 @Entity
-@Table(name = "enrichment_job")
+@Table(name = "exhibition_outbox")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class EnrichmentJob {
+public class OutboxMessage {
 
 	/** last_error가 무한정 커지지 않게 저장 전 자르는 상한(원인 식별엔 충분하다). */
 	private static final int MAX_ERROR_LENGTH = 1000;
@@ -50,8 +53,8 @@ public class EnrichmentJob {
 	private Long id;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "job_type", nullable = false, length = 30)
-	private JobType jobType;
+	@Column(name = "message_type", nullable = false, length = 30)
+	private OutboxMessageType messageType;
 
 	/** 작업 대상 식별자 — 종류에 따라 {@code external_id}(상세·장르) 또는 {@code place_key}(영업시간)다. */
 	@Column(name = "target_key", nullable = false, length = 500)
@@ -59,7 +62,7 @@ public class EnrichmentJob {
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "status", nullable = false, length = 20)
-	private JobStatus status;
+	private OutboxMessageStatus status;
 
 	/** 지금까지의 시도 횟수 — 백오프 간격 계산과 최대 시도 초과 판정의 재료. */
 	@Column(name = "attempt_count", nullable = false)
@@ -88,10 +91,10 @@ public class EnrichmentJob {
 	@Column(name = "updated_at", nullable = false)
 	private LocalDateTime updatedAt;
 
-	private EnrichmentJob(JobType jobType, String targetKey, LocalDateTime now) {
-		this.jobType = jobType;
+	private OutboxMessage(OutboxMessageType messageType, String targetKey, LocalDateTime now) {
+		this.messageType = messageType;
 		this.targetKey = targetKey;
-		this.status = JobStatus.PENDING;
+		this.status = OutboxMessageStatus.PENDING;
 		this.attemptCount = 0;
 		this.nextAttemptAt = now;
 	}
@@ -99,19 +102,19 @@ public class EnrichmentJob {
 	/**
 	 * 작업을 큐에 넣는다(멱등 enqueue의 생산자 — 중복 방지는 UK가 맡는다). 처음부터 즉시 선별 대상(PENDING·now).
 	 */
-	public static EnrichmentJob enqueue(JobType jobType, String targetKey, LocalDateTime now) {
-		if (jobType == null) {
-			throw new IllegalArgumentException("jobType은 필수다");
+	public static OutboxMessage enqueue(OutboxMessageType messageType, String targetKey, LocalDateTime now) {
+		if (messageType == null) {
+			throw new IllegalArgumentException("messageType은 필수다");
 		}
 		if (targetKey == null || targetKey.isBlank()) {
 			throw new IllegalArgumentException("targetKey는 필수다");
 		}
-		return new EnrichmentJob(jobType, targetKey, now);
+		return new OutboxMessage(messageType, targetKey, now);
 	}
 
 	/** 작업이 성공했다. 종료 상태로 전이하고 원인 흔적을 지운다. */
 	public void succeed(LocalDateTime now) {
-		this.status = JobStatus.SUCCEEDED;
+		this.status = OutboxMessageStatus.SUCCEEDED;
 		this.lastError = null;
 		this.completedAt = now;
 		this.nextAttemptAt = null;
@@ -120,28 +123,28 @@ public class EnrichmentJob {
 	/**
 	 * 실패를 기록하고 다음 상태를 정한다(상태 전이의 단일 지점 — 규칙은 Entity 안에서만).
 	 * <ul>
-	 *   <li>{@link JobFailureType#PERMANENT}: 즉시 {@link JobStatus#FAILED_PERMANENT}.</li>
-	 *   <li>{@link JobFailureType#RETRYABLE}: 시도 횟수를 늘리고, 최대 시도를 넘겼으면 PERMANENT로 승격(무한 재시도 방지),
-	 *       아니면 {@link JobStatus#FAILED_RETRYABLE} + 지수 백오프로 {@code next_attempt_at}를 민다.</li>
+	 *   <li>{@link OutboxFailureType#PERMANENT}: 즉시 {@link OutboxMessageStatus#FAILED_PERMANENT}.</li>
+	 *   <li>{@link OutboxFailureType#RETRYABLE}: 시도 횟수를 늘리고, 최대 시도를 넘겼으면 PERMANENT로 승격(무한 재시도 방지),
+	 *       아니면 {@link OutboxMessageStatus#FAILED_RETRYABLE} + 지수 백오프로 {@code next_attempt_at}를 민다.</li>
 	 * </ul>
 	 */
-	public void recordFailure(JobFailureType failureType, String error, RetryPolicy policy, LocalDateTime now) {
+	public void recordFailure(OutboxFailureType failureType, String error, RetryPolicy policy, LocalDateTime now) {
 		this.attemptCount++;
 		this.lastError = truncate(error);
-		if (failureType == JobFailureType.PERMANENT) {
-			this.status = JobStatus.FAILED_PERMANENT;
+		if (failureType == OutboxFailureType.PERMANENT) {
+			this.status = OutboxMessageStatus.FAILED_PERMANENT;
 			this.completedAt = now;
 			this.nextAttemptAt = null;
 			return;
 		}
 		if (policy.isExhausted(this.attemptCount)) {
 			// 재시도 가능한 실패라도 시도를 소진하면 사람에게 보이게 영구 실패로 승격한다.
-			this.status = JobStatus.FAILED_PERMANENT;
+			this.status = OutboxMessageStatus.FAILED_PERMANENT;
 			this.completedAt = now;
 			this.nextAttemptAt = null;
 			return;
 		}
-		this.status = JobStatus.FAILED_RETRYABLE;
+		this.status = OutboxMessageStatus.FAILED_RETRYABLE;
 		this.completedAt = null;
 		this.nextAttemptAt = policy.nextAttemptAt(this.attemptCount, now);
 	}
@@ -154,7 +157,7 @@ public class EnrichmentJob {
 		if (!this.status.isTerminal()) {
 			return;
 		}
-		this.status = JobStatus.PENDING;
+		this.status = OutboxMessageStatus.PENDING;
 		this.attemptCount = 0;
 		this.nextAttemptAt = now;
 		this.lastError = null;

@@ -1,4 +1,4 @@
-package modi.backend.domain.exhibition.enrichment;
+package modi.backend.domain.exhibition.sync.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

@@ -1,4 +1,4 @@
-package modi.backend.application.exhibition.sync.job;
+package modi.backend.application.exhibition.sync.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -12,23 +12,23 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
-import modi.backend.domain.exhibition.enrichment.JobFailureType;
+import modi.backend.domain.exhibition.sync.outbox.OutboxFailureType;
 import modi.backend.support.error.CoreException;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 
 /**
- * {@link JobFailures} 예외 → 재시도 분류 매핑 검증. RestClient 전환(ADR-09)으로 예외 계열이
+ * {@link OutboxFailures} 예외 → 재시도 분류 매핑 검증. RestClient 전환(ADR-09)으로 예외 계열이
  * {@code WebClientResponseException}에서 {@code RestClientResponseException}으로 바뀌었으므로,
  * "무엇이 RETRYABLE이고 무엇이 PERMANENT인가"라는 운영 의미론이 유지되는지를 여기서 박제한다.
  */
-class JobFailuresTest {
+class OutboxFailuresTest {
 
 	@Test
 	@DisplayName("429는 원인이 사라지면 성공할 수 있으므로 RETRYABLE")
 	void classify_tooManyRequests_retryable() {
 		Exception error = httpError(HttpStatus.TOO_MANY_REQUESTS);
 
-		assertThat(JobFailures.classify(error)).isEqualTo(JobFailureType.RETRYABLE);
+		assertThat(OutboxFailures.classify(error)).isEqualTo(OutboxFailureType.RETRYABLE);
 	}
 
 	@Test
@@ -37,7 +37,7 @@ class JobFailuresTest {
 		Exception error = HttpServerErrorException.create(HttpStatus.SERVICE_UNAVAILABLE, "Service Unavailable",
 				HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8);
 
-		assertThat(JobFailures.classify(error)).isEqualTo(JobFailureType.RETRYABLE);
+		assertThat(OutboxFailures.classify(error)).isEqualTo(OutboxFailureType.RETRYABLE);
 	}
 
 	@Test
@@ -45,7 +45,7 @@ class JobFailuresTest {
 	void classify_clientError_permanent() {
 		Exception error = httpError(HttpStatus.NOT_FOUND);
 
-		assertThat(JobFailures.classify(error)).isEqualTo(JobFailureType.PERMANENT);
+		assertThat(OutboxFailures.classify(error)).isEqualTo(OutboxFailureType.PERMANENT);
 	}
 
 	@Test
@@ -53,7 +53,7 @@ class JobFailuresTest {
 	void classify_timeout_retryable() {
 		Exception error = new ResourceAccessException("I/O error", new java.net.http.HttpTimeoutException("read timed out"));
 
-		assertThat(JobFailures.classify(error)).isEqualTo(JobFailureType.RETRYABLE);
+		assertThat(OutboxFailures.classify(error)).isEqualTo(OutboxFailureType.RETRYABLE);
 	}
 
 	@Test
@@ -62,7 +62,7 @@ class JobFailuresTest {
 		Exception error = new CoreException(ExhibitionErrorCode.EXTERNAL_API_UNAVAILABLE, "외부 전시 API 호출 실패",
 				httpError(HttpStatus.BAD_REQUEST));
 
-		assertThat(JobFailures.classify(error)).isEqualTo(JobFailureType.PERMANENT);
+		assertThat(OutboxFailures.classify(error)).isEqualTo(OutboxFailureType.PERMANENT);
 	}
 
 	@Test
@@ -70,7 +70,7 @@ class JobFailuresTest {
 	void classify_parseFailure_permanent() {
 		Exception error = new com.fasterxml.jackson.core.JsonParseException(null, "unexpected token");
 
-		assertThat(JobFailures.classify(error)).isEqualTo(JobFailureType.PERMANENT);
+		assertThat(OutboxFailures.classify(error)).isEqualTo(OutboxFailureType.PERMANENT);
 	}
 
 	private static HttpClientErrorException httpError(HttpStatus status) {
