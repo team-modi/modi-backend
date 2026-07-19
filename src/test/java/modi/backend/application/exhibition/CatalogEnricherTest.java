@@ -23,19 +23,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
-import modi.backend.application.exhibition.sync.draft.ExhibitionDraftFacade;
-import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
-import modi.backend.application.exhibition.sync.outbox.ExhibitionOutboxFacade;
-import modi.backend.config.CatalogEnrichProperties;
+import modi.backend.ingestion.application.ExhibitionSyncFacade;
+import modi.backend.ingestion.application.draft.ExhibitionDraftFacade;
+import modi.backend.ingestion.application.enricher.CatalogEnricher;
+import modi.backend.ingestion.application.outbox.ExhibitionOutboxFacade;
+import modi.backend.ingestion.config.CatalogEnrichProperties;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.domain.exhibition.sync.data.GenreClassification;
-import modi.backend.domain.exhibition.sync.data.GenreResult;
-import modi.backend.domain.exhibition.sync.outbox.OutboxFailureType;
-import modi.backend.domain.exhibition.sync.outbox.OutboxMessage;
-import modi.backend.domain.exhibition.sync.outbox.OutboxMessageType;
-import modi.backend.domain.exhibition.sync.port.GenreClassificationException;
-import modi.backend.domain.exhibition.sync.port.GenreClassifier;
+import modi.backend.ingestion.domain.data.GenreClassification;
+import modi.backend.ingestion.domain.data.GenreResult;
+import modi.backend.ingestion.domain.outbox.OutboxFailureType;
+import modi.backend.ingestion.domain.outbox.OutboxMessage;
+import modi.backend.ingestion.domain.outbox.OutboxMessageType;
+import modi.backend.ingestion.domain.port.GenreClassificationException;
+import modi.backend.ingestion.domain.port.GenreClassifier;
 
 /**
  * CatalogEnricher 단위 검증 — <b>전시 아웃박스 기반</b> 장르 처리(스윕 → 드레인). 핵심 둘:

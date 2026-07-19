@@ -1,8 +1,8 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.CatalogSynchronizer;
-import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
-import modi.backend.application.exhibition.sync.enricher.DetailEnricher;
+import modi.backend.ingestion.application.CatalogSynchronizer;
+import modi.backend.ingestion.application.enricher.CatalogEnricher;
+import modi.backend.ingestion.application.enricher.DetailEnricher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -20,18 +20,18 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
-import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
-import modi.backend.domain.exhibition.sync.data.CatalogListData;
-import modi.backend.domain.exhibition.sync.entity.CultureDetailResponse;
-import modi.backend.infra.exhibition.sync.CultureDetailResponseJpaRepository;
-import modi.backend.domain.exhibition.sync.entity.CultureListResponse;
-import modi.backend.domain.exhibition.sync.outbox.OutboxMessage;
-import modi.backend.domain.exhibition.sync.outbox.OutboxMessageRepository;
-import modi.backend.domain.exhibition.sync.outbox.OutboxMessageStatus;
-import modi.backend.domain.exhibition.sync.outbox.OutboxMessageType;
-import modi.backend.infra.exhibition.sync.CultureListResponseJpaRepository;
-import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.ingestion.domain.data.CatalogDetailData;
+import modi.backend.ingestion.domain.data.CatalogExhibitionData;
+import modi.backend.ingestion.domain.data.CatalogListData;
+import modi.backend.ingestion.domain.entity.CultureDetailResponse;
+import modi.backend.ingestion.infra.CultureDetailResponseJpaRepository;
+import modi.backend.ingestion.domain.entity.CultureListResponse;
+import modi.backend.ingestion.domain.outbox.OutboxMessage;
+import modi.backend.ingestion.domain.outbox.OutboxMessageRepository;
+import modi.backend.ingestion.domain.outbox.OutboxMessageStatus;
+import modi.backend.ingestion.domain.outbox.OutboxMessageType;
+import modi.backend.ingestion.infra.CultureListResponseJpaRepository;
+import modi.backend.ingestion.domain.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;

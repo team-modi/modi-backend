@@ -1,6 +1,6 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.infra.exhibition.sync.mock.MockGenreClassifier;
+import modi.backend.ingestion.infra.mock.MockGenreClassifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -22,9 +22,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.exhibition.catalog.ArtistRepository;
-import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
+import modi.backend.ingestion.domain.data.CatalogDetailData;
 import modi.backend.domain.exhibition.catalog.Exhibition;
-import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.ingestion.domain.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
@@ -58,7 +58,7 @@ class ExhibitionDetailTest {
 		placeRepository = mock(ExhibitionPlaceRepository.class);
 		facade = new ExhibitionFacade(exhibitionRepository, mock(ExhibitionQueryRepository.class), placeRepository,
 				mock(ArtistRepository.class), catalogClient, bookmarkRepository, venueRepository, recordJpaRepository,
-				new modi.backend.infra.exhibition.sync.mock.MockGenreClassifier());
+				new modi.backend.ingestion.infra.mock.MockGenreClassifier());
 		given(exhibitionRepository.save(any(Exhibition.class))).willAnswer(invocation -> invocation.getArgument(0));
 		given(placeRepository.findById(anyLong())).willReturn(Optional.of(
 				ExhibitionPlace.createFromList("장소", null, null, null, null)));

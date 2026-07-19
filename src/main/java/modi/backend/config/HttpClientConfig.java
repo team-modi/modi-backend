@@ -1,6 +1,8 @@
 package modi.backend.config;
 
-import modi.backend.infra.exhibition.sync.culture.CultureApiMapper;
+import modi.backend.ingestion.config.PublicDataProperties;
+
+import modi.backend.ingestion.infra.culture.CultureApiMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -16,8 +18,8 @@ import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
 import modi.backend.infra.auth.KakaoApi;
 import modi.backend.infra.auth.NaverApi;
-import modi.backend.infra.exhibition.sync.culture.CultureApi;
-import modi.backend.infra.exhibition.sync.culture.CultureExhibitionClient;
+import modi.backend.ingestion.infra.culture.CultureApi;
+import modi.backend.ingestion.infra.culture.CultureExhibitionClient;
 
 /**
  * RestClient 기반 HTTP Interface 클라이언트 등록. (선언형 REST 엔드포인트 관리 — ADR-09)
@@ -44,7 +46,7 @@ public class HttpClientConfig {
 
 	/**
 	 * 공공데이터 전시 API(한눈에보는문화정보) 전용 RestClient. baseUrl은 설정(app.public-data.culture.base-url)에서 주입한다.
-	 * 응답이 XML이라 JSON 컨버터는 쓰지 않는다 — 문자열로 받아 {@link modi.backend.infra.exhibition.sync.culture.CultureApiMapper}가 XmlMapper로 직접 파싱한다.
+	 * 응답이 XML이라 JSON 컨버터는 쓰지 않는다 — 문자열로 받아 {@link modi.backend.ingestion.infra.culture.CultureApiMapper}가 XmlMapper로 직접 파싱한다.
 	 * <p>
 	 * 읽기 타임아웃을 반드시 건다 — 상세 백필이 단일 스케줄러 스레드에서 이 클라이언트를 반복 호출하는데,
 	 * 게이트웨이가 TCP만 받고 응답을 안 주면(무응답 stall) 타임아웃이 없을 경우 스레드와 DB 커넥션이 영구 점유돼

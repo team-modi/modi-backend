@@ -15,17 +15,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import modi.backend.application.exhibition.sync.CatalogSynchronizer;
-import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
-import modi.backend.application.exhibition.sync.draft.ExhibitionDraftFacade;
-import modi.backend.application.exhibition.sync.enricher.DetailTargetState;
-import modi.backend.application.exhibition.sync.outbox.ExhibitionOutboxFacade;
+import modi.backend.ingestion.application.CatalogSynchronizer;
+import modi.backend.ingestion.application.ExhibitionSyncFacade;
+import modi.backend.ingestion.application.draft.ExhibitionDraftFacade;
+import modi.backend.ingestion.application.enricher.DetailTargetState;
+import modi.backend.ingestion.application.outbox.ExhibitionOutboxFacade;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
-import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
-import modi.backend.domain.exhibition.sync.data.CatalogListData;
-import modi.backend.domain.exhibition.sync.outbox.OutboxMessageType;
-import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.ingestion.domain.data.CatalogExhibitionData;
+import modi.backend.ingestion.domain.data.CatalogListData;
+import modi.backend.ingestion.domain.outbox.OutboxMessageType;
+import modi.backend.ingestion.domain.port.ExhibitionCatalogClient;
 
 /**
  * syncCatalog 라우팅 정책 단위 검증(ADR-10) — 루프는 <b>목록 외 외부 호출 0</b>: 완성 전시=스킵,

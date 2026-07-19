@@ -1,8 +1,8 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
-import modi.backend.application.exhibition.sync.ExhibitionCatalogBootSync;
-import modi.backend.application.exhibition.sync.CatalogSynchronizer;
+import modi.backend.ingestion.application.enricher.CatalogEnricher;
+import modi.backend.ingestion.application.ExhibitionCatalogBootSync;
+import modi.backend.ingestion.application.CatalogSynchronizer;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.BDDMockito.given;
@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
-import modi.backend.domain.exhibition.sync.SyncTrigger;
+import modi.backend.ingestion.domain.SyncTrigger;
 import modi.backend.support.error.CoreException;
 
 /**

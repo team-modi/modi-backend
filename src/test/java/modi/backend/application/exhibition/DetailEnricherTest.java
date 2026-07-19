@@ -1,10 +1,10 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.enricher.DetailEnricher;
-import modi.backend.application.exhibition.sync.enricher.DetailTargetState;
-import modi.backend.application.exhibition.sync.draft.ExhibitionDraftFacade;
-import modi.backend.application.exhibition.sync.outbox.ExhibitionOutboxFacade;
-import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+import modi.backend.ingestion.application.enricher.DetailEnricher;
+import modi.backend.ingestion.application.enricher.DetailTargetState;
+import modi.backend.ingestion.application.draft.ExhibitionDraftFacade;
+import modi.backend.ingestion.application.outbox.ExhibitionOutboxFacade;
+import modi.backend.ingestion.application.ExhibitionSyncFacade;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -21,13 +21,13 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import modi.backend.config.OutboxProperties;
-import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
-import modi.backend.domain.exhibition.sync.outbox.OutboxMessage;
-import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
+import modi.backend.ingestion.config.OutboxProperties;
+import modi.backend.ingestion.domain.data.CatalogDetailData;
+import modi.backend.ingestion.domain.outbox.OutboxMessage;
+import modi.backend.ingestion.domain.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
-import modi.backend.domain.exhibition.sync.outbox.OutboxFailureType;
-import modi.backend.domain.exhibition.sync.outbox.OutboxMessageType;
+import modi.backend.ingestion.domain.outbox.OutboxFailureType;
+import modi.backend.ingestion.domain.outbox.OutboxMessageType;
 import modi.backend.support.error.CoreException;
 
 /**

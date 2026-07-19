@@ -1,6 +1,6 @@
 package modi.backend.domain.exhibition.catalog;
 
-import modi.backend.domain.exhibition.sync.entity.GooglePlaceResponse;
+import modi.backend.ingestion.domain.entity.GooglePlaceResponse;
 import modi.backend.domain.exhibition.hours.PlaceHours;
 import modi.backend.domain.exhibition.hours.PlaceKey;
 
