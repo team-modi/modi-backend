@@ -1,8 +1,8 @@
 package modi.backend.ingestion.application;
 
 import modi.backend.ingestion.application.enricher.CatalogEnricher;
-import modi.backend.ingestion.application.seed.ExhibitionDemoSeeder;
-import modi.backend.ingestion.application.seed.LocalExhibitionSeeder;
+import modi.backend.application.exhibition.seed.ExhibitionDemoSeeder;
+import modi.backend.application.exhibition.seed.LocalExhibitionSeeder;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

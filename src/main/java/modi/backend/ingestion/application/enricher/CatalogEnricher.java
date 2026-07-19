@@ -11,19 +11,19 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.ingestion.application.ExhibitionSyncFacade;
+import modi.backend.application.exhibition.contract.ExhibitionBackfill;
 import modi.backend.ingestion.application.draft.ExhibitionDraftFacade;
 import modi.backend.ingestion.application.outbox.ExhibitionOutboxFacade;
 import modi.backend.ingestion.application.outbox.OutboxFailures;
 import modi.backend.ingestion.application.outbox.OutboxProcessing;
 import modi.backend.ingestion.config.CatalogEnrichProperties;
-import modi.backend.ingestion.domain.data.GenreClassification;
-import modi.backend.ingestion.domain.data.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreClassification;
+import modi.backend.domain.exhibition.genre.GenreResult;
 import modi.backend.ingestion.domain.outbox.OutboxFailureType;
 import modi.backend.ingestion.domain.outbox.OutboxMessage;
 import modi.backend.ingestion.domain.outbox.OutboxMessageType;
-import modi.backend.ingestion.domain.port.GenreClassificationException;
-import modi.backend.ingestion.domain.port.GenreClassifier;
+import modi.backend.domain.exhibition.genre.GenreClassificationException;
+import modi.backend.domain.exhibition.genre.GenreClassifier;
 
 /**
  * 장르 분류 처리기 — <b>전시 아웃박스 기반</b>({@link OutboxMessageType#CLASSIFY_GENRE}).
@@ -45,7 +45,8 @@ public class CatalogEnricher {
 
 	private static final Logger log = LoggerFactory.getLogger(CatalogEnricher.class);
 
-	private final ExhibitionSyncFacade exhibitionSyncFacade;
+	/** 레거시 전시 뒤채움 계약(코어 소유) — 미분류 스윕·입력 해소·정준 반영. */
+	private final ExhibitionBackfill exhibitionBackfill;
 	private final ExhibitionDraftFacade exhibitionDraftFacade;
 	private final ExhibitionOutboxFacade exhibitionOutboxFacade;
 	private final CatalogEnrichProperties properties;
@@ -77,7 +78,7 @@ public class CatalogEnricher {
 	/** 미분류 레거시 CATALOG를 멱등 enqueue한다(이번 실행이 드레인할 수 있는 만큼만 — 나머진 다음 실행이 스윕). */
 	private void sweepUnclassified(LocalDateTime now) {
 		int sweepLimit = properties.genreBatchSize() * properties.genreMaxBatchesPerRun();
-		List<String> externalIds = exhibitionSyncFacade.findUnclassifiedCatalogExternalIds(sweepLimit);
+		List<String> externalIds = exhibitionBackfill.findUnclassifiedCatalogExternalIds(sweepLimit);
 		if (!externalIds.isEmpty()) {
 			exhibitionOutboxFacade.enqueueAll(OutboxMessageType.CLASSIFY_GENRE, externalIds, now);
 		}
@@ -101,7 +102,7 @@ public class CatalogEnricher {
 			return 0;
 		}
 		List<String> externalIds = messages.stream().map(OutboxMessage::getTargetKey).toList();
-		Map<String, GenreClassification> exhibitionInputs = exhibitionSyncFacade.resolveGenreInputs(externalIds);
+		Map<String, GenreClassification> exhibitionInputs = exhibitionBackfill.resolveGenreInputs(externalIds);
 
 		List<GenreTargetResolution> actionable = new ArrayList<>();
 		int transitioned = 0;
@@ -147,10 +148,10 @@ public class CatalogEnricher {
 			GenreResult result = results.get(i);
 			try {
 				if (target.isDraft()) {
-					// 게이트를 채우면 이 반영 트랜잭션에서 승격까지 간다(ADR-10 승격 경계).
-					exhibitionDraftFacade.applyGenreAndPromote(target.message().getTargetKey(), result, now);
+					// 게이트를 채우면 이 반영 트랜잭션이 EXHIBITION_READY를 원자 기록한다(ADR-12 — 승격 완주는 DraftPromoter).
+					exhibitionDraftFacade.applyGenre(target.message().getTargetKey(), result, now);
 				} else {
-					exhibitionSyncFacade.applyGenreResults(Map.of(target.message().getTargetKey(), result), now);
+					exhibitionBackfill.applyGenreResults(Map.of(target.message().getTargetKey(), result), now);
 				}
 			} catch (OptimisticLockingFailureException e) {
 				continue; // 반영 중 충돌 — 다른 워커가 처리(메시지는 그 워커가 마감한다).

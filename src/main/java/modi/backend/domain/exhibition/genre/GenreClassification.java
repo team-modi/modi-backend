@@ -1,6 +1,6 @@
-package modi.backend.ingestion.domain.data;
+package modi.backend.domain.exhibition.genre;
 
-import modi.backend.ingestion.domain.port.GenreClassifier;
+import modi.backend.domain.exhibition.genre.GenreClassifier;
 
 import modi.backend.domain.exhibition.catalog.Exhibition;
 

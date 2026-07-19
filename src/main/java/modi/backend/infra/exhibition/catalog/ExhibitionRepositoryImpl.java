@@ -15,7 +15,7 @@ import modi.backend.domain.exhibition.catalog.ExhibitionDetail;
 import modi.backend.domain.exhibition.catalog.ExhibitionGenre;
 import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionType;
-import modi.backend.ingestion.domain.data.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreResult;
 
 /**
  * 전시 애그리거트 어댑터(DIP) — 루트와 부속(상세 satellite·장르 정준·작가 조인)의 JpaRepository 4개를

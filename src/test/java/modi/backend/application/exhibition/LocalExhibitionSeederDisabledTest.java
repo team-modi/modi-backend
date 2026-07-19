@@ -1,6 +1,6 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.ingestion.application.seed.LocalExhibitionSeeder;
+import modi.backend.application.exhibition.seed.LocalExhibitionSeeder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

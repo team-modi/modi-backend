@@ -14,10 +14,10 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.ingestion.domain.data.GenreClassification;
-import modi.backend.ingestion.domain.data.GenreResult;
-import modi.backend.ingestion.domain.port.GenreClassificationException;
-import modi.backend.ingestion.domain.port.GenreClassifier;
+import modi.backend.domain.exhibition.genre.GenreClassification;
+import modi.backend.domain.exhibition.genre.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreClassificationException;
+import modi.backend.domain.exhibition.genre.GenreClassifier;
 
 /**
  * FailoverGenreClassifier 단위 검증(ADR-11) — 1차 실패 시 2차 전환, 전 공급자 실패 시 예외,

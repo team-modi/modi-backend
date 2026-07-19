@@ -3,7 +3,7 @@ package modi.backend.ingestion.domain.data;
 import modi.backend.domain.exhibition.catalog.Exhibition;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
-import modi.backend.ingestion.domain.data.PlaceHoursData;
+import modi.backend.domain.exhibition.hours.PlaceHoursData;
 
 import java.time.LocalDate;
 

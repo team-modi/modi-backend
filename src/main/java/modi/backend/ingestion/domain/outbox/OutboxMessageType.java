@@ -18,6 +18,13 @@ public enum OutboxMessageType {
 	/** 장르(AI) 분류 — {@code target_key = external_id}. AI 장애 시 RETRYABLE로 남아 회복 후 자동 재분류("AI 최소 1회 무조건"). */
 	CLASSIFY_GENRE,
 
+	/**
+	 * 승격 준비 완료 — {@code target_key = external_id}. 게이트를 채운 draft의 마지막 스텝 트랜잭션이 원자 기록하고,
+	 * 소비 측이 draft를 재조회해 코어 등록 계약({@code ExhibitionRegistrar})을 호출한다(ADR-12 — payload 없음,
+	 * 재조회 방식이라 스키마도 불변). 등록은 {@code exhibitions.external_id} UK로 멱등이라 재전달에 안전하다.
+	 */
+	EXHIBITION_READY,
+
 	/** 영업시간 최초 조회 — {@code target_key = place_key}. 장소당 1회(유료). 큐 어휘의 일부로 정의된 종류다. */
 	FETCH_PLACE_HOURS,
 

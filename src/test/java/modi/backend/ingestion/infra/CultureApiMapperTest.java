@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import modi.backend.ingestion.domain.data.CatalogDetailData;
+import modi.backend.domain.exhibition.catalog.CatalogDetailData;
 import modi.backend.ingestion.domain.data.CatalogExhibitionData;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import modi.backend.support.error.CoreException;

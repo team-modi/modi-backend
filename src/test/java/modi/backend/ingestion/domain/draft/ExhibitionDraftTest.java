@@ -12,9 +12,9 @@ import org.junit.jupiter.api.Test;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.ingestion.domain.data.CatalogDetailData;
+import modi.backend.domain.exhibition.catalog.CatalogDetailData;
 import modi.backend.ingestion.domain.data.CatalogExhibitionData;
-import modi.backend.ingestion.domain.data.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreResult;
 
 /**
  * ExhibitionDraft 순수 단위 검증 — 라이프사이클(PENDING→ENRICHING→COMPLETED/FAILED)·승격 게이트·재전달 멱등.

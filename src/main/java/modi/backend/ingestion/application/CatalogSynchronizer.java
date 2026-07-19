@@ -9,7 +9,8 @@ import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
 import modi.backend.ingestion.application.draft.ExhibitionDraftFacade;
-import modi.backend.ingestion.application.enricher.DetailTargetState;
+import modi.backend.application.exhibition.contract.DetailTargetState;
+import modi.backend.application.exhibition.contract.ExhibitionBackfill;
 import modi.backend.ingestion.application.outbox.ExhibitionOutboxFacade;
 import modi.backend.ingestion.domain.SyncTrigger;
 import modi.backend.ingestion.domain.data.CatalogExhibitionData;
@@ -35,6 +36,8 @@ public class CatalogSynchronizer {
 	private static final Logger log = LoggerFactory.getLogger(CatalogSynchronizer.class);
 
 	private final ExhibitionSyncFacade exhibitionSyncFacade;
+	/** 레거시 전시 뒤채움 계약(코어 소유) — 목록 1건의 대상 상태 판정. */
+	private final ExhibitionBackfill exhibitionBackfill;
 	private final ExhibitionDraftFacade exhibitionDraftFacade;
 	private final ExhibitionOutboxFacade exhibitionOutboxFacade;
 	private final ExhibitionCatalogClient catalogClient;
@@ -99,7 +102,7 @@ public class CatalogSynchronizer {
 	 * 완성 전시=스킵, 레거시 미완성=FETCH_DETAIL 위임, 그 외=draft 스테이징(신규)·갱신(재sync).
 	 */
 	private SyncOutcome syncOne(CatalogExhibitionData data, LocalDateTime now) {
-		DetailTargetState state = exhibitionSyncFacade.findDetailTargetState(data.externalId());
+		DetailTargetState state = exhibitionBackfill.findDetailTargetState(data.externalId());
 		if (state == DetailTargetState.ALREADY_SYNCED) {
 			return SyncOutcome.SKIPPED;
 		}

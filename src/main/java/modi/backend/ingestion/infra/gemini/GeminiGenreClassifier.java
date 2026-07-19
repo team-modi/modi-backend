@@ -12,10 +12,10 @@ import io.micrometer.core.instrument.MeterRegistry;
 import modi.backend.ingestion.config.GeminiProperties;
 import modi.backend.domain.exhibition.genre.GenreKeyword;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.ingestion.domain.data.GenreClassification;
-import modi.backend.ingestion.domain.data.GenreResult;
-import modi.backend.ingestion.domain.port.GenreClassificationException;
-import modi.backend.ingestion.domain.port.GenreClassifier;
+import modi.backend.domain.exhibition.genre.GenreClassification;
+import modi.backend.domain.exhibition.genre.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreClassificationException;
+import modi.backend.domain.exhibition.genre.GenreClassifier;
 
 /**
  * Gemini(무료 한도) 기반 장르 분류기 — 폴백 체인의 <b>1차</b> 공급자(ADR-11).

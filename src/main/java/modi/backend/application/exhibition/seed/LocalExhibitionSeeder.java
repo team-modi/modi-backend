@@ -1,6 +1,5 @@
-package modi.backend.ingestion.application.seed;
+package modi.backend.application.exhibition.seed;
 
-import modi.backend.ingestion.application.ExhibitionCatalogBootSync;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
@@ -30,7 +29,7 @@ import modi.backend.support.db.SqlScriptSplitter;
  *
  * <p><b>왜 필요한가</b>: {@code application.yaml}에 공공데이터 인증키 기본값이 박혀 있어, 프론트 개발자가 도커로 로컬 기동하면
  * 부팅 카탈로그 동기화가 실 data.go.kr을 호출한다(+빈 Gemini 키 random 폴백). 이 시더가 켜지면 그 외부 동기화·스케줄러는
- * skip되고({@link ExhibitionCatalogBootSync}·{@link ExhibitionSyncScheduler}), <b>classpath 시드 SQL로만</b> 초기화된다 —
+ * skip되고({@code ExhibitionCatalogBootSync}·{@code ExhibitionSyncScheduler}), <b>classpath 시드 SQL로만</b> 초기화된다 —
  * 로컬 실 API 호출 0.
  *
  * <p><b>동작</b>: Flyway 마이그레이션 이후(ApplicationRunner라 자동) 실행된다. {@code exhibitions}가 <b>비어 있을 때만</b>

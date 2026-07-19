@@ -23,19 +23,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import modi.backend.ingestion.application.ExhibitionSyncFacade;
+import modi.backend.application.exhibition.contract.ExhibitionBackfill;
 import modi.backend.ingestion.application.draft.ExhibitionDraftFacade;
 import modi.backend.ingestion.application.enricher.CatalogEnricher;
 import modi.backend.ingestion.application.outbox.ExhibitionOutboxFacade;
 import modi.backend.ingestion.config.CatalogEnrichProperties;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.ingestion.domain.data.GenreClassification;
-import modi.backend.ingestion.domain.data.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreClassification;
+import modi.backend.domain.exhibition.genre.GenreResult;
 import modi.backend.ingestion.domain.outbox.OutboxFailureType;
 import modi.backend.ingestion.domain.outbox.OutboxMessage;
 import modi.backend.ingestion.domain.outbox.OutboxMessageType;
-import modi.backend.ingestion.domain.port.GenreClassificationException;
-import modi.backend.ingestion.domain.port.GenreClassifier;
+import modi.backend.domain.exhibition.genre.GenreClassificationException;
+import modi.backend.domain.exhibition.genre.GenreClassifier;
 
 /**
  * CatalogEnricher 단위 검증 — <b>전시 아웃박스 기반</b> 장르 처리(스윕 → 드레인). 핵심 둘:
@@ -46,7 +46,7 @@ class CatalogEnricherTest {
 
 	private final CatalogEnrichProperties props = new CatalogEnrichProperties(40, 20);
 
-	private ExhibitionSyncFacade facade;
+	private ExhibitionBackfill backfill;
 	private ExhibitionDraftFacade draftFacade;
 	private ExhibitionOutboxFacade outboxFacade;
 	private GenreClassifier classifier;
@@ -54,13 +54,13 @@ class CatalogEnricherTest {
 
 	@BeforeEach
 	void setUp() {
-		facade = mock(ExhibitionSyncFacade.class);
+		backfill = mock(ExhibitionBackfill.class);
 		draftFacade = mock(ExhibitionDraftFacade.class);
 		outboxFacade = mock(ExhibitionOutboxFacade.class);
 		classifier = mock(GenreClassifier.class);
-		enricher = new CatalogEnricher(facade, draftFacade, outboxFacade, props, classifier);
-		when(facade.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of());
-		when(facade.resolveGenreInputs(anyCollection())).thenReturn(Map.of());
+		enricher = new CatalogEnricher(backfill, draftFacade, outboxFacade, props, classifier);
+		when(backfill.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of());
+		when(backfill.resolveGenreInputs(anyCollection())).thenReturn(Map.of());
 		when(draftFacade.resolveGenreInput(anyString())).thenReturn(Optional.empty());
 		when(outboxFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any())).thenReturn(List.of());
 	}
@@ -76,7 +76,7 @@ class CatalogEnricherTest {
 	@Test
 	@DisplayName("스윕 — 미분류 레거시 CATALOG를 CLASSIFY_GENRE로 멱등 enqueue한다")
 	void enrichGenres_미분류를_메시지로_스윕() {
-		when(facade.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of("E1", "E2"));
+		when(backfill.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of("E1", "E2"));
 
 		enricher.enrichGenres();
 
@@ -90,7 +90,7 @@ class CatalogEnricherTest {
 		OutboxMessage m2 = genreMessage("E2");
 		when(outboxFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any()))
 				.thenReturn(List.of(m1, m2), List.of());
-		when(facade.resolveGenreInputs(anyCollection()))
+		when(backfill.resolveGenreInputs(anyCollection()))
 				.thenReturn(Map.of("E1", classification(), "E2", classification()));
 		when(classifier.classifyAll(anyList())).thenReturn(List.of(
 				GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash"),
@@ -99,7 +99,7 @@ class CatalogEnricherTest {
 		int total = enricher.enrichGenres();
 
 		verify(classifier, times(1)).classifyAll(anyList()); // 전시마다가 아니라 배치당 1콜
-		verify(facade, times(2)).applyGenreResults(argThat(m -> m.size() == 1), any());
+		verify(backfill, times(2)).applyGenreResults(argThat(m -> m.size() == 1), any());
 		verify(outboxFacade, times(2)).markSucceeded(any(), any());
 		assertThat(total).isEqualTo(2);
 	}
@@ -116,8 +116,8 @@ class CatalogEnricherTest {
 
 		enricher.enrichGenres();
 
-		verify(draftFacade).applyGenreAndPromote(eq("D1"), any(), any()); // 게이트 충족 시 이 트랜잭션에서 승격까지
-		verify(facade, never()).applyGenreResults(any(), any());
+		verify(draftFacade).applyGenre(eq("D1"), any(), any()); // 게이트 충족 시 이 트랜잭션에서 승격까지
+		verify(backfill, never()).applyGenreResults(any(), any());
 		verify(outboxFacade).markSucceeded(eq(m1), any());
 	}
 
@@ -128,7 +128,7 @@ class CatalogEnricherTest {
 		OutboxMessage m2 = genreMessage("D1");
 		when(outboxFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any()))
 				.thenReturn(List.of(m1, m2), List.of());
-		when(facade.resolveGenreInputs(anyCollection())).thenReturn(Map.of("E1", classification()));
+		when(backfill.resolveGenreInputs(anyCollection())).thenReturn(Map.of("E1", classification()));
 		when(draftFacade.resolveGenreInput("D1")).thenReturn(Optional.of(classification()));
 		when(classifier.classifyAll(anyList())).thenThrow(new GenreClassificationException("전 공급자 실패"));
 
@@ -136,8 +136,8 @@ class CatalogEnricherTest {
 
 		verify(outboxFacade, times(2)).markFailed(any(), eq(OutboxFailureType.RETRYABLE), anyString(), any());
 		verify(outboxFacade, never()).markSucceeded(any(), any());
-		verify(facade, never()).applyGenreResults(any(), any());
-		verify(draftFacade, never()).applyGenreAndPromote(any(), any(), any()); // 가짜 값이 승격을 오염시키지 않는다
+		verify(backfill, never()).applyGenreResults(any(), any());
+		verify(draftFacade, never()).applyGenre(any(), any(), any()); // 가짜 값이 승격을 오염시키지 않는다
 	}
 
 	@Test

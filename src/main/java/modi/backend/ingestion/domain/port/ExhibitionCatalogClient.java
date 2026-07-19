@@ -1,17 +1,16 @@
 package modi.backend.ingestion.domain.port;
 
-import modi.backend.ingestion.domain.data.CatalogDetailData;
 import modi.backend.ingestion.domain.data.CatalogListData;
 
+import modi.backend.domain.exhibition.catalog.ExhibitionDetailClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 
-import java.util.Optional;
 
 /**
  * 외부 전시 API 수집 포트(도메인 소유). 구현은 infra(DIP) — 외부 HTTP·응답 포맷을 도메인에서 감춘다.
  * 외부 장애/통신 실패는 {@link ExhibitionErrorCode#EXTERNAL_API_UNAVAILABLE}로 변환해 던진다.
  */
-public interface ExhibitionCatalogClient {
+public interface ExhibitionCatalogClient extends ExhibitionDetailClient {
 
 	/**
 	 * 설정된 페이지 범위를 순회하며 적재 가능한 전시 수집 데이터를 모두 가져온다.
@@ -21,11 +20,4 @@ public interface ExhibitionCatalogClient {
 	 */
 	CatalogListData fetchAll();
 
-	/**
-	 * 단건 상세(detail2)를 지연 조회한다. 인증키 미설정/결과 없음은 빈 Optional.
-	 *
-	 * @param externalId 원천 seq
-	 * @return 상세 확장 필드(없으면 빈 Optional)
-	 */
-	Optional<CatalogDetailData> fetchDetail(String externalId);
 }

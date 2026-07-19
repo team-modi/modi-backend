@@ -20,9 +20,9 @@ import lombok.NoArgsConstructor;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.ingestion.domain.data.CatalogDetailData;
+import modi.backend.domain.exhibition.catalog.CatalogDetailData;
 import modi.backend.ingestion.domain.data.CatalogExhibitionData;
-import modi.backend.ingestion.domain.data.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreResult;
 
 /**
  * 전시 초기화 스테이징 — {@code exhibition_draft} 매핑. <b>초기화 in-flight 상태의 단독 보유자</b>다(ADR-10).

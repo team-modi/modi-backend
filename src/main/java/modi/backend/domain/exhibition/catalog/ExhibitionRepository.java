@@ -5,7 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-import modi.backend.ingestion.domain.data.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreResult;
 
 /**
  * 전시 애그리거트의 쓰기 진입점(도메인 소유, 구현은 infra — DIP). soft delete된 행은 조회에서 제외한다.

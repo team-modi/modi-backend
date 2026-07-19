@@ -11,7 +11,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.support.RestClientAdapter;
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
-import modi.backend.ingestion.domain.port.PlaceHoursProvider;
+import modi.backend.domain.exhibition.hours.PlaceHoursProvider;
 import modi.backend.ingestion.infra.google.GoogleMapsApi;
 import modi.backend.ingestion.infra.google.GooglePlaceHoursProvider;
 import modi.backend.ingestion.infra.mock.MockPlaceHoursProvider;

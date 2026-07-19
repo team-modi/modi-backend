@@ -22,7 +22,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.exhibition.catalog.ArtistRepository;
-import modi.backend.ingestion.domain.data.CatalogDetailData;
+import modi.backend.domain.exhibition.catalog.CatalogDetailData;
 import modi.backend.domain.exhibition.catalog.Exhibition;
 import modi.backend.ingestion.domain.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;

@@ -9,10 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
+import modi.backend.application.exhibition.contract.PlaceHoursBackfill;
 import modi.backend.ingestion.config.OutboxProperties;
-import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
-import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
-import modi.backend.domain.exhibition.hours.PlaceHours;
 import modi.backend.ingestion.domain.outbox.OutboxFailureType;
 import modi.backend.ingestion.domain.outbox.OutboxMessage;
 import modi.backend.ingestion.domain.outbox.OutboxMessageRepository;
@@ -34,8 +32,8 @@ import modi.backend.ingestion.domain.outbox.OutboxMessageType;
 public class ExhibitionOutboxFacade {
 
 	private final OutboxMessageRepository outboxMessageRepository;
-	/** target_key(=exhibition_place.place_key, 정규화 이름 — ADR-07)로 전시장을 해소해 정준 영업시간을 찾는다(재검증 가드용). */
-	private final ExhibitionPlaceRepository exhibitionPlaceRepository;
+	/** target_key(=exhibition_place.place_key, 정규화 이름 — ADR-07)로 정준 영업시간 상태를 본다(재검증 가드용, 코어 계약). */
+	private final PlaceHoursBackfill placeHoursBackfill;
 	private final OutboxProperties properties;
 	/** 커밋 직후 릴레이 드레인을 앞당기는 글루 이벤트({@link OutboxEnqueued}) 발행자. */
 	private final ApplicationEventPublisher eventPublisher;
@@ -79,16 +77,12 @@ public class ExhibitionOutboxFacade {
 		if (placeKey == null || placeKey.isBlank()) {
 			return;
 		}
-		// target_key는 exhibition_place.place_key(정규화 이름)다 — 전시장을 해소해 그 장소의 정준 영업시간을 본다.
-		ExhibitionPlace place = exhibitionPlaceRepository.findByPlaceKey(placeKey).orElse(null);
-		if (place == null) {
-			return; // 아직 그 이름의 전시장이 없다(비정상 유입) — 재검증 대상 아님.
+		// target_key는 exhibition_place.place_key(정규화 이름)다 — 코어 계약으로 그 장소의 정준 영업시간 상태를 본다.
+		PlaceHoursBackfill.HoursSyncState state = placeHoursBackfill.findHoursSyncState(placeKey).orElse(null);
+		if (state == null) {
+			return; // 가드 1: 전시장이 없거나 최초 조회 전 장소 — 재검증 이벤트 대상이 아니다(최초 FETCH는 별도 경로).
 		}
-		PlaceHours placeHours = exhibitionPlaceRepository.findHours(place.getId()).orElse(null);
-		if (placeHours == null) {
-			return; // 가드 1: 최초 조회 전 장소는 재검증 이벤트 대상이 아니다.
-		}
-		if (isRecentlySynced(placeHours, now)) {
+		if (isRecentlySynced(state.syncedAt(), now)) {
 			return; // 가드 2: 최근에 확인한 장소는 최소 간격 안이라 건너뛴다.
 		}
 		outboxMessageRepository.findByMessageTypeAndTargetKey(OutboxMessageType.REFRESH_PLACE_HOURS, placeKey)
@@ -100,8 +94,7 @@ public class ExhibitionOutboxFacade {
 		eventPublisher.publishEvent(new OutboxEnqueued(OutboxMessageType.REFRESH_PLACE_HOURS));
 	}
 
-	private boolean isRecentlySynced(PlaceHours placeHours, LocalDateTime now) {
-		LocalDateTime syncedAt = placeHours.getSyncedAt();
+	private boolean isRecentlySynced(LocalDateTime syncedAt, LocalDateTime now) {
 		if (syncedAt == null) {
 			return false; // 성공 확인 시각을 모르면 막지 않는다(재검증 허용).
 		}

@@ -19,7 +19,7 @@ import org.springframework.web.client.support.RestClientAdapter;
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
 import modi.backend.ingestion.config.PublicDataProperties;
-import modi.backend.ingestion.domain.data.CatalogDetailData;
+import modi.backend.domain.exhibition.catalog.CatalogDetailData;
 import modi.backend.ingestion.domain.data.CatalogExhibitionData;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import okhttp3.mockwebserver.MockResponse;

@@ -18,10 +18,10 @@ import io.micrometer.core.instrument.MeterRegistry;
 import modi.backend.ingestion.config.GenreClaudeProperties;
 import modi.backend.domain.exhibition.genre.GenreKeyword;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.ingestion.domain.data.GenreClassification;
-import modi.backend.ingestion.domain.data.GenreResult;
-import modi.backend.ingestion.domain.port.GenreClassificationException;
-import modi.backend.ingestion.domain.port.GenreClassifier;
+import modi.backend.domain.exhibition.genre.GenreClassification;
+import modi.backend.domain.exhibition.genre.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreClassificationException;
+import modi.backend.domain.exhibition.genre.GenreClassifier;
 
 /**
  * Claude(Anthropic) 기반 장르 분류기 — 폴백 체인의 <b>2차</b> 공급자(ADR-11). 1차(Gemini)가 한도 초과·장애로

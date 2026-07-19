@@ -12,8 +12,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import modi.backend.TestcontainersConfiguration;
 import modi.backend.ingestion.domain.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.hours.OpeningHoursFormatter;
-import modi.backend.ingestion.domain.data.PlaceHoursData;
-import modi.backend.ingestion.domain.port.PlaceHoursProvider;
+import modi.backend.domain.exhibition.hours.PlaceHoursData;
+import modi.backend.domain.exhibition.hours.PlaceHoursProvider;
 import modi.backend.ingestion.infra.mock.MockPlaceHoursProvider;
 
 /**

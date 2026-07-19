@@ -13,6 +13,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import lombok.RequiredArgsConstructor;
 import modi.backend.ingestion.application.enricher.CatalogEnricher;
 import modi.backend.ingestion.application.enricher.DetailEnricher;
+import modi.backend.ingestion.application.enricher.DraftPromoter;
 import modi.backend.ingestion.application.enricher.PlaceHoursRefresher;
 import modi.backend.ingestion.application.outbox.OutboxEnqueued;
 
@@ -46,6 +47,7 @@ public class ExhibitionOutboxRelay {
 
 	private final CatalogEnricher catalogEnricher;
 	private final DetailEnricher detailEnricher;
+	private final DraftPromoter draftPromoter;
 	private final PlaceHoursRefresher placeHoursRefresher;
 
 	/**
@@ -74,7 +76,7 @@ public class ExhibitionOutboxRelay {
 		drain();
 	}
 
-	/** 도래한 메시지 전 타입 드레인 — 장르(CLASSIFY_GENRE) → 상세(FETCH_DETAIL) → 영업시간(FETCH/REFRESH_PLACE_HOURS). */
+	/** 도래한 메시지 전 타입 드레인 — 장르(CLASSIFY_GENRE) → 상세(FETCH_DETAIL) → 승격(EXHIBITION_READY) → 영업시간(FETCH/REFRESH_PLACE_HOURS). */
 	public void drain() {
 		if (localSeedEnabled) {
 			return; // 로컬 시드 모드 — 외부 보강 드레인 안 함(로그 폭주 방지: 60초 폴링이라 침묵).
@@ -88,6 +90,11 @@ public class ExhibitionOutboxRelay {
 			detailEnricher.enrichDetails();
 		} catch (RuntimeException e) {
 			log.warn("상세 재시도 드레인 실패(다음 주기 재시도): {}", e.getMessage());
+		}
+		try {
+			draftPromoter.promoteReady();
+		} catch (RuntimeException e) {
+			log.warn("승격 드레인 실패(다음 주기 재시도): {}", e.getMessage());
 		}
 		try {
 			placeHoursRefresher.refreshDueHours();

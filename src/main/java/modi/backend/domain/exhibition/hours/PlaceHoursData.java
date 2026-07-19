@@ -1,4 +1,4 @@
-package modi.backend.ingestion.domain.data;
+package modi.backend.domain.exhibition.hours;
 
 import modi.backend.domain.exhibition.hours.WeeklyOpeningHours;
 

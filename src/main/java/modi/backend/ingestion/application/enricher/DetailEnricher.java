@@ -10,13 +10,15 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
+import modi.backend.application.exhibition.contract.ExhibitionBackfill;
+import modi.backend.application.exhibition.contract.DetailTargetState;
 import modi.backend.ingestion.application.ExhibitionSyncFacade;
 import modi.backend.ingestion.application.draft.ExhibitionDraftFacade;
 import modi.backend.ingestion.application.outbox.ExhibitionOutboxFacade;
 import modi.backend.ingestion.application.outbox.OutboxFailures;
 import modi.backend.ingestion.application.outbox.OutboxProcessing;
 import modi.backend.ingestion.config.OutboxProperties;
-import modi.backend.ingestion.domain.data.CatalogDetailData;
+import modi.backend.domain.exhibition.catalog.CatalogDetailData;
 import modi.backend.ingestion.domain.outbox.OutboxFailureType;
 import modi.backend.ingestion.domain.outbox.OutboxMessage;
 import modi.backend.ingestion.domain.outbox.OutboxMessageStatus;
@@ -43,6 +45,8 @@ public class DetailEnricher {
 
 	private final ExhibitionOutboxFacade exhibitionOutboxFacade;
 	private final ExhibitionSyncFacade exhibitionSyncFacade;
+	/** 레거시 전시 뒤채움 계약(코어 소유) — 대상 판정·무상세 확인. */
+	private final ExhibitionBackfill exhibitionBackfill;
 	private final ExhibitionDraftFacade exhibitionDraftFacade;
 	private final ExhibitionCatalogClient catalogClient;
 	private final OutboxProperties properties;
@@ -114,7 +118,7 @@ public class DetailEnricher {
 
 	/** 전시 폴백 경로(레거시 미완성 행) — 기존 satellite 채움 의미론 그대로. */
 	private boolean processExhibition(OutboxMessage message, String externalId, LocalDateTime now) {
-		DetailTargetState state = exhibitionSyncFacade.findDetailTargetState(externalId);
+		DetailTargetState state = exhibitionBackfill.findDetailTargetState(externalId);
 		if (state == DetailTargetState.ALREADY_SYNCED) {
 			// 다른 경로가 이미 상세를 채웠다(또는 draft가 승격 시 채움) — 할 일 없음.
 			return OutboxProcessing.succeed(exhibitionOutboxFacade, message, now);
@@ -132,8 +136,8 @@ public class DetailEnricher {
 					OutboxFailures.classify(e), OutboxFailures.describe(e), now);
 		}
 		try {
-			detail.ifPresentOrElse(d -> exhibitionSyncFacade.applyDetailForJob(externalId, d),
-					() -> exhibitionSyncFacade.markDetailCheckedForJob(externalId));
+			detail.ifPresentOrElse(d -> exhibitionSyncFacade.applyLegacyDetail(externalId, d),
+					() -> exhibitionBackfill.markDetailChecked(externalId, LocalDateTime.now()));
 		} catch (OptimisticLockingFailureException e) {
 			return false; // 반영 중 충돌 — 다른 워커가 처리
 		} catch (RuntimeException e) {

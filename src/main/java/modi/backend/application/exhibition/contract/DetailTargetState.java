@@ -1,4 +1,4 @@
-package modi.backend.ingestion.application.enricher;
+package modi.backend.application.exhibition.contract;
 
 /**
  * FETCH_DETAIL 작업이 대상 전시를 만났을 때의 상태 — {@link DetailEnricher}가 처리 방향을 정한다.

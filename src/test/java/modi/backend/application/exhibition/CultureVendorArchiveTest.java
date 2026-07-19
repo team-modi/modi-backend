@@ -2,6 +2,7 @@ package modi.backend.application.exhibition;
 
 import modi.backend.ingestion.application.CatalogSynchronizer;
 import modi.backend.ingestion.application.enricher.CatalogEnricher;
+import modi.backend.ingestion.application.enricher.DraftPromoter;
 import modi.backend.ingestion.application.enricher.DetailEnricher;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,7 +21,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import modi.backend.TestcontainersConfiguration;
-import modi.backend.ingestion.domain.data.CatalogDetailData;
+import modi.backend.domain.exhibition.catalog.CatalogDetailData;
 import modi.backend.ingestion.domain.data.CatalogExhibitionData;
 import modi.backend.ingestion.domain.data.CatalogListData;
 import modi.backend.ingestion.domain.entity.CultureDetailResponse;
@@ -62,6 +63,9 @@ class CultureVendorArchiveTest {
 
 	@Autowired
 	CatalogEnricher catalogEnricher;
+
+	@Autowired
+	DraftPromoter draftPromoter;
 
 	@Autowired
 	ExhibitionRepository exhibitionRepository;
@@ -254,6 +258,7 @@ class CultureVendorArchiveTest {
 	private void drainPipeline() {
 		detailEnricher.enrichDetails();
 		catalogEnricher.enrichGenres();
+		draftPromoter.promoteReady(); // 승격 소비(ADR-12)
 	}
 
 	/** 벤더층에 적재되는 목록 payload 모양(응답 아이템의 매핑 JSON — 도메인 변환 이전 값). */

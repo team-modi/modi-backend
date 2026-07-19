@@ -1,9 +1,9 @@
-package modi.backend.ingestion.domain.port;
+package modi.backend.domain.exhibition.genre;
 
 import java.util.List;
 
-import modi.backend.ingestion.domain.data.GenreClassification;
-import modi.backend.ingestion.domain.data.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreClassification;
+import modi.backend.domain.exhibition.genre.GenreResult;
 
 /**
  * 전시 장르 분류 포트(도메인 소유, 구현 무관). 애플리케이션은 이 인터페이스만 의존하고,

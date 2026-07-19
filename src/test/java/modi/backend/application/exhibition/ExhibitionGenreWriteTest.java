@@ -1,7 +1,7 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.ingestion.application.enricher.GenreTarget;
-import modi.backend.ingestion.application.ExhibitionSyncFacade;
+import modi.backend.application.exhibition.contract.GenreTarget;
+import modi.backend.application.exhibition.contract.ExhibitionBackfill;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,10 +24,10 @@ import modi.backend.domain.exhibition.catalog.ExhibitionGenre;
 import modi.backend.infra.exhibition.catalog.ExhibitionGenreJpaRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
-import modi.backend.ingestion.domain.data.GenreClassification;
+import modi.backend.domain.exhibition.genre.GenreClassification;
 import modi.backend.domain.exhibition.genre.GenreKeyword;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.ingestion.domain.data.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreResult;
 
 /**
  * 장르 <b>쓰기</b> 검증(@SpringBootTest + Testcontainers-MySQL).
@@ -47,7 +47,7 @@ class ExhibitionGenreWriteTest {
 	ExhibitionFacade exhibitionFacade;
 
 	@Autowired
-	ExhibitionSyncFacade exhibitionSyncFacade;
+	ExhibitionBackfill exhibitionBackfill;
 
 	@Autowired
 	ExhibitionRepository exhibitionRepository;
@@ -92,7 +92,7 @@ class ExhibitionGenreWriteTest {
 		Exhibition seeded = seedCatalog();
 		List<GenreTarget> targets = List.of(new GenreTarget(seeded.getId(), GenreClassification.from(seeded)));
 
-		int applied = exhibitionSyncFacade.applyGenres(targets,
+		int applied = exhibitionBackfill.applyGenres(targets,
 				List.of(GenreResult.ai("미디어아트", GenreProvider.GEMINI, "gemini-2.5-flash-002")),
 				LocalDateTime.now());
 
@@ -109,9 +109,9 @@ class ExhibitionGenreWriteTest {
 	void applyGenres_재분류_행추가없이_갱신() {
 		Exhibition seeded = seedCatalog();
 		List<GenreTarget> targets = List.of(new GenreTarget(seeded.getId(), GenreClassification.from(seeded)));
-		exhibitionSyncFacade.applyGenres(targets, List.of(GenreResult.mock("회화·드로잉")), LocalDateTime.now());
+		exhibitionBackfill.applyGenres(targets, List.of(GenreResult.mock("회화·드로잉")), LocalDateTime.now());
 
-		exhibitionSyncFacade.applyGenres(targets,
+		exhibitionBackfill.applyGenres(targets,
 				List.of(GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash")), LocalDateTime.now());
 
 		assertThat(exhibitionGenreRepository.findAllByExhibitionIdIn(List.of(seeded.getId()))).hasSize(1);
@@ -129,7 +129,7 @@ class ExhibitionGenreWriteTest {
 		seeded.delete();
 		exhibitionRepository.save(seeded);
 
-		int applied = exhibitionSyncFacade.applyGenres(targets, List.of(GenreResult.mock("사진")), LocalDateTime.now());
+		int applied = exhibitionBackfill.applyGenres(targets, List.of(GenreResult.mock("사진")), LocalDateTime.now());
 
 		assertThat(applied).isZero();
 		assertThat(exhibitionGenreRepository.findByExhibitionId(seeded.getId())).isEmpty();

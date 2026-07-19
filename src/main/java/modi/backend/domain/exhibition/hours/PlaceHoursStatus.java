@@ -1,6 +1,6 @@
 package modi.backend.domain.exhibition.hours;
 
-import modi.backend.ingestion.domain.data.PlaceHoursData;
+import modi.backend.domain.exhibition.hours.PlaceHoursData;
 
 /**
  * 장소 영업시간 조회 상태(정준층 — {@code place_hours.status}).

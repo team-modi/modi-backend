@@ -1,5 +1,7 @@
 package modi.backend.ingestion.application.enricher;
 
+import modi.backend.application.exhibition.contract.PlaceHoursBackfill;
+import modi.backend.application.exhibition.contract.PlaceHoursTarget;
 import modi.backend.ingestion.application.ExhibitionSyncFacade;
 
 import modi.backend.ingestion.application.outbox.ExhibitionOutboxFacade;
@@ -19,8 +21,8 @@ import modi.backend.ingestion.config.OutboxProperties;
 import modi.backend.ingestion.domain.outbox.OutboxMessage;
 import modi.backend.ingestion.domain.outbox.OutboxMessageType;
 import modi.backend.domain.exhibition.hours.OpeningHoursFormatter;
-import modi.backend.ingestion.domain.data.PlaceHoursData;
-import modi.backend.ingestion.domain.port.PlaceHoursProvider;
+import modi.backend.domain.exhibition.hours.PlaceHoursData;
+import modi.backend.domain.exhibition.hours.PlaceHoursProvider;
 
 /**
  * 이벤트 구동 영업시간 재검증 처리기(설계 §4-1) — 전시 아웃박스의 영업시간 메시지
@@ -43,6 +45,8 @@ public class PlaceHoursRefresher {
 
 	private final ExhibitionOutboxFacade exhibitionOutboxFacade;
 	private final ExhibitionSyncFacade exhibitionSyncFacade;
+	/** 영업시간 정준층 계약(코어 소유) — 대상 해소·실패 기록. */
+	private final PlaceHoursBackfill placeHoursBackfill;
 	private final PlaceHoursProvider placeHoursProvider;
 	private final OpeningHoursFormatter openingHoursFormatter;
 	private final OutboxProperties properties;
@@ -72,7 +76,7 @@ public class PlaceHoursRefresher {
 	/** @return true면 전이함, false면 낙관락 충돌로 skip(다른 워커가 처리). */
 	private boolean processOne(OutboxMessage job, LocalDateTime now) {
 		String placeKey = job.getTargetKey();
-		Optional<PlaceHoursTarget> resolved = exhibitionSyncFacade.resolvePlaceHoursTarget(placeKey);
+		Optional<PlaceHoursTarget> resolved = placeHoursBackfill.resolvePlaceHoursTarget(placeKey);
 		if (resolved.isEmpty()) {
 			// 그 장소를 쓰는 전시가 더는 없다 — 재검증할 대상이 없으니 성공으로 마감한다.
 			return OutboxProcessing.succeed(exhibitionOutboxFacade, job, now);
@@ -85,7 +89,7 @@ public class PlaceHoursRefresher {
 		} catch (org.springframework.dao.OptimisticLockingFailureException e) {
 			return false; // 반영 중 충돌 — 다른 워커가 처리
 		} catch (RuntimeException e) {
-			exhibitionSyncFacade.recordVenueHoursFailure(target, placeHoursProvider.vendor());
+			placeHoursBackfill.markHoursFailure(target.exhibitionPlaceId(), placeHoursProvider.vendor());
 			return OutboxProcessing.fail(exhibitionOutboxFacade, job,
 					OutboxFailures.classify(e), OutboxFailures.describe(e), now);
 		}

@@ -34,14 +34,14 @@ import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegionGroup;
 import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.domain.exhibition.catalog.ExhibitionSection;
-import modi.backend.ingestion.domain.data.GenreClassification;
-import modi.backend.ingestion.domain.port.GenreClassificationException;
-import modi.backend.ingestion.domain.port.GenreClassifier;
+import modi.backend.domain.exhibition.genre.GenreClassification;
+import modi.backend.domain.exhibition.genre.GenreClassificationException;
+import modi.backend.domain.exhibition.genre.GenreClassifier;
 import modi.backend.domain.exhibition.genre.GenreKeyword;
-import modi.backend.ingestion.domain.data.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreResult;
 import modi.backend.domain.exhibition.hours.PlaceHours;
-import modi.backend.ingestion.domain.data.CatalogDetailData;
-import modi.backend.ingestion.domain.port.ExhibitionCatalogClient;
+import modi.backend.domain.exhibition.catalog.CatalogDetailData;
+import modi.backend.domain.exhibition.catalog.ExhibitionDetailClient;
 import modi.backend.domain.venue.Venue;
 import modi.backend.domain.venue.VenueErrorCode;
 import modi.backend.domain.venue.VenueRepository;
@@ -79,7 +79,7 @@ public class ExhibitionFacade {
 	/** 작가(정규화 이름 UK, 독립 애그리거트) — CUSTOM 등록의 artist 문자열을 resolve-or-create해 조인으로 잇는다. */
 	private final ArtistRepository artistRepository;
 	/** 상세 지연 수집(최초 상세 진입 1회)용 — 배치 동기화가 아니라 사용자 경로의 캐시 채움이다. */
-	private final ExhibitionCatalogClient catalogClient;
+	private final ExhibitionDetailClient catalogClient;
 	private final ExhibitionBookmarkRepository exhibitionBookmarkRepository;
 	private final VenueRepository venueRepository;
 	private final RecordJpaRepository recordJpaRepository;

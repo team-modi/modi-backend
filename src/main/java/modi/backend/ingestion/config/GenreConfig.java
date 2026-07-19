@@ -15,7 +15,7 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
-import modi.backend.ingestion.domain.port.GenreClassifier;
+import modi.backend.domain.exhibition.genre.GenreClassifier;
 import modi.backend.ingestion.infra.claude.ClaudeGenreClassifier;
 import modi.backend.ingestion.infra.failover.FailoverGenreClassifier;
 import modi.backend.ingestion.infra.gemini.GeminiApi;

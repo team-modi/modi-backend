@@ -24,9 +24,9 @@ import modi.backend.domain.exhibition.genre.GenreProvider;
 import modi.backend.domain.exhibition.hours.PlaceHours;
 import modi.backend.domain.exhibition.hours.PlaceHoursStatus;
 import modi.backend.domain.exhibition.hours.PlaceHoursVendor;
-import modi.backend.ingestion.domain.data.CatalogDetailData;
+import modi.backend.domain.exhibition.catalog.CatalogDetailData;
 import modi.backend.ingestion.domain.data.CatalogExhibitionData;
-import modi.backend.ingestion.domain.data.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreResult;
 import modi.backend.ingestion.domain.draft.DraftStatus;
 import modi.backend.ingestion.domain.draft.ExhibitionDraft;
 import modi.backend.ingestion.domain.draft.ExhibitionDraftRepository;
@@ -89,7 +89,7 @@ class ExhibitionSyncAtomicityIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("승격 — 마지막 필수 스텝(장르) 트랜잭션에서 전시·상세·장르·재검증 enqueue·draft 종료가 전부 남는다")
+	@DisplayName("승격 — 마지막 스텝 tx가 EXHIBITION_READY를 원자 기록하고, 소비가 전시·재검증 enqueue·draft 종료를 완주한다(ADR-12)")
 	void promote_승격_원자성() {
 		int seq = SEQ.getAndIncrement();
 		String externalId = "PROMOTE-" + seq;
@@ -104,10 +104,18 @@ class ExhibitionSyncAtomicityIntegrationTest {
 		exhibitionDraftFacade.stageFromList(listData(externalId, placeName), now);
 		exhibitionDraftFacade.applyDetail(externalId,
 				new CatalogDetailData("무료", "전시 소개", null, "02-000-0000", null, null, "서울시 종로구", null, null), now);
-		exhibitionDraftFacade.applyGenreAndPromote(externalId,
+		exhibitionDraftFacade.applyGenre(externalId,
 				GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash"), now);
 
-		// 승격 산물 전부가 남았다 — 전시 코어(장소 연결)·draft 종료·재검증 메시지.
+		// 발행 측 원자성 — 마지막 스텝(장르) 트랜잭션의 산물로 승격 신호가 남았고, 전시는 아직 없다(소비 전).
+		OutboxMessage ready = outboxMessageRepository
+				.findByMessageTypeAndTargetKey(OutboxMessageType.EXHIBITION_READY, externalId).orElseThrow();
+		assertThat(ready.getStatus()).isEqualTo(OutboxMessageStatus.PENDING);
+		assertThat(exhibitionRepository.findByExternalId(externalId)).isEmpty();
+
+		exhibitionDraftFacade.completePromotion(externalId, now); // 소비(멱등) — 등록·재검증 enqueue·draft 종료 완주
+
+		// 소비 산물 전부가 남았다 — 전시 코어(장소 연결)·draft 종료·재검증 메시지.
 		Exhibition promoted = exhibitionRepository.findByExternalId(externalId).orElseThrow();
 		assertThat(promoted.getExhibitionPlaceId()).isEqualTo(placeId);
 		assertThat(exhibitionRepository.hasDetail(promoted.getId())).isTrue();
@@ -128,7 +136,7 @@ class ExhibitionSyncAtomicityIntegrationTest {
 		exhibitionDraftFacade.stageFromList(listData(externalId, "게이트장소" + seq), now);
 
 		// 상세 해소 전 장르부터 도착(순서 역전) — 게이트가 막는다.
-		exhibitionDraftFacade.applyGenreAndPromote(externalId,
+		exhibitionDraftFacade.applyGenre(externalId,
 				GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash"), now);
 
 		assertThat(exhibitionRepository.findByExternalId(externalId)).isEmpty(); // 전시는 아직 없다
@@ -146,10 +154,13 @@ class ExhibitionSyncAtomicityIntegrationTest {
 		exhibitionDraftFacade.stageFromList(listData(externalId, "멱등장소" + seq), now);
 		exhibitionDraftFacade.markDetailAbsent(externalId, now); // 무상세 해소도 게이트를 채운다
 
-		exhibitionDraftFacade.applyGenreAndPromote(externalId,
+		exhibitionDraftFacade.applyGenre(externalId,
 				GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash"), now);
-		exhibitionDraftFacade.applyGenreAndPromote(externalId,
+		exhibitionDraftFacade.applyGenre(externalId,
 				GenreResult.ai("공예", GenreProvider.CLAUDE, "claude-haiku-4-5-20251001"), now); // 재전달
+
+		exhibitionDraftFacade.completePromotion(externalId, now); // 소비
+		exhibitionDraftFacade.completePromotion(externalId, now); // 소비 재전달 — no-op(멱등)
 
 		Exhibition promoted = exhibitionRepository.findByExternalId(externalId).orElseThrow();
 		ExhibitionDraft draft = exhibitionDraftRepository.findByExternalId(externalId).orElseThrow();

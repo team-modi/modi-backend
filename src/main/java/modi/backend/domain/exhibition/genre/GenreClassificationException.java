@@ -1,4 +1,4 @@
-package modi.backend.ingestion.domain.port;
+package modi.backend.domain.exhibition.genre;
 
 /**
  * 장르 분류 실패 — {@link GenreClassifier} 구현이 유효한 분류를 만들지 못했을 때 던진다(ADR-11 계약 반전).

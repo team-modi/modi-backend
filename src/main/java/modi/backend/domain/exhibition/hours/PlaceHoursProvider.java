@@ -1,6 +1,6 @@
-package modi.backend.ingestion.domain.port;
+package modi.backend.domain.exhibition.hours;
 
-import modi.backend.ingestion.domain.data.PlaceHoursData;
+import modi.backend.domain.exhibition.hours.PlaceHoursData;
 
 import modi.backend.domain.exhibition.hours.PlaceHoursVendor;
 

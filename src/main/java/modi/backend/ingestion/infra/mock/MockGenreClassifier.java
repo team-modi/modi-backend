@@ -3,9 +3,9 @@ package modi.backend.ingestion.infra.mock;
 import org.springframework.stereotype.Component;
 
 import modi.backend.domain.exhibition.genre.GenreKeyword;
-import modi.backend.ingestion.domain.data.GenreClassification;
-import modi.backend.ingestion.domain.data.GenreResult;
-import modi.backend.ingestion.domain.port.GenreClassifier;
+import modi.backend.domain.exhibition.genre.GenreClassification;
+import modi.backend.domain.exhibition.genre.GenreResult;
+import modi.backend.domain.exhibition.genre.GenreClassifier;
 
 /**
  * 로컬/CI/키없음 환경의 <b>결정적</b> 장르 분류기 — 제목 해시로 마스터에서 1개를 고른다(AI 호출·비용 0).

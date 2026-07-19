@@ -19,13 +19,14 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import modi.backend.TestcontainersConfiguration;
 import modi.backend.ingestion.application.draft.ExhibitionDraftFacade;
 import modi.backend.ingestion.application.enricher.CatalogEnricher;
+import modi.backend.ingestion.application.enricher.DraftPromoter;
 import modi.backend.ingestion.application.enricher.DetailEnricher;
 import modi.backend.domain.exhibition.catalog.Exhibition;
 import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
 import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
 import modi.backend.domain.exhibition.genre.GenreProvider;
-import modi.backend.ingestion.domain.data.CatalogDetailData;
+import modi.backend.domain.exhibition.catalog.CatalogDetailData;
 import modi.backend.ingestion.domain.data.CatalogExhibitionData;
 import modi.backend.ingestion.domain.data.CatalogListData;
 import modi.backend.ingestion.domain.draft.DraftStatus;
@@ -55,6 +56,9 @@ class ExhibitionDraftPipelineIntegrationTest {
 
 	@Autowired
 	CatalogEnricher catalogEnricher;
+
+	@Autowired
+	DraftPromoter draftPromoter;
 
 	@Autowired
 	ExhibitionDraftFacade exhibitionDraftFacade;
@@ -105,6 +109,7 @@ class ExhibitionDraftPipelineIntegrationTest {
 
 		// 3) 장르 드레인 — 분류(테스트 기본 mock 분류기, 결정적) + 게이트 충족 → 같은 트랜잭션에서 승격.
 		catalogEnricher.enrichGenres();
+		draftPromoter.promoteReady(); // 승격 소비(ADR-12)
 
 		ExhibitionDraft completed = exhibitionDraftRepository.findByExternalId(externalId).orElseThrow();
 		assertThat(completed.getStatus()).isEqualTo(DraftStatus.COMPLETED);
@@ -132,6 +137,7 @@ class ExhibitionDraftPipelineIntegrationTest {
 		catalogSynchronizer.syncCatalog();
 		detailEnricher.enrichDetails();
 		catalogEnricher.enrichGenres();
+		draftPromoter.promoteReady(); // 승격 소비(ADR-12)
 
 		ExhibitionDraft completed = exhibitionDraftRepository.findByExternalId(externalId).orElseThrow();
 		assertThat(completed.getStatus()).isEqualTo(DraftStatus.COMPLETED);
