@@ -11,6 +11,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.BatchSize;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -81,6 +82,8 @@ public class Record extends BaseEntity {
 	@OneToMany(mappedBy = "record", cascade = CascadeType.ALL, orphanRemoval = true)
 	private final List<RecordKeyword> keywords = new ArrayList<>();
 
+	// 아카이브 목록은 한 페이지(기본 20건)의 감정 태그를 카드마다 읽는다 → 지연 로딩 N+1 방지로 IN 배치 조회.
+	@BatchSize(size = 100)
 	@OneToMany(mappedBy = "record", cascade = CascadeType.ALL, orphanRemoval = true)
 	private final List<RecordEmotion> emotions = new ArrayList<>();
 

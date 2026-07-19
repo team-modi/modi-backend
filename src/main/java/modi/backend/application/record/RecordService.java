@@ -207,9 +207,12 @@ public class RecordService {
 				.map(RecordMedia::getUrl)
 				.findFirst()
 				.orElse(null);
+		List<String> emotionCodes = record.getEmotions().stream()
+				.map(RecordEmotion::getEmotionCode)
+				.toList();
 		return new RecordListItemResponse(record.getId(), record.getExhibitionId(), thumbnailUrl, record.getAiSummary(),
-				record.getRepresentativeEmotion(), record.isBookmarked(), record.getWriteMode(), record.getViewedAt(),
-				record.getCreatedAt(), record.getExhibitionTitle(), record.getExhibitionType(),
+				record.getRepresentativeEmotion(), emotionCodes, record.isBookmarked(), record.getWriteMode(),
+				record.getViewedAt(), record.getCreatedAt(), record.getExhibitionTitle(), record.getExhibitionType(),
 				record.getExhibitionPosterUrl(), record.getExhibitionPlace(), record.getExhibitionRegion(),
 				record.getExhibitionCategory(), record.getExhibitionStartDate(), record.getExhibitionEndDate());
 	}

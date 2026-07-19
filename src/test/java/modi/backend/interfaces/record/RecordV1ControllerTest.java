@@ -253,7 +253,9 @@ class RecordV1ControllerTest {
 						.param("emotion", "MOVED"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.content", hasSize(1)))
-				.andExpect(jsonPath("$.data.content[0].recordId").exists());
+				.andExpect(jsonPath("$.data.content[0].recordId").exists())
+				.andExpect(jsonPath("$.data.content[0].emotionCodes", hasSize(1)))
+				.andExpect(jsonPath("$.data.content[0].emotionCodes[0]").value("MOVED"));
 	}
 
 	@Test
