@@ -1,177 +1,134 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.CatalogSynchronizer;
-import modi.backend.application.exhibition.sync.outbox.ExhibitionOutboxFacade;
-import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
-import org.springframework.test.util.ReflectionTestUtils;
 
-import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
-import modi.backend.domain.exhibition.catalog.ArtistRepository;
-import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
+import modi.backend.application.exhibition.sync.CatalogSynchronizer;
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+import modi.backend.application.exhibition.sync.draft.ExhibitionDraftFacade;
+import modi.backend.application.exhibition.sync.enricher.DetailTargetState;
+import modi.backend.application.exhibition.sync.outbox.ExhibitionOutboxFacade;
+import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
+import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
 import modi.backend.domain.exhibition.sync.data.CatalogExhibitionData;
 import modi.backend.domain.exhibition.sync.data.CatalogListData;
-import modi.backend.infra.exhibition.sync.CultureDetailResponseJpaRepository;
-import modi.backend.infra.exhibition.sync.CultureListResponseJpaRepository;
-import modi.backend.domain.exhibition.catalog.Exhibition;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessageType;
 import modi.backend.domain.exhibition.sync.port.ExhibitionCatalogClient;
-import modi.backend.domain.exhibition.catalog.ExhibitionCategory;
-import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
-import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
-import modi.backend.domain.exhibition.catalog.ExhibitionRegion;
-import modi.backend.domain.exhibition.catalog.ExhibitionQueryRepository;
-import modi.backend.domain.exhibition.catalog.ExhibitionRepository;
-import modi.backend.domain.exhibition.sync.port.GenreClassifier;
-import modi.backend.infra.exhibition.sync.GooglePlaceResponseJpaRepository;
-import modi.backend.domain.exhibition.sync.port.SyncRunRepository;
-import modi.backend.domain.venue.VenueRepository;
-import modi.backend.infra.record.RecordJpaRepository;
 
 /**
- * syncCatalog 적재 정책 단위 검증 — 목록+상세를 한 패스로 채운다: 신규는 전시장 resolve 후 상세까지 채워 적재하고,
- * 기존 미완성은 상세만 채워 완성하며(상세 satellite 생성), 이미 상세행이 있는 기존은 상세 재호출·저장 없이 건너뛴다.
- * 루프는 {@link CatalogSynchronizer}(트랜잭션 밖 조율자), 영속 단계는 {@link ExhibitionSyncFacade} — 실물 둘을
- * 함께 조립해 정책을 검증한다(리포지토리·클라이언트만 모킹).
+ * syncCatalog 라우팅 정책 단위 검증(ADR-10) — 루프는 <b>목록 외 외부 호출 0</b>: 완성 전시=스킵,
+ * 레거시 미완성=FETCH_DETAIL 메시지로 뒤채움 위임(인라인 상세 조회 없음), 그 외=draft 스테이징.
+ * 기간 비정상 원천은 스킵하되 벤더 원본은 남긴다.
  */
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class ExhibitionCatalogSyncTest {
 
-	@Mock ExhibitionRepository exhibitionRepository;
-	@Mock ExhibitionCatalogClient catalogClient;
-	@Mock ExhibitionBookmarkRepository exhibitionBookmarkRepository;
-	@Mock VenueRepository venueRepository;
-	@Mock RecordJpaRepository recordJpaRepository;
-	@Mock GooglePlaceResponseJpaRepository googlePlaceResponseRepository;
-	@Mock GenreClassifier genreClassifier;
-	@Mock CultureListResponseJpaRepository cultureListResponseRepository;
-	@Mock CultureDetailResponseJpaRepository cultureDetailResponseRepository;
-	@Mock SyncRunRepository syncRunRepository;
-	@Mock ExhibitionPlaceRepository exhibitionPlaceRepository;
-	@Mock ExhibitionQueryRepository exhibitionQueryRepository;
-	@Mock ArtistRepository artistRepository;
-	@Mock ExhibitionOutboxFacade exhibitionOutboxFacade;
+	private ExhibitionSyncFacade facade;
+	private ExhibitionDraftFacade draftFacade;
+	private ExhibitionOutboxFacade outboxFacade;
+	private ExhibitionCatalogClient catalogClient;
+	private CatalogSynchronizer synchronizer;
 
-	@InjectMocks
-	ExhibitionSyncFacade facade;
-
-	/** 동기화 루프 실물 — 파사드 실물 + 모킹된 클라이언트/아웃박스로 조립한다(@InjectMocks 이후 초기화 필요라 lazy). */
-	private CatalogSynchronizer synchronizer() {
-		return new CatalogSynchronizer(facade, exhibitionOutboxFacade, catalogClient);
+	@BeforeEach
+	void setUp() {
+		facade = mock(ExhibitionSyncFacade.class);
+		draftFacade = mock(ExhibitionDraftFacade.class);
+		outboxFacade = mock(ExhibitionOutboxFacade.class);
+		catalogClient = mock(ExhibitionCatalogClient.class);
+		synchronizer = new CatalogSynchronizer(facade, draftFacade, outboxFacade, catalogClient);
 	}
 
-	private void stubPlaceResolveCreatesNew() {
-		given(exhibitionPlaceRepository.resolveOrCreate(any(), any(), any(), any(), any()))
-				.willAnswer(inv -> withPlaceId(ExhibitionPlace.createFromList(inv.getArgument(0),
-						inv.getArgument(1), inv.getArgument(2), inv.getArgument(3), inv.getArgument(4)), 55L));
-		given(exhibitionPlaceRepository.findById(anyLong())).willReturn(Optional.empty());
-		given(exhibitionRepository.save(any(Exhibition.class))).willAnswer(inv -> inv.getArgument(0));
-	}
-
-	@Test
-	@DisplayName("syncCatalog — 신규는 전시장 resolve 후 상세까지 채워 적재하고, 기존 미완성은 상세만 채워 완성한다")
-	void syncCatalog_신규적재_기존상세완성() {
-		LocalDate today = LocalDate.now();
-		stubPlaceResolveCreatesNew();
-		Exhibition existing = withId(Exhibition.createCatalog("CAT-OLD", "기존 전시", 10L, today.minusDays(3),
-				today.plusDays(3), ExhibitionCategory.PAINTING, null, null, "기관"), 100L);
-		given(catalogClient.fetchAll()).willReturn(listData(List.of(
-				data("CAT-OLD", "기존 전시(원천 갱신본)"), data("CAT-NEW", "신규 전시"))));
-		given(exhibitionRepository.findByExternalId("CAT-OLD")).willReturn(Optional.of(existing));
-		given(exhibitionRepository.findByExternalId("CAT-NEW")).willReturn(Optional.empty());
-		given(exhibitionRepository.hasDetail(100L)).willReturn(false);
-		given(catalogClient.fetchDetail("CAT-OLD")).willReturn(Optional.of(detail("무료")));
-		given(catalogClient.fetchDetail("CAT-NEW")).willReturn(Optional.of(detail("15,000원")));
-
-		int inserted = synchronizer().syncCatalog();
-
-		assertThat(inserted).isEqualTo(1); // 신규만 적재 수에 잡힌다(기존 상세 완성은 별도)
-		assertThat(existing.getTitle()).isEqualTo("기존 전시"); // 제목은 원천 갱신본으로 안 바뀐다
-		ArgumentCaptor<String> priceCaptor = ArgumentCaptor.forClass(String.class);
-		verify(exhibitionRepository, times(2)).applyDetail(anyLong(), priceCaptor.capture(), any(), any(), any());
-		assertThat(priceCaptor.getAllValues()).containsExactlyInAnyOrder("무료", "15,000원");
-	}
-
-	@Test
-	@DisplayName("syncCatalog — 이미 상세행이 있는 기존은 상세 재호출·저장 없이 건너뛴다")
-	void syncCatalog_완성된기존_스킵() {
-		LocalDate today = LocalDate.now();
-		Exhibition synced = withId(Exhibition.createCatalog("CAT-DONE", "완성 전시", 10L, today.minusDays(1),
-				today.plusDays(5), ExhibitionCategory.PAINTING, null, null, "기관"), 200L);
-		given(catalogClient.fetchAll()).willReturn(listData(List.of(data("CAT-DONE", "완성 전시"))));
-		given(exhibitionRepository.findByExternalId("CAT-DONE")).willReturn(Optional.of(synced));
-		given(exhibitionRepository.hasDetail(200L)).willReturn(true); // 상세행 존재 → 완성 상태
-
-		int inserted = synchronizer().syncCatalog();
-
-		assertThat(inserted).isZero();
-		verify(catalogClient, never()).fetchDetail(any());
-		verify(exhibitionRepository, never()).applyDetail(anyLong(), any(), any(), any(), any());
-	}
-
-	@Test
-	@DisplayName("syncCatalog — 기간 비정상(종료<시작) 원천 레코드는 스킵하고 나머지는 상세까지 채워 적재한다")
-	void syncCatalog_기간비정상_스킵() {
-		LocalDate today = LocalDate.now();
-		stubPlaceResolveCreatesNew();
-		CatalogExhibitionData invalid = new CatalogExhibitionData("CAT-BAD", "역전 기간", "장소", today,
-				today.minusDays(1), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, null, "기관",
-				null, null, null, "전시", "서울", null);
-		given(catalogClient.fetchAll()).willReturn(listData(List.of(invalid, data("CAT-OK", "정상 전시"))));
-		given(exhibitionRepository.findByExternalId("CAT-OK")).willReturn(Optional.empty());
-		given(exhibitionRepository.hasDetail(anyLong())).willReturn(false);
-		given(catalogClient.fetchDetail("CAT-OK")).willReturn(Optional.empty()); // 원천 상세 없음 → 확인 완료행만
-
-		int inserted = synchronizer().syncCatalog();
-
-		assertThat(inserted).isEqualTo(1);
-		verify(exhibitionRepository, times(1)).save(any());
-	}
-
-	private static Exhibition withId(Exhibition e, long id) {
-		ReflectionTestUtils.setField(e, "id", id);
-		return e;
-	}
-
-	private static ExhibitionPlace withPlaceId(ExhibitionPlace p, long id) {
-		ReflectionTestUtils.setField(p, "id", id);
-		return p;
-	}
-
-	private static CatalogListData listData(java.util.List<CatalogExhibitionData> items) {
+	private static CatalogListData listData(List<CatalogExhibitionData> items) {
 		return new CatalogListData(items, items.size(), false);
 	}
 
-	private CatalogExhibitionData data(String externalId, String title) {
+	private static CatalogExhibitionData data(String externalId, String title) {
 		LocalDate today = LocalDate.now();
 		return new CatalogExhibitionData(externalId, title, "장소", today.minusDays(1), today.plusDays(10),
 				ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, null, "기관", null, null, null, "전시", "서울",
 				null);
 	}
 
-	private CatalogDetailData detail(String price) {
-		return new CatalogDetailData(price, "전시 소개", "https://example.com/detail", "02-000-0000",
-				"https://example.com/img.jpg", "https://example.com/place", "서울시 종로구", "PLACE-1", null);
+	@Test
+	@DisplayName("syncCatalog — 신규는 draft로 스테이징하고, 상세를 인라인으로 조회하지 않는다(목록 외 외부 호출 0)")
+	void syncCatalog_신규_스테이징() {
+		given(catalogClient.fetchAll()).willReturn(listData(List.of(data("CAT-NEW", "신규 전시"))));
+		given(facade.findDetailTargetState("CAT-NEW")).willReturn(DetailTargetState.MISSING);
+		given(draftFacade.stageFromList(any(), any())).willReturn(ExhibitionDraftFacade.StageOutcome.STAGED);
+
+		int staged = synchronizer.syncCatalog();
+
+		assertThat(staged).isEqualTo(1);
+		verify(draftFacade).stageFromList(any(), any()); // FETCH_DETAIL enqueue는 스테이징 트랜잭션 안(파사드)에서
+		verify(catalogClient, never()).fetchDetail(any()); // 상세는 아웃박스 릴레이가 조회한다
+	}
+
+	@Test
+	@DisplayName("syncCatalog — 이미 완성된 전시는 스테이징도 위임도 없이 건너뛴다")
+	void syncCatalog_완성전시_스킵() {
+		given(catalogClient.fetchAll()).willReturn(listData(List.of(data("CAT-DONE", "완성 전시"))));
+		given(facade.findDetailTargetState("CAT-DONE")).willReturn(DetailTargetState.ALREADY_SYNCED);
+
+		int staged = synchronizer.syncCatalog();
+
+		assertThat(staged).isZero();
+		verify(draftFacade, never()).stageFromList(any(), any());
+		verify(outboxFacade, never()).enqueue(any(), any(), any());
+	}
+
+	@Test
+	@DisplayName("syncCatalog — 레거시 미완성 전시는 FETCH_DETAIL 메시지로 뒤채움을 위임한다(인라인 조회 없음)")
+	void syncCatalog_레거시미완성_메시지위임() {
+		given(catalogClient.fetchAll()).willReturn(listData(List.of(data("CAT-OLD", "기존 전시"))));
+		given(facade.findDetailTargetState("CAT-OLD")).willReturn(DetailTargetState.NEEDS_DETAIL);
+
+		int staged = synchronizer.syncCatalog();
+
+		assertThat(staged).isZero();
+		verify(outboxFacade).enqueue(eq(OutboxMessageType.FETCH_DETAIL), eq("CAT-OLD"), any());
+		verify(catalogClient, never()).fetchDetail(any());
+		verify(draftFacade, never()).stageFromList(any(), any()); // 이미 승격된 행 — draft를 만들지 않는다
+	}
+
+	@Test
+	@DisplayName("syncCatalog — 기간 비정상(종료<시작) 원천은 스킵하되 벤더 원본은 남긴다")
+	void syncCatalog_기간비정상_스킵() {
+		LocalDate today = LocalDate.now();
+		CatalogExhibitionData invalid = new CatalogExhibitionData("CAT-BAD", "역전 기간", "장소", today,
+				today.minusDays(1), ExhibitionRegion.SEOUL, ExhibitionCategory.PAINTING, null, null, "기관",
+				null, null, null, "전시", "서울", null);
+		given(catalogClient.fetchAll()).willReturn(listData(List.of(invalid, data("CAT-OK", "정상 전시"))));
+		given(facade.findDetailTargetState("CAT-OK")).willReturn(DetailTargetState.MISSING);
+		given(draftFacade.stageFromList(any(), any())).willReturn(ExhibitionDraftFacade.StageOutcome.STAGED);
+
+		int staged = synchronizer.syncCatalog();
+
+		assertThat(staged).isEqualTo(1); // CAT-OK만 스테이징
+		verify(facade).archiveListResponse(eq(invalid), any()); // 탈락 항목도 원본은 보존(요구사항 명문화)
+		verify(draftFacade, never()).stageFromList(eq(invalid), any());
+	}
+
+	@Test
+	@DisplayName("syncCatalog — 재sync에서 미종료 draft는 목록분 갱신(REFRESHED)으로 집계된다")
+	void syncCatalog_재sync_갱신집계() {
+		given(catalogClient.fetchAll()).willReturn(listData(List.of(data("CAT-RE", "재동기화 전시"))));
+		given(facade.findDetailTargetState("CAT-RE")).willReturn(DetailTargetState.MISSING);
+		given(draftFacade.stageFromList(any(), any())).willReturn(ExhibitionDraftFacade.StageOutcome.REFRESHED);
+
+		int staged = synchronizer.syncCatalog();
+
+		assertThat(staged).isZero(); // 갱신은 신규 스테이징 수에 잡히지 않는다
+		verify(facade).archiveSyncRun(any(), eq(0), eq(1), eq(0), eq(0));
 	}
 }

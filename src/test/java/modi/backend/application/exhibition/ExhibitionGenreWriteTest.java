@@ -75,15 +75,15 @@ class ExhibitionGenreWriteTest {
 	}
 
 	@Test
-	@DisplayName("CUSTOM 등록(장르 미지정) — 기본 분류기(random)의 폴백은 provider=RANDOM으로 드러난다")
-	void registerCustom_미지정_provider_RANDOM() {
-		// 기본 프로파일의 주 분류기는 random이다(외부 호출 0). 그 산출물은 재분류 대상으로 식별돼야 한다.
+	@DisplayName("CUSTOM 등록(장르 미지정) — 기본 분류기(mock)의 결정적 산출은 provider=MOCK으로 드러난다(ADR-11)")
+	void registerCustom_미지정_provider_MOCK() {
+		// 기본 프로파일의 주 분류기는 mock이다(외부 호출 0·결정적). 계보로 실 AI 분류와 구분된다.
 		ExhibitionResult.Created created = exhibitionFacade.registerCustom(customCreate(null));
 
 		ExhibitionGenre canonical = canonical(created.exhibitionId());
 		assertThat(GenreKeyword.all()).contains(canonical.getGenreKeyword());
-		assertThat(canonical.getProvider()).isEqualTo(GenreProvider.RANDOM.name());
-		assertThat(canonical.isFallback()).isTrue(); // 선별 재분류 대상으로 남는다
+		assertThat(canonical.getProvider()).isEqualTo(GenreProvider.MOCK.name());
+		assertThat(canonical.isFallback()).isFalse(); // 폴백값이 아니라 의도된 mock 산출 — 재분류 표식은 레거시 RANDOM만
 	}
 
 	@Test
@@ -109,7 +109,7 @@ class ExhibitionGenreWriteTest {
 	void applyGenres_재분류_행추가없이_갱신() {
 		Exhibition seeded = seedCatalog();
 		List<GenreTarget> targets = List.of(new GenreTarget(seeded.getId(), GenreClassification.from(seeded)));
-		exhibitionSyncFacade.applyGenres(targets, List.of(GenreResult.random("회화·드로잉")), LocalDateTime.now());
+		exhibitionSyncFacade.applyGenres(targets, List.of(GenreResult.mock("회화·드로잉")), LocalDateTime.now());
 
 		exhibitionSyncFacade.applyGenres(targets,
 				List.of(GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash")), LocalDateTime.now());
@@ -129,7 +129,7 @@ class ExhibitionGenreWriteTest {
 		seeded.delete();
 		exhibitionRepository.save(seeded);
 
-		int applied = exhibitionSyncFacade.applyGenres(targets, List.of(GenreResult.random("사진")), LocalDateTime.now());
+		int applied = exhibitionSyncFacade.applyGenres(targets, List.of(GenreResult.mock("사진")), LocalDateTime.now());
 
 		assertThat(applied).isZero();
 		assertThat(exhibitionGenreRepository.findByExhibitionId(seeded.getId())).isEmpty();

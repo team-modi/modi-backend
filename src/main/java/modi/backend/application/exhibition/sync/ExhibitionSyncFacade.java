@@ -264,34 +264,6 @@ public class ExhibitionSyncFacade {
 						GooglePlaceResponse.first(placeId, data.rawJson(), now)));
 	}
 
-	/**
-	 * 신규 목록 1건의 <b>영속 단계</b> — 전시장 resolve-or-create + 전시 저장 + 상세 반영(또는 무상세 확인) +
-	 * 영업시간 재검증 enqueue가 <b>한 트랜잭션</b>이다(ADR-10 원자성 — 전시는 저장됐는데 후속 메시지가 유실되는
-	 * 창이 없다. 예전엔 각 저장이 자체 트랜잭션 + enqueue는 best-effort였다).
-	 *
-	 * <p>외부 호출(상세 조회)은 호출부({@link CatalogSynchronizer})가 트랜잭션 <b>밖</b>에서 마친 뒤 값만 넘긴다.
-	 *
-	 * @param detail 상세 값(원천에 상세가 없으면 null — 확인 완료행만 남겨 재조회를 막는다)
-	 */
-	@Transactional
-	public void applyNewListing(CatalogExhibitionData data, CatalogDetailData detail) {
-		ExhibitionPlace place = exhibitionPlaceRepository.resolveOrCreate(data.place(), data.region(), data.sigungu(),
-				data.gpsX(), data.gpsY());
-		Exhibition saved = exhibitionRepository.save(Exhibition.createCatalog(data.externalId(), data.title(),
-				place.getId(), data.startDate(), data.endDate(), data.category(), data.posterUrl(), data.detailUrl(),
-				data.serviceName()));
-		LocalDateTime now = LocalDateTime.now();
-		if (detail != null) {
-			applyCatalogDetail(saved, detail, now);
-		} else {
-			exhibitionRepository.markDetailChecked(saved.getId(), now);
-		}
-		// 이벤트 구동 재검증(설계 §4-1): 새 전시가 기존 장소(place_hours 존재)에 들어오면 재검증 enqueue한다. target_key는
-		// 전시장 자연키(정규화 이름). 가드(기존 장소만·최소 간격·UK 중복)는 아웃박스 파사드가 판단한다. REQUIRED 전파라
-		// 이 트랜잭션에 합류한다 — 같이 성공하거나 같이 실패한다.
-		exhibitionOutboxFacade.enqueueHoursRefresh(place.getPlaceKey(), now);
-	}
-
 	/** 런 감사 기록 — 부가 기록이라 실패해도 동기화 결과를 깨지 않는다. */
 	public void archiveSyncRun(SyncRun run, int inserted, int completed, int skipped, int deferred) {
 		try {
@@ -332,7 +304,7 @@ public class ExhibitionSyncFacade {
 	 * 상세 원본을 벤더층에 upsert한다(순수 원본 보관소 — 설계 §2). {@code data}가 있을 때만 기록한다:
 	 * 원천에 상세가 없으면(빈 응답) 남길 원본이 없어 행을 만들지 않는다(그 사실은 상세 satellite 행 존재가 안다).
 	 */
-	public void archiveDetailOutcome(String externalId, CatalogDetailData data) {
+	private void archiveDetailOutcome(String externalId, CatalogDetailData data) {
 		if (data == null) {
 			return;
 		}

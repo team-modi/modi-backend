@@ -55,7 +55,12 @@ public class ExhibitionOutboxRelay {
 	@Value("${app.local-seed.enabled:false}")
 	private boolean localSeedEnabled;
 
-	/** durable 엔진 — 주기 폴링. 재시작 후에도 테이블에 남은 메시지가 이어서 처리된다(at-least-once). */
+	/**
+	 * durable 엔진 — 주기 폴링. 재시작 후에도 테이블에 남은 메시지가 이어서 처리된다(at-least-once).
+	 * 폴링도 이벤트 드레인과 <b>같은 실행기</b>로 제출해 인프로세스 드레인을 단일 직렬화한다 — 두 경로가 같은
+	 * 배치를 동시에 집으면 낙관락으로 정합성은 지켜지지만 AI 배치 호출(최대 60초·유료/한도)이 통째로 중복되기 때문.
+	 */
+	@Async("outboxRelayExecutor")
 	@Scheduled(fixedDelayString = "${app.exhibition.outbox.poll-interval-ms:60000}",
 			initialDelayString = "${app.exhibition.outbox.poll-interval-ms:60000}")
 	public void poll() {

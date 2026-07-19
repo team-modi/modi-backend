@@ -1,9 +1,5 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
-import modi.backend.application.exhibition.sync.outbox.ExhibitionOutboxFacade;
-import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -21,153 +17,145 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import modi.backend.application.exhibition.sync.ExhibitionSyncFacade;
+import modi.backend.application.exhibition.sync.draft.ExhibitionDraftFacade;
+import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
+import modi.backend.application.exhibition.sync.outbox.ExhibitionOutboxFacade;
 import modi.backend.config.CatalogEnrichProperties;
-import modi.backend.config.GenreProperties;
-import modi.backend.domain.exhibition.sync.outbox.OutboxMessage;
-import modi.backend.domain.exhibition.sync.data.GenreClassification;
-import modi.backend.domain.exhibition.sync.port.GenreClassifier;
 import modi.backend.domain.exhibition.genre.GenreProvider;
+import modi.backend.domain.exhibition.sync.data.GenreClassification;
 import modi.backend.domain.exhibition.sync.data.GenreResult;
 import modi.backend.domain.exhibition.sync.outbox.OutboxFailureType;
+import modi.backend.domain.exhibition.sync.outbox.OutboxMessage;
 import modi.backend.domain.exhibition.sync.outbox.OutboxMessageType;
+import modi.backend.domain.exhibition.sync.port.GenreClassificationException;
+import modi.backend.domain.exhibition.sync.port.GenreClassifier;
 
 /**
- * CatalogEnricher 단위 검증 — <b>통합 작업큐 기반</b> 장르 보강(스윕 → 드레인). 핵심은 "AI 최소 1회 무조건":
- * AI가 폴백하면(장애) 작업을 성공 처리하지 않고 RETRYABLE로 둬 회복 후 재분류되게 한다. 배치 구조([조회] → tx 밖
- * AI 호출 → [반영·전이])와 조기 종료도 함께 본다.
+ * CatalogEnricher 단위 검증 — <b>전시 아웃박스 기반</b> 장르 처리(스윕 → 드레인). 핵심 둘:
+ * (1) 대상 해소는 draft 우선·전시 폴백 이원화(ADR-10) — draft는 반영 트랜잭션에서 승격까지 간다.
+ * (2) 계약 반전(ADR-11) — 분류기 실패는 폴백값이 아니라 예외이고, 배치 전부를 RETRYABLE로 남겨 회복 후 재분류한다.
  */
 class CatalogEnricherTest {
 
 	private final CatalogEnrichProperties props = new CatalogEnrichProperties(40, 20);
 
+	private ExhibitionSyncFacade facade;
+	private ExhibitionDraftFacade draftFacade;
+	private ExhibitionOutboxFacade outboxFacade;
+	private GenreClassifier classifier;
+	private CatalogEnricher enricher;
+
+	@BeforeEach
+	void setUp() {
+		facade = mock(ExhibitionSyncFacade.class);
+		draftFacade = mock(ExhibitionDraftFacade.class);
+		outboxFacade = mock(ExhibitionOutboxFacade.class);
+		classifier = mock(GenreClassifier.class);
+		enricher = new CatalogEnricher(facade, draftFacade, outboxFacade, props, classifier);
+		when(facade.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of());
+		when(facade.resolveGenreInputs(anyCollection())).thenReturn(Map.of());
+		when(draftFacade.resolveGenreInput(anyString())).thenReturn(Optional.empty());
+		when(outboxFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any())).thenReturn(List.of());
+	}
+
 	private static GenreClassification classification() {
 		return new GenreClassification("전시", null, null, null, null, null);
 	}
 
-	private static OutboxMessage genreJob(String externalId) {
+	private static OutboxMessage genreMessage(String externalId) {
 		return OutboxMessage.enqueue(OutboxMessageType.CLASSIFY_GENRE, externalId, LocalDateTime.now());
 	}
 
 	@Test
-	@DisplayName("스윕 — 미분류 CATALOG를 CLASSIFY_GENRE로 멱등 enqueue한다")
-	void enrichGenres_미분류를_작업으로_스윕() {
-		ExhibitionSyncFacade facade = mock(ExhibitionSyncFacade.class);
-		ExhibitionOutboxFacade jobFacade = mock(ExhibitionOutboxFacade.class);
-		GenreClassifier classifier = mock(GenreClassifier.class);
+	@DisplayName("스윕 — 미분류 레거시 CATALOG를 CLASSIFY_GENRE로 멱등 enqueue한다")
+	void enrichGenres_미분류를_메시지로_스윕() {
 		when(facade.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of("E1", "E2"));
-		when(jobFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any())).thenReturn(List.of());
-		CatalogEnricher enricher = new CatalogEnricher(facade, jobFacade, props, new GenreProperties("random"),
-				classifier);
 
 		enricher.enrichGenres();
 
-		verify(jobFacade).enqueueAll(eq(OutboxMessageType.CLASSIFY_GENRE), eq(List.of("E1", "E2")), any());
+		verify(outboxFacade).enqueueAll(eq(OutboxMessageType.CLASSIFY_GENRE), eq(List.of("E1", "E2")), any());
 	}
 
 	@Test
-	@DisplayName("드레인 — 랜덤 구성에선 분류 성공분을 정준층에 쓰고 작업을 성공 처리한다(배치당 AI 1콜)")
-	void enrichGenres_드레인_성공분_반영() {
-		ExhibitionSyncFacade facade = mock(ExhibitionSyncFacade.class);
-		ExhibitionOutboxFacade jobFacade = mock(ExhibitionOutboxFacade.class);
-		GenreClassifier classifier = mock(GenreClassifier.class);
-		OutboxMessage j1 = genreJob("E1");
-		OutboxMessage j2 = genreJob("E2");
-		when(facade.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of());
-		when(jobFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any()))
-				.thenReturn(List.of(j1, j2), List.of());
+	@DisplayName("드레인 — 전시 폴백 경로: 분류 성공분을 정준층에 쓰고 메시지를 성공 처리한다(배치당 AI 1콜)")
+	void enrichGenres_전시경로_성공반영() {
+		OutboxMessage m1 = genreMessage("E1");
+		OutboxMessage m2 = genreMessage("E2");
+		when(outboxFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any()))
+				.thenReturn(List.of(m1, m2), List.of());
 		when(facade.resolveGenreInputs(anyCollection()))
 				.thenReturn(Map.of("E1", classification(), "E2", classification()));
-		when(classifier.classifyAll(anyList()))
-				.thenReturn(List.of(GenreResult.random("사진"), GenreResult.random("미디어아트")));
-		CatalogEnricher enricher = new CatalogEnricher(facade, jobFacade, props, new GenreProperties("random"),
-				classifier);
+		when(classifier.classifyAll(anyList())).thenReturn(List.of(
+				GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash"),
+				GenreResult.ai("미디어아트", GenreProvider.GEMINI, "gemini-2.5-flash")));
 
 		int total = enricher.enrichGenres();
 
 		verify(classifier, times(1)).classifyAll(anyList()); // 전시마다가 아니라 배치당 1콜
-		verify(facade).applyGenreResults(argThat(m -> m.size() == 2), any());
-		verify(jobFacade, times(2)).markSucceeded(any(), any());
+		verify(facade, times(2)).applyGenreResults(argThat(m -> m.size() == 1), any());
+		verify(outboxFacade, times(2)).markSucceeded(any(), any());
 		assertThat(total).isEqualTo(2);
 	}
 
 	@Test
-	@DisplayName("드레인 — AI(gemini) 폴백이면 정준층에 쓰지 않고 작업을 RETRYABLE로 둔다(AI 회복 후 재분류)")
-	void enrichGenres_AI폴백_재시도로_남긴다() {
-		ExhibitionSyncFacade facade = mock(ExhibitionSyncFacade.class);
-		ExhibitionOutboxFacade jobFacade = mock(ExhibitionOutboxFacade.class);
-		GenreClassifier classifier = mock(GenreClassifier.class);
-		OutboxMessage j1 = genreJob("E1");
-		when(facade.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of());
-		when(jobFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any())).thenReturn(List.of(j1), List.of());
-		when(facade.resolveGenreInputs(anyCollection())).thenReturn(Map.of("E1", classification()));
-		// gemini 구성에서 provider=RANDOM = AI 장애 폴백.
-		when(classifier.classifyAll(anyList())).thenReturn(List.of(GenreResult.random("사진")));
-		CatalogEnricher enricher = new CatalogEnricher(facade, jobFacade, props, new GenreProperties("gemini"),
-				classifier);
+	@DisplayName("드레인 — draft 우선: draft 대상은 승격 반영 경로로 가고 전시 정준층엔 쓰지 않는다(ADR-10)")
+	void enrichGenres_draft경로_승격반영() {
+		OutboxMessage m1 = genreMessage("D1");
+		when(outboxFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any()))
+				.thenReturn(List.of(m1), List.of());
+		when(draftFacade.resolveGenreInput("D1")).thenReturn(Optional.of(classification()));
+		when(classifier.classifyAll(anyList())).thenReturn(List.of(
+				GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash")));
 
 		enricher.enrichGenres();
 
-		verify(facade).applyGenreResults(argThat(Map::isEmpty), any()); // 폴백값은 저장하지 않는다
-		verify(jobFacade).markFailed(eq(j1), eq(OutboxFailureType.RETRYABLE), anyString(), any());
-		verify(jobFacade, never()).markSucceeded(any(), any());
+		verify(draftFacade).applyGenreAndPromote(eq("D1"), any(), any()); // 게이트 충족 시 이 트랜잭션에서 승격까지
+		verify(facade, never()).applyGenreResults(any(), any());
+		verify(outboxFacade).markSucceeded(eq(m1), any());
 	}
 
 	@Test
-	@DisplayName("드레인 — AI(gemini)가 실제로 분류하면 정준층에 쓰고 성공 처리한다")
-	void enrichGenres_AI성공_반영() {
-		ExhibitionSyncFacade facade = mock(ExhibitionSyncFacade.class);
-		ExhibitionOutboxFacade jobFacade = mock(ExhibitionOutboxFacade.class);
-		GenreClassifier classifier = mock(GenreClassifier.class);
-		OutboxMessage j1 = genreJob("E1");
-		when(facade.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of());
-		when(jobFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any())).thenReturn(List.of(j1), List.of());
+	@DisplayName("드레인 — 분류기 예외(전 공급자 실패)면 배치 전부를 RETRYABLE로 남기고 아무것도 쓰지 않는다(ADR-11)")
+	void enrichGenres_분류실패_전부_재시도() {
+		OutboxMessage m1 = genreMessage("E1");
+		OutboxMessage m2 = genreMessage("D1");
+		when(outboxFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any()))
+				.thenReturn(List.of(m1, m2), List.of());
 		when(facade.resolveGenreInputs(anyCollection())).thenReturn(Map.of("E1", classification()));
-		when(classifier.classifyAll(anyList()))
-				.thenReturn(List.of(GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash")));
-		CatalogEnricher enricher = new CatalogEnricher(facade, jobFacade, props, new GenreProperties("gemini"),
-				classifier);
+		when(draftFacade.resolveGenreInput("D1")).thenReturn(Optional.of(classification()));
+		when(classifier.classifyAll(anyList())).thenThrow(new GenreClassificationException("전 공급자 실패"));
 
 		enricher.enrichGenres();
 
-		verify(facade).applyGenreResults(argThat(m -> m.size() == 1), any());
-		verify(jobFacade).markSucceeded(eq(j1), any());
-		verify(jobFacade, never()).markFailed(any(), any(), anyString(), any());
+		verify(outboxFacade, times(2)).markFailed(any(), eq(OutboxFailureType.RETRYABLE), anyString(), any());
+		verify(outboxFacade, never()).markSucceeded(any(), any());
+		verify(facade, never()).applyGenreResults(any(), any());
+		verify(draftFacade, never()).applyGenreAndPromote(any(), any(), any()); // 가짜 값이 승격을 오염시키지 않는다
 	}
 
 	@Test
-	@DisplayName("드레인 — 이미 분류됐거나 사라진 대상은 AI 없이 작업을 성공 마감한다")
+	@DisplayName("드레인 — draft도 전시도 대상이 아니면(이미 분류/사라짐) AI 없이 메시지를 성공 마감한다")
 	void enrichGenres_이미분류_AI없이_마감() {
-		ExhibitionSyncFacade facade = mock(ExhibitionSyncFacade.class);
-		ExhibitionOutboxFacade jobFacade = mock(ExhibitionOutboxFacade.class);
-		GenreClassifier classifier = mock(GenreClassifier.class);
-		OutboxMessage j1 = genreJob("E1");
-		when(facade.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of());
-		when(jobFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any())).thenReturn(List.of(j1), List.of());
-		when(facade.resolveGenreInputs(anyCollection())).thenReturn(Map.of()); // 해소 실패 = 이미 분류/사라짐
-		CatalogEnricher enricher = new CatalogEnricher(facade, jobFacade, props, new GenreProperties("gemini"),
-				classifier);
+		OutboxMessage m1 = genreMessage("E1");
+		when(outboxFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any()))
+				.thenReturn(List.of(m1), List.of());
 
 		enricher.enrichGenres();
 
 		verify(classifier, never()).classifyAll(anyList()); // 할 일 없으면 AI를 태우지 않는다
-		verify(jobFacade).markSucceeded(eq(j1), any());
+		verify(outboxFacade).markSucceeded(eq(m1), any());
 	}
 
 	@Test
-	@DisplayName("드레인 — 도래 작업이 없으면 AI를 태우지 않고 즉시 끝낸다")
+	@DisplayName("드레인 — 도래 메시지가 없으면 AI를 태우지 않고 즉시 끝낸다")
 	void enrichGenres_도래없으면_즉시종료() {
-		ExhibitionSyncFacade facade = mock(ExhibitionSyncFacade.class);
-		ExhibitionOutboxFacade jobFacade = mock(ExhibitionOutboxFacade.class);
-		GenreClassifier classifier = mock(GenreClassifier.class);
-		when(facade.findUnclassifiedCatalogExternalIds(anyInt())).thenReturn(List.of());
-		when(jobFacade.findDue(eq(OutboxMessageType.CLASSIFY_GENRE), anyInt(), any())).thenReturn(List.of());
-		CatalogEnricher enricher = new CatalogEnricher(facade, jobFacade, props, new GenreProperties("random"),
-				classifier);
-
 		assertThat(enricher.enrichGenres()).isZero();
 		verify(classifier, never()).classifyAll(anyList());
 	}

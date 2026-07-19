@@ -60,6 +60,7 @@ public class ExhibitionOutboxFacade {
 	@Transactional
 	public void enqueueAll(OutboxMessageType messageType, Collection<String> targetKeys, LocalDateTime now) {
 		for (String targetKey : targetKeys) {
+			// 자기호출이라 enqueue의 프록시 속성은 안 탄다 — 이 메서드가 이미 같은 @Transactional 경계라 무해하다.
 			enqueue(messageType, targetKey, now);
 		}
 	}
@@ -121,10 +122,16 @@ public class ExhibitionOutboxFacade {
 		outboxMessageRepository.save(message);
 	}
 
-	/** 실패 전이(백오프·최대 초과 승격은 Entity가 정책으로 판단). 낙관락 충돌 시 예외 전파. */
+	/**
+	 * 실패 전이(백오프·최대 초과 승격은 Entity가 정책으로 판단). 낙관락 충돌 시 예외 전파.
+	 * 장르(CLASSIFY_GENRE)만 시도 소진 없는 정책을 쓴다 — AI 장애는 무기한 대기(ADR-11, 사용자 확정)이고,
+	 * 소진 승격되면 draft가 영구 승격 불가로 굳기 때문이다.
+	 */
 	@Transactional
 	public void markFailed(OutboxMessage message, OutboxFailureType failureType, String error, LocalDateTime now) {
-		message.recordFailure(failureType, error, properties.retryPolicy(), now);
+		var policy = message.getMessageType() == OutboxMessageType.CLASSIFY_GENRE
+				? properties.genreRetryPolicy() : properties.retryPolicy();
+		message.recordFailure(failureType, error, policy, now);
 		outboxMessageRepository.save(message);
 	}
 }

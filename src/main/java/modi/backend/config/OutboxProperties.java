@@ -46,4 +46,14 @@ public record OutboxProperties(Integer maxAttempts, Long baseBackoffSeconds, Lon
 	public RetryPolicy retryPolicy() {
 		return new RetryPolicy(maxAttempts, baseBackoffSeconds, maxBackoffSeconds);
 	}
+
+	/**
+	 * 장르(CLASSIFY_GENRE) 전용 — <b>시도 소진 없는</b> 백오프 정책(ADR-11). AI 장애는 데이터 문제가 아니라
+	 * 인프라 문제라 재시도해도 손해가 없고, 소진 승격(FAILED_PERMANENT)되면 draft가 영구히 승격 불가로 굳는다.
+	 * "모든 AI 동시 장애 시 draft 승격 대기(감수)"가 사용자 확정 — 캡된 백오프(상한 {@link #maxBackoffSeconds})로
+	 * 회복까지 무기한 재시도한다.
+	 */
+	public RetryPolicy genreRetryPolicy() {
+		return new RetryPolicy(Integer.MAX_VALUE, baseBackoffSeconds, maxBackoffSeconds);
+	}
 }

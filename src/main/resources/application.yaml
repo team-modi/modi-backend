@@ -106,11 +106,16 @@ app:
     # 전시 카탈로그 정기 동기화 스케줄. sync.cron 시각에 목록 동기화 + 상세 보강을 수행한다(기본 매일 자정).
     sync:
       cron: ${EXHIBITION_SYNC_CRON:0 0 0 * * *}
-    # 전시 장르 분류. classifier로 랜덤/AI 두 구현 중 하나를 주 분류기로 고른다(둘 다 빈으로 공존, 무중단 교체).
-    #   random(기본, develop·로컬): 마스터에서 무작위 1개 — AI 호출·비용 없음. 운영(prod 프로파일)에서만 gemini(실제 AI 분류)로 override.
-    #   gemini: api-key 미설정·429·오류 시 자동으로 random 폴백.
+    # 전시 장르 분류(ADR-11). classifier로 주 분류기를 고른다(구현들 빈 공존, 무중단 교체).
+    #   mock(기본, develop·로컬·CI): 제목 해시 결정적 분류 — AI 호출·비용 0, provider=MOCK 계보.
+    #   gemini(운영 prod): 폴백 체인 = 1차 Gemini → 2차 Claude(resilience4j Retry+CircuitBreaker).
+    #     전 공급자 실패 시 폴백값 없이 예외 → 아웃박스 RETRYABLE(무기한) → draft 승격 대기.
+    #   claude.*: 2차 공급자 전용 버킷 — 감상문용 app.ai.*와 한도 분리(장르 백필이 감상문 한도를 안 태움).
     genre:
-      classifier: ${GENRE_CLASSIFIER:random}
+      classifier: ${GENRE_CLASSIFIER:mock}
+      claude:
+        api-key: ${GENRE_CLAUDE_API_KEY:}
+        model: ${GENRE_CLAUDE_MODEL:claude-haiku-4-5-20251001}
     # 공공데이터(CATALOG) 보강 — 목록 동기화는 목록 필드만 적재하므로 장르(분류)·상세2(price 등)를 이어서 채운다.
     #   장르: 동기화(부팅 1회·매일 자정) "직후에만" 신규 적재분(미분류 행)을 배치로(배치당 AI 1콜) 분류한다.
     #        별도 주기 백필 없음 — 동기화가 신규만 추가하므로 미분류 행 = 방금 추가된 전시(멱등, 신규 없으면 no-op).
@@ -211,7 +216,7 @@ app:
   local-seed:
     enabled: false
   exhibition:
-    # 운영에서만 실제 AI(gemini) 장르 분류를 쓴다. develop·로컬(기본 프로파일)은 random(무비용). 필요 시 env로 override.
+    # 운영에서만 AI 체인(1차 gemini → 2차 claude) 장르 분류를 쓴다. develop·로컬(기본 프로파일)은 mock(무비용·결정적).
     genre:
       classifier: ${GENRE_CLASSIFIER:gemini}
   # ⚠️ 베타 한정: 리마인드 소환 대기를 3초로 단축(2~3일 베타에서 즉시 검증용, 리마인드는 조회 시점 판정이라 값만 줄이면 됨).

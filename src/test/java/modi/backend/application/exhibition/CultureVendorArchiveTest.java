@@ -1,6 +1,8 @@
 package modi.backend.application.exhibition;
 
 import modi.backend.application.exhibition.sync.CatalogSynchronizer;
+import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
+import modi.backend.application.exhibition.sync.enricher.DetailEnricher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -56,6 +58,12 @@ class CultureVendorArchiveTest {
 	CatalogSynchronizer catalogSynchronizer;
 
 	@Autowired
+	DetailEnricher detailEnricher;
+
+	@Autowired
+	CatalogEnricher catalogEnricher;
+
+	@Autowired
 	ExhibitionRepository exhibitionRepository;
 
 	@Autowired
@@ -81,10 +89,11 @@ class CultureVendorArchiveTest {
 		given(exhibitionCatalogClient.fetchAll()).willReturn(listData(List.of(listData(externalId, "원본 적재 전시", payload))));
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.empty());
 
-		int inserted = catalogSynchronizer.syncCatalog();
+		int staged = catalogSynchronizer.syncCatalog();
+		drainPipeline(); // 상세 해소 → 장르 분류 → 승격(ADR-10 — 전시는 게이트를 채워야 나타난다)
 
-		// 도메인층 — 기존 동작 그대로여야 한다.
-		assertThat(inserted).isEqualTo(1);
+		// 도메인층 — 파이프라인을 다 태우면 기존처럼 전시가 나타난다.
+		assertThat(staged).isEqualTo(1);
 		assertThat(exhibitionRepository.findByExternalId(externalId)).isPresent();
 		// 벤더층 — 이번 단계에서 새로 쓰기 시작한 곳. payload는 응답 원본(매핑 JSON)이 그대로 실려야 한다.
 		CultureListResponse row = listRow(externalId);
@@ -164,6 +173,7 @@ class CultureVendorArchiveTest {
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.of(detailData(detailPayload)));
 
 		catalogSynchronizer.syncCatalog();
+		detailEnricher.enrichDetails(); // 상세는 아웃박스 릴레이 경로에서 조회·적재된다(sync는 목록 외 호출 0)
 
 		// 상태머신(status/attempt/next_attempt)은 exhibition_outbox으로 이관됐다 — 벤더 테이블엔 무손실 원본만 남는다.
 		CultureDetailResponse row = detailRow(externalId);
@@ -179,6 +189,7 @@ class CultureVendorArchiveTest {
 		given(exhibitionCatalogClient.fetchDetail(externalId)).willReturn(Optional.empty());
 
 		catalogSynchronizer.syncCatalog();
+		drainPipeline(); // 무상세 확인도 스텝 해소 → 승격까지 이어진다(영구 미승격 방지)
 
 		// 빈 응답은 보관할 원본이 없다 — 벤더 행 없음(V29에서 상태머신 제거). 도메인은 "확인 완료"만 표기해 재조회를 막는다
 		// — 상세 satellite 행 존재로 판정한다(연관 부재 = 미동기화).
@@ -188,25 +199,29 @@ class CultureVendorArchiveTest {
 	}
 
 	@Test
-	@DisplayName("상세 호출 실패 — FETCH_DETAIL 작업으로 재시도가 남고(현행 최대 갭 해소), 그 행만 연기하는 기존 동작은 그대로다")
-	void syncCatalog_상세실패_작업enqueue_기존동작보존() {
+	@DisplayName("상세 호출 실패 — 메시지가 RETRYABLE로 남아 durable 재시도되고, 전시는 게이트 전이라 나타나지 않는다")
+	void syncCatalog_상세실패_메시지재시도() {
 		String externalId = nextId();
 		given(exhibitionCatalogClient.fetchAll())
 				.willReturn(listData(List.of(listData(externalId, "상세 실패 전시", listPayload(externalId, "상세 실패 전시")))));
 		given(exhibitionCatalogClient.fetchDetail(externalId))
 				.willThrow(new CoreException(ExhibitionErrorCode.EXTERNAL_API_UNAVAILABLE, "외부 전시 API 호출 실패"));
 
-		int inserted = catalogSynchronizer.syncCatalog();
+		int staged = catalogSynchronizer.syncCatalog();
+		// 스테이징은 성공하고(목록 외 외부 호출 0 — 상세 실패가 sync를 못 막는다), FETCH_DETAIL 메시지가 함께 남는다.
+		assertThat(staged).isEqualTo(1);
+		OutboxMessage message = outboxMessageRepository
+				.findByMessageTypeAndTargetKey(OutboxMessageType.FETCH_DETAIL, externalId).orElseThrow();
+		assertThat(message.getStatus()).isEqualTo(OutboxMessageStatus.PENDING);
 
-		// 기존 동작: 불완전한 행을 적재하지 않고 이 행만 다음 주기로 연기한다.
-		assertThat(inserted).isZero();
+		detailEnricher.enrichDetails(); // 드레인에서 상세 조회가 실패한다
+
+		// 실패는 아웃박스 상태로 남고(RETRYABLE — 회복 후 재시도), 전시는 게이트를 못 채워 나타나지 않는다.
+		assertThat(outboxMessageRepository.findByMessageTypeAndTargetKey(OutboxMessageType.FETCH_DETAIL, externalId)
+				.orElseThrow().getStatus()).isEqualTo(OutboxMessageStatus.FAILED_RETRYABLE);
 		assertThat(exhibitionRepository.findByExternalId(externalId)).isEmpty();
-		// 진행 상태·재시도는 이제 통합 작업큐가 안다 — 벤더 테이블엔 실패 원본을 남기지 않는다(순수 원본 보관소).
-		OutboxMessage job = outboxMessageRepository.findByMessageTypeAndTargetKey(OutboxMessageType.FETCH_DETAIL, externalId)
-				.orElseThrow();
-		assertThat(job.getStatus()).isEqualTo(OutboxMessageStatus.PENDING);
+		// 벤더 테이블엔 실패 원본을 남기지 않는다(순수 원본 보관소). 목록 원본은 상세와 무관하게 남는다.
 		assertThat(cultureDetailResponseRepository.findByExternalId(externalId)).isEmpty();
-		// 목록 원본은 상세 실패와 무관하게 남는다(상세보다 먼저 기록하므로).
 		assertThat(listRow(externalId)).isNotNull();
 	}
 
@@ -233,6 +248,12 @@ class CultureVendorArchiveTest {
 
 	private String nextId() {
 		return "VENDOR-" + SEQ.getAndIncrement();
+	}
+
+	/** 아웃박스 드레인으로 파이프라인 완주 — 상세 해소(장르 체인) → 분류(테스트 기본 mock — 결정적) → 승격. */
+	private void drainPipeline() {
+		detailEnricher.enrichDetails();
+		catalogEnricher.enrichGenres();
 	}
 
 	/** 벤더층에 적재되는 목록 payload 모양(응답 아이템의 매핑 JSON — 도메인 변환 이전 값). */

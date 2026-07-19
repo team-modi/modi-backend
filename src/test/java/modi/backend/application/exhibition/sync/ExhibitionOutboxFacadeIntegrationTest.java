@@ -129,6 +129,34 @@ class ExhibitionOutboxFacadeIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("markFailed 정책 분기 — CLASSIFY_GENRE는 시도 소진 없이 RETRYABLE(무기한), FETCH_DETAIL은 소진 시 PERMANENT 승격")
+	void markFailed_장르_무기한정책() {
+		String genreKey = nextKey("EXT");
+		String detailKey = nextKey("EXT");
+		LocalDateTime now = LocalDateTime.now();
+		exhibitionOutboxFacade.enqueue(OutboxMessageType.CLASSIFY_GENRE, genreKey, now);
+		exhibitionOutboxFacade.enqueue(OutboxMessageType.FETCH_DETAIL, detailKey, now);
+
+		// 기본 maxAttempts(5)를 넘겨 실패를 반복한다 — 이 분기가 회귀하면(기본 정책 사용) 장르도 PERMANENT로 굳어
+		// draft가 영구 승격 불가가 된다(ADR-11의 핵심 요구).
+		for (int i = 0; i < 7; i++) {
+			OutboxMessage genreMessage = outboxMessageRepository
+					.findByMessageTypeAndTargetKey(OutboxMessageType.CLASSIFY_GENRE, genreKey).orElseThrow();
+			exhibitionOutboxFacade.markFailed(genreMessage, OutboxFailureType.RETRYABLE, "전 공급자 실패", now);
+			OutboxMessage detailMessage = outboxMessageRepository
+					.findByMessageTypeAndTargetKey(OutboxMessageType.FETCH_DETAIL, detailKey).orElseThrow();
+			if (!detailMessage.isTerminal()) {
+				exhibitionOutboxFacade.markFailed(detailMessage, OutboxFailureType.RETRYABLE, "timeout", now);
+			}
+		}
+
+		assertThat(outboxMessageRepository.findByMessageTypeAndTargetKey(OutboxMessageType.CLASSIFY_GENRE, genreKey)
+				.orElseThrow().getStatus()).isEqualTo(OutboxMessageStatus.FAILED_RETRYABLE); // 소진 승격 없음 — 회복 대기
+		assertThat(outboxMessageRepository.findByMessageTypeAndTargetKey(OutboxMessageType.FETCH_DETAIL, detailKey)
+				.orElseThrow().getStatus()).isEqualTo(OutboxMessageStatus.FAILED_PERMANENT); // 기본 정책은 소진 승격
+	}
+
+	@Test
 	@DisplayName("HOURS_REFRESH 가드 — place_hours가 없으면(기존 장소 아님) enqueue하지 않는다")
 	void 재검증_기존장소만() {
 		String placeKey = nextKey("PLACE");

@@ -34,6 +34,8 @@ import com.jayway.jsonpath.JsonPath;
 
 import modi.backend.TestcontainersConfiguration;
 import modi.backend.application.exhibition.sync.CatalogSynchronizer;
+import modi.backend.application.exhibition.sync.enricher.CatalogEnricher;
+import modi.backend.application.exhibition.sync.enricher.DetailEnricher;
 import modi.backend.application.exhibition.ExhibitionFacade;
 import modi.backend.domain.bookmark.ExhibitionBookmarkRepository;
 import modi.backend.domain.exhibition.sync.data.CatalogDetailData;
@@ -70,6 +72,12 @@ class ExhibitionIntegrationTest {
 
 	@Autowired
 	CatalogSynchronizer catalogSynchronizer;
+
+	@Autowired
+	DetailEnricher detailEnricher;
+
+	@Autowired
+	CatalogEnricher catalogEnricher;
 
 	@Autowired
 	ExhibitionRepository exhibitionRepository;
@@ -111,6 +119,8 @@ class ExhibitionIntegrationTest {
 				new CatalogDetailData("성인 20,000원", "모네 특별전 설명", "https://detail/monet", "02-1234-5678",
 						"https://img/monet.jpg", "https://place/monet", "서울 어딘가", "PLACE-SEQ-1", null)));
 		catalogSynchronizer.syncCatalog();
+		detailEnricher.enrichDetails(); // 스테이징 → 상세 해소(ADR-10 — 전시는 승격 후에만 나타난다)
+		catalogEnricher.enrichGenres(); // 장르 분류(테스트 기본 mock) + 승격
 	}
 
 	/**
@@ -435,7 +445,8 @@ class ExhibitionIntegrationTest {
 				.andExpect(jsonPath("$.data.artists").isArray())
 				.andExpect(jsonPath("$.data.artists").isEmpty())
 				.andExpect(jsonPath("$.data.keywords").isArray())
-				.andExpect(jsonPath("$.data.keywords").isEmpty())
+				// 승격 게이트에 장르가 필수라(ADR-10) CATALOG는 이제 항상 분류돼 나타난다(테스트 기본 mock — 결정적).
+				.andExpect(jsonPath("$.data.keywords").isNotEmpty())
 				// CATALOG의 artistSummary는 null, 비로그인이라 bookmarked·recorded false
 				.andExpect(jsonPath("$.data.artistSummary").doesNotExist())
 				.andExpect(jsonPath("$.data.free").isBoolean())

@@ -1,6 +1,6 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.infra.exhibition.sync.mock.RandomGenreClassifier;
+import modi.backend.infra.exhibition.sync.mock.MockGenreClassifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -58,7 +58,7 @@ class ExhibitionDetailTest {
 		placeRepository = mock(ExhibitionPlaceRepository.class);
 		facade = new ExhibitionFacade(exhibitionRepository, mock(ExhibitionQueryRepository.class), placeRepository,
 				mock(ArtistRepository.class), catalogClient, bookmarkRepository, venueRepository, recordJpaRepository,
-				new modi.backend.infra.exhibition.sync.mock.RandomGenreClassifier());
+				new modi.backend.infra.exhibition.sync.mock.MockGenreClassifier());
 		given(exhibitionRepository.save(any(Exhibition.class))).willAnswer(invocation -> invocation.getArgument(0));
 		given(placeRepository.findById(anyLong())).willReturn(Optional.of(
 				ExhibitionPlace.createFromList("장소", null, null, null, null)));

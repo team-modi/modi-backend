@@ -1,10 +1,7 @@
-package modi.backend.infra.genre;
-
-import modi.backend.infra.exhibition.sync.gemini.GeminiApi;
-import modi.backend.infra.exhibition.sync.gemini.GeminiGenreClassifier;
-import modi.backend.infra.exhibition.sync.mock.RandomGenreClassifier;
+package modi.backend.infra.exhibition.sync.gemini;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.util.List;
@@ -19,17 +16,18 @@ import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import modi.backend.config.GeminiProperties;
-import modi.backend.domain.exhibition.sync.data.GenreClassification;
-import modi.backend.domain.exhibition.genre.GenreKeyword;
 import modi.backend.domain.exhibition.genre.GenreProvider;
+import modi.backend.domain.exhibition.sync.data.GenreClassification;
 import modi.backend.domain.exhibition.sync.data.GenreResult;
+import modi.backend.domain.exhibition.sync.port.GenreClassificationException;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
 
 /**
- * {@link GeminiGenreClassifier} 실HTTP 계약·429 폴백 검증(MockWebServer). 실제 Gemini 대신 목 서버로
- * 응답 포맷·구조화 요청·오류 폴백을 확인한다. maxRetryDelaySeconds=0으로 두어 재시도 백오프가 테스트를 지연시키지 않게 한다.
+ * {@link GeminiGenreClassifier} 실HTTP 계약 검증(MockWebServer). 실제 Gemini 대신 목 서버로
+ * 응답 포맷·구조화 요청·<b>실패 시 예외(ADR-11 계약 반전)</b>를 확인한다 — 폴백값·내부 재시도는 이제 없다
+ * (즉시 재시도·2차 전환은 폴백 체인, durable 재시도는 아웃박스의 몫).
  */
 class GeminiGenreClassifierTest {
 
@@ -60,7 +58,7 @@ class GeminiGenreClassifierTest {
 				.build();
 		GeminiApi api = HttpServiceProxyFactory.builderFor(RestClientAdapter.create(restClient)).build()
 				.createClient(GeminiApi.class);
-		return new GeminiGenreClassifier(api, properties, new RandomGenreClassifier(), new SimpleMeterRegistry());
+		return new GeminiGenreClassifier(api, properties, new SimpleMeterRegistry());
 	}
 
 	@Test
@@ -91,53 +89,34 @@ class GeminiGenreClassifierTest {
 	}
 
 	@Test
-	@DisplayName("응답이 마스터에 없는 값이면 랜덤으로 폴백하고, 그 사실을 provider=RANDOM으로 드러낸다")
-	void classify_unknownGenre_fallsBackToRandom() {
+	@DisplayName("응답이 마스터에 없는 값이면 폴백값 대신 분류 실패 예외를 던진다(ADR-11)")
+	void classify_unknownGenre_throws() {
 		server.enqueue(candidateResponse("K-POP 콘서트"));
 
-		GenreResult result = classifier.classify(input);
-
-		assertThat(GenreKeyword.all()).contains(result.genreKeyword());
-		// 폴백을 GEMINI로 기록하면 랜덤값이 AI 분류값으로 위장돼 영구 이탈한다.
-		assertThat(result.provider()).isEqualTo(GenreProvider.RANDOM);
+		// 가짜 값이 저장되는 순간 미분류 대상에서 영구 이탈하던 과거 문제 — 이제 실패는 값이 아니라 예외다.
+		assertThatThrownBy(() -> classifier.classify(input))
+				.isInstanceOf(GenreClassificationException.class)
+				.hasMessageContaining("마스터에 없음");
 	}
 
 	@Test
-	@DisplayName("무료 한도 초과(429)가 재시도까지 지속되면 랜덤으로 폴백한다")
-	void classify_rateLimited_fallsBackToRandom() {
-		// maxRetries=1 → 총 2회 시도, 둘 다 429면 폴백.
-		server.enqueue(new MockResponse().setResponseCode(429).setBody("{\"error\":{\"code\":429}}"));
+	@DisplayName("429는 내부 재시도 없이 단일 시도로 예외를 던진다(재시도·전환은 체인·아웃박스의 몫)")
+	void classify_rateLimited_throwsWithoutInternalRetry() {
 		server.enqueue(new MockResponse().setResponseCode(429).setBody("{\"error\":{\"code\":429}}"));
 
-		GenreResult result = classifier.classify(input);
-
-		assertThat(GenreKeyword.all()).contains(result.genreKeyword());
-		assertThat(result.provider()).isEqualTo(GenreProvider.RANDOM);
-		assertThat(server.getRequestCount()).isEqualTo(2);
+		assertThatThrownBy(() -> classifier.classify(input))
+				.isInstanceOf(GenreClassificationException.class);
+		assertThat(server.getRequestCount()).isEqualTo(1); // 수동 429 백오프 루프가 제거됐다 — 단일 시도.
 	}
 
 	@Test
-	@DisplayName("429 후 재시도가 성공하면 그 값을 반환한다")
-	void classify_rateLimitedThenSuccess_returnsGenre() {
-		server.enqueue(new MockResponse().setResponseCode(429).setBody("{\"error\":{\"code\":429}}"));
-		server.enqueue(candidateResponse("미디어아트"));
-
-		GenreResult result = classifier.classify(input);
-
-		assertThat(result.genreKeyword()).isEqualTo("미디어아트");
-		assertThat(result.provider()).isEqualTo(GenreProvider.GEMINI);
-	}
-
-	@Test
-	@DisplayName("api-key 미설정이면 외부 호출 없이 랜덤으로 폴백한다")
-	void classify_notConfigured_fallsBackWithoutCall() {
+	@DisplayName("api-key 미설정이면 외부 호출 없이 분류 실패 예외를 던진다(체인이 2차로 전환)")
+	void classify_notConfigured_throwsWithoutCall() {
 		GeminiGenreClassifier disabled = classifierWith(new GeminiProperties(
 				server.url("/").toString(), "", "gemini-2.5-flash", 5L, 1, 0L));
 
-		GenreResult result = disabled.classify(input);
-
-		assertThat(GenreKeyword.all()).contains(result.genreKeyword());
-		assertThat(result.provider()).isEqualTo(GenreProvider.RANDOM);
+		assertThatThrownBy(() -> disabled.classify(input))
+				.isInstanceOf(GenreClassificationException.class);
 		assertThat(server.getRequestCount()).isZero();
 	}
 
@@ -164,37 +143,29 @@ class GeminiGenreClassifierTest {
 	}
 
 	@Test
-	@DisplayName("배치: 응답 배열이 입력보다 짧으면 누락 항목만 랜덤으로 보정한다")
-	void classifyAll_shortResponse_perItemFallback() {
+	@DisplayName("배치: 응답 배열이 입력보다 짧으면 배치 전체를 실패로 본다(부분 폴백값 금지 — ADR-11)")
+	void classifyAll_shortResponse_throws() {
 		server.enqueue(arrayResponse("사진")); // 입력 2건인데 1건만 응답
 		List<GenreClassification> inputs = List.of(
 				new GenreClassification("서울 사진전", null, null, null, null, null),
 				new GenreClassification("무제", null, null, null, null, null));
 
-		List<GenreResult> genres = classifier.classifyAll(inputs);
-
-		assertThat(genres).hasSize(2);
-		assertThat(genres.get(0).genreKeyword()).isEqualTo("사진");
-		assertThat(genres.get(0).provider()).isEqualTo(GenreProvider.GEMINI);
-		// 누락 항목만 랜덤 보정 — 계보가 항목 단위라 성공분과 폴백분이 섞인 배치도 나중에 구분된다.
-		assertThat(GenreKeyword.all()).contains(genres.get(1).genreKeyword());
-		assertThat(genres.get(1).provider()).isEqualTo(GenreProvider.RANDOM);
+		assertThatThrownBy(() -> classifier.classifyAll(inputs))
+				.isInstanceOf(GenreClassificationException.class)
+				.hasMessageContaining("입력 크기와 다름");
 	}
 
 	@Test
-	@DisplayName("배치: 429가 재시도까지 지속되면 전체를 랜덤으로 폴백한다")
-	void classifyAll_rateLimited_fallsBackAll() {
-		server.enqueue(new MockResponse().setResponseCode(429).setBody("{\"error\":{\"code\":429}}"));
+	@DisplayName("배치: 429면 단일 시도로 예외를 던진다(아웃박스가 durable 재시도)")
+	void classifyAll_rateLimited_throws() {
 		server.enqueue(new MockResponse().setResponseCode(429).setBody("{\"error\":{\"code\":429}}"));
 		List<GenreClassification> inputs = List.of(
 				new GenreClassification("A", null, null, null, null, null),
 				new GenreClassification("B", null, null, null, null, null));
 
-		List<GenreResult> genres = classifier.classifyAll(inputs);
-
-		assertThat(genres).hasSize(2);
-		assertThat(GenreKeyword.all()).containsAll(genres.stream().map(GenreResult::genreKeyword).toList());
-		assertThat(genres).allSatisfy(g -> assertThat(g.provider()).isEqualTo(GenreProvider.RANDOM));
+		assertThatThrownBy(() -> classifier.classifyAll(inputs))
+				.isInstanceOf(GenreClassificationException.class);
+		assertThat(server.getRequestCount()).isEqualTo(1);
 	}
 
 	/**
