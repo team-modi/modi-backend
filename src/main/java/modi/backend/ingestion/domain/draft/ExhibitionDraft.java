@@ -230,6 +230,23 @@ public class ExhibitionDraft {
 		markEnriching();
 	}
 
+	/** 다음 스텝 파생 — 저장 상태가 아니라 해소 마커에서 읽는다({@link DraftStep}). 흐름 가독화용 단일 진실. */
+	public DraftStep nextStep() {
+		if (this.status.isTerminal()) {
+			return DraftStep.NONE;
+		}
+		if (needsDetail()) {
+			return DraftStep.FETCH_DETAIL;
+		}
+		if (needsGenre()) {
+			return DraftStep.CLASSIFY_GENRE;
+		}
+		if (isReadyForPromotion()) {
+			return DraftStep.PROMOTE;
+		}
+		return DraftStep.NONE;
+	}
+
 	/**
 	 * 승격 게이트(사용자 확정) — 목록 코어(제목·전시장) + 상세 스텝 해소 + 장르 필수. 영업시간은 선택이라 보지 않는다.
 	 */

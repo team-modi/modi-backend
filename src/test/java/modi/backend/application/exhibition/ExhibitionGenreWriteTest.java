@@ -1,12 +1,12 @@
 package modi.backend.application.exhibition;
 
-import modi.backend.application.exhibition.contract.GenreTarget;
 import modi.backend.application.exhibition.contract.ExhibitionBackfill;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.DisplayName;
@@ -87,16 +87,13 @@ class ExhibitionGenreWriteTest {
 	}
 
 	@Test
-	@DisplayName("CATALOG 배치 백필 — 정준층에 AI 계보(provider·model)와 함께 쓴다")
-	void applyGenres_배치_계보기록() {
+	@DisplayName("CATALOG 레거시 백필 — 정준층에 AI 계보(provider·model)와 함께 쓴다")
+	void applyGenreResults_계보기록() {
 		Exhibition seeded = seedCatalog();
-		List<GenreTarget> targets = List.of(new GenreTarget(seeded.getId(), GenreClassification.from(seeded)));
 
-		int applied = exhibitionBackfill.applyGenres(targets,
-				List.of(GenreResult.ai("미디어아트", GenreProvider.GEMINI, "gemini-2.5-flash-002")),
-				LocalDateTime.now());
+		exhibitionBackfill.applyGenreResults(Map.of(seeded.getExternalId(),
+				GenreResult.ai("미디어아트", GenreProvider.GEMINI, "gemini-2.5-flash-002")), LocalDateTime.now());
 
-		assertThat(applied).isEqualTo(1);
 		ExhibitionGenre canonical = canonical(seeded.getId());
 		assertThat(canonical.getGenreKeyword()).isEqualTo("미디어아트");
 		assertThat(canonical.getProvider()).isEqualTo(GenreProvider.GEMINI.name());
@@ -106,13 +103,13 @@ class ExhibitionGenreWriteTest {
 
 	@Test
 	@DisplayName("재분류 — 같은 전시를 다시 반영하면 행을 늘리지 않고 갱신한다(UK 1행 유지, RANDOM → GEMINI 복구)")
-	void applyGenres_재분류_행추가없이_갱신() {
+	void applyGenreResults_재분류_행추가없이_갱신() {
 		Exhibition seeded = seedCatalog();
-		List<GenreTarget> targets = List.of(new GenreTarget(seeded.getId(), GenreClassification.from(seeded)));
-		exhibitionBackfill.applyGenres(targets, List.of(GenreResult.mock("회화·드로잉")), LocalDateTime.now());
+		exhibitionBackfill.applyGenreResults(Map.of(seeded.getExternalId(), GenreResult.mock("회화·드로잉")),
+				LocalDateTime.now());
 
-		exhibitionBackfill.applyGenres(targets,
-				List.of(GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash")), LocalDateTime.now());
+		exhibitionBackfill.applyGenreResults(Map.of(seeded.getExternalId(),
+				GenreResult.ai("사진", GenreProvider.GEMINI, "gemini-2.5-flash")), LocalDateTime.now());
 
 		assertThat(exhibitionGenreRepository.findAllByExhibitionIdIn(List.of(seeded.getId()))).hasSize(1);
 		ExhibitionGenre canonical = canonical(seeded.getId());
@@ -123,15 +120,14 @@ class ExhibitionGenreWriteTest {
 
 	@Test
 	@DisplayName("조회~반영 사이 사라진 전시는 건너뛴다(정준층에도 남기지 않는다)")
-	void applyGenres_사라진전시_건너뜀() {
+	void applyGenreResults_사라진전시_건너뜀() {
 		Exhibition seeded = seedCatalog();
-		List<GenreTarget> targets = List.of(new GenreTarget(seeded.getId(), GenreClassification.from(seeded)));
 		seeded.delete();
 		exhibitionRepository.save(seeded);
 
-		int applied = exhibitionBackfill.applyGenres(targets, List.of(GenreResult.mock("사진")), LocalDateTime.now());
+		exhibitionBackfill.applyGenreResults(Map.of(seeded.getExternalId(), GenreResult.mock("사진")),
+				LocalDateTime.now());
 
-		assertThat(applied).isZero();
 		assertThat(exhibitionGenreRepository.findByExhibitionId(seeded.getId())).isEmpty();
 	}
 

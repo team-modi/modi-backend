@@ -2,6 +2,7 @@ package modi.backend.application.exhibition;
 
 import modi.backend.ingestion.application.enricher.DetailEnricher;
 import modi.backend.application.exhibition.contract.DetailTargetState;
+import modi.backend.ingestion.application.draft.DraftEnrichmentService;
 import modi.backend.ingestion.application.draft.ExhibitionDraftFacade;
 import modi.backend.ingestion.application.outbox.ExhibitionOutboxFacade;
 import modi.backend.ingestion.application.ExhibitionSyncFacade;
@@ -29,6 +30,7 @@ import modi.backend.ingestion.domain.port.ExhibitionCatalogClient;
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.ingestion.domain.outbox.OutboxFailureType;
 import modi.backend.ingestion.domain.outbox.OutboxMessageType;
+import modi.backend.domain.exhibition.genre.GenreClassifier;
 import modi.backend.support.error.CoreException;
 
 /**
@@ -59,7 +61,8 @@ class DetailEnricherTest {
 		when(jobFacade.findDue(eq(OutboxMessageType.FETCH_DETAIL), anyInt(), any())).thenReturn(List.of(job));
 		when(backfill.findDetailTargetState("E1")).thenReturn(DetailTargetState.NEEDS_DETAIL);
 		when(client.fetchDetail("E1")).thenReturn(Optional.of(detail()));
-		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade, client, props);
+		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade,
+				new DraftEnrichmentService(draftFacade, client, mock(GenreClassifier.class)), client, props);
 
 		enricher.enrichDetails();
 
@@ -80,7 +83,8 @@ class DetailEnricherTest {
 		when(backfill.findDetailTargetState("E1")).thenReturn(DetailTargetState.NEEDS_DETAIL);
 		when(client.fetchDetail("E1"))
 				.thenThrow(new CoreException(ExhibitionErrorCode.EXTERNAL_API_UNAVAILABLE, "외부 API 실패"));
-		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade, client, props);
+		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade,
+				new DraftEnrichmentService(draftFacade, client, mock(GenreClassifier.class)), client, props);
 
 		enricher.enrichDetails();
 
@@ -99,7 +103,8 @@ class DetailEnricherTest {
 		OutboxMessage job = detailJob("E1");
 		when(jobFacade.findDue(eq(OutboxMessageType.FETCH_DETAIL), anyInt(), any())).thenReturn(List.of(job));
 		when(backfill.findDetailTargetState("E1")).thenReturn(DetailTargetState.ALREADY_SYNCED);
-		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade, client, props);
+		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade,
+				new DraftEnrichmentService(draftFacade, client, mock(GenreClassifier.class)), client, props);
 
 		enricher.enrichDetails();
 
@@ -118,7 +123,8 @@ class DetailEnricherTest {
 		OutboxMessage job = detailJob("E1");
 		when(jobFacade.findDue(eq(OutboxMessageType.FETCH_DETAIL), anyInt(), any())).thenReturn(List.of(job));
 		when(backfill.findDetailTargetState("E1")).thenReturn(DetailTargetState.MISSING);
-		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade, client, props);
+		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade,
+				new DraftEnrichmentService(draftFacade, client, mock(GenreClassifier.class)), client, props);
 
 		enricher.enrichDetails();
 
@@ -138,7 +144,8 @@ class DetailEnricherTest {
 		when(jobFacade.findDue(eq(OutboxMessageType.FETCH_DETAIL), anyInt(), any())).thenReturn(List.of(job));
 		when(draftFacade.needsDetail("E1")).thenReturn(true);
 		when(client.fetchDetail("E1")).thenReturn(Optional.of(detail()));
-		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade, client, props);
+		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade,
+				new DraftEnrichmentService(draftFacade, client, mock(GenreClassifier.class)), client, props);
 
 		enricher.enrichDetails();
 
@@ -167,7 +174,8 @@ class DetailEnricherTest {
 			m.recordFailure(inv.getArgument(1), inv.getArgument(2), props.retryPolicy(), inv.getArgument(3));
 			return null;
 		}).when(jobFacade).markFailed(any(), any(), any(), any());
-		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade, client, props);
+		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade,
+				new DraftEnrichmentService(draftFacade, client, mock(GenreClassifier.class)), client, props);
 
 		enricher.enrichDetails();
 
@@ -184,7 +192,8 @@ class DetailEnricherTest {
 		ExhibitionCatalogClient client = mock(ExhibitionCatalogClient.class);
 		ExhibitionDraftFacade draftFacade = mock(ExhibitionDraftFacade.class);
 		when(jobFacade.findDue(eq(OutboxMessageType.FETCH_DETAIL), anyInt(), any())).thenReturn(List.of());
-		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade, client, props);
+		DetailEnricher enricher = new DetailEnricher(jobFacade, facade, backfill, draftFacade,
+				new DraftEnrichmentService(draftFacade, client, mock(GenreClassifier.class)), client, props);
 
 		enricher.enrichDetails();
 

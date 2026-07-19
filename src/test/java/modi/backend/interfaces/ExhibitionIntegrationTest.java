@@ -34,7 +34,7 @@ import com.jayway.jsonpath.JsonPath;
 
 import modi.backend.TestcontainersConfiguration;
 import modi.backend.ingestion.application.CatalogSynchronizer;
-import modi.backend.ingestion.application.enricher.CatalogEnricher;
+import modi.backend.ingestion.application.enricher.GenreEnricher;
 import modi.backend.ingestion.application.enricher.DraftPromoter;
 import modi.backend.ingestion.application.enricher.DetailEnricher;
 import modi.backend.application.exhibition.ExhibitionFacade;
@@ -78,7 +78,7 @@ class ExhibitionIntegrationTest {
 	DetailEnricher detailEnricher;
 
 	@Autowired
-	CatalogEnricher catalogEnricher;
+	GenreEnricher genreEnricher;
 
 	@Autowired
 	DraftPromoter draftPromoter;
@@ -124,7 +124,7 @@ class ExhibitionIntegrationTest {
 						"https://img/monet.jpg", "https://place/monet", "서울 어딘가", "PLACE-SEQ-1", null)));
 		catalogSynchronizer.syncCatalog();
 		detailEnricher.enrichDetails(); // 스테이징 → 상세 해소(ADR-10 — 전시는 승격 후에만 나타난다)
-		catalogEnricher.enrichGenres();
+		genreEnricher.enrichGenres();
 		draftPromoter.promoteReady(); // 승격 소비(ADR-12) // 장르 분류(테스트 기본 mock) + 승격
 	}
 

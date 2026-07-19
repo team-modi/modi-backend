@@ -11,7 +11,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import lombok.RequiredArgsConstructor;
-import modi.backend.ingestion.application.enricher.CatalogEnricher;
+import modi.backend.ingestion.application.enricher.GenreEnricher;
 import modi.backend.ingestion.application.enricher.DetailEnricher;
 import modi.backend.ingestion.application.enricher.DraftPromoter;
 import modi.backend.ingestion.application.enricher.PlaceHoursRefresher;
@@ -45,7 +45,7 @@ public class ExhibitionOutboxRelay {
 
 	private static final Logger log = LoggerFactory.getLogger(ExhibitionOutboxRelay.class);
 
-	private final CatalogEnricher catalogEnricher;
+	private final GenreEnricher genreEnricher;
 	private final DetailEnricher detailEnricher;
 	private final DraftPromoter draftPromoter;
 	private final PlaceHoursRefresher placeHoursRefresher;
@@ -82,7 +82,7 @@ public class ExhibitionOutboxRelay {
 			return; // 로컬 시드 모드 — 외부 보강 드레인 안 함(로그 폭주 방지: 60초 폴링이라 침묵).
 		}
 		try {
-			catalogEnricher.enrichGenres();
+			genreEnricher.enrichGenres();
 		} catch (RuntimeException e) {
 			log.warn("장르 분류 드레인 실패(다음 주기 재시도): {}", e.getMessage());
 		}

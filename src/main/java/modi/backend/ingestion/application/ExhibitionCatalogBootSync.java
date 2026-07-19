@@ -1,6 +1,6 @@
 package modi.backend.ingestion.application;
 
-import modi.backend.ingestion.application.enricher.CatalogEnricher;
+import modi.backend.ingestion.application.enricher.GenreEnricher;
 import modi.backend.application.exhibition.seed.ExhibitionDemoSeeder;
 import modi.backend.application.exhibition.seed.LocalExhibitionSeeder;
 
@@ -33,7 +33,7 @@ public class ExhibitionCatalogBootSync implements ApplicationRunner {
 	private static final Logger log = LoggerFactory.getLogger(ExhibitionCatalogBootSync.class);
 
 	private final CatalogSynchronizer catalogSynchronizer;
-	private final CatalogEnricher catalogEnricher;
+	private final GenreEnricher genreEnricher;
 
 	/** 로컬 시드 모드면 외부 동기화를 건너뛴다(로컬 실 API 호출 0 — {@link LocalExhibitionSeeder}가 SQL로 초기화). */
 	@Value("${app.local-seed.enabled:false}")
@@ -54,7 +54,7 @@ public class ExhibitionCatalogBootSync implements ApplicationRunner {
 				log.warn("부팅 시 전시 카탈로그 동기화 스킵(외부 불가) — {}", e.getMessage());
 			}
 			try {
-				catalogEnricher.enrichGenres();
+				genreEnricher.enrichGenres();
 			} catch (RuntimeException e) {
 				log.warn("부팅 시 장르 분류 실패(자정 동기화에서 재시도): {}", e.getMessage());
 			}

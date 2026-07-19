@@ -9,6 +9,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
+import modi.backend.ingestion.application.draft.DraftEnrichmentService;
 import modi.backend.ingestion.application.draft.ExhibitionDraftFacade;
 import modi.backend.ingestion.application.outbox.ExhibitionOutboxFacade;
 import modi.backend.ingestion.application.outbox.OutboxFailures;
@@ -35,6 +36,7 @@ public class DraftPromoter {
 
 	private final ExhibitionOutboxFacade exhibitionOutboxFacade;
 	private final ExhibitionDraftFacade exhibitionDraftFacade;
+	private final DraftEnrichmentService draftEnrichmentService;
 	private final OutboxProperties properties;
 
 	/**
@@ -63,7 +65,7 @@ public class DraftPromoter {
 		String externalId = message.getTargetKey();
 		try {
 			// 재전달·경합(종료 draft·게이트 미충족)은 내부에서 no-op — 할 일 없음도 성공 마감이다(멱등 소비).
-			exhibitionDraftFacade.completePromotion(externalId, now);
+			draftEnrichmentService.promoteStep(externalId, now);
 		} catch (OptimisticLockingFailureException e) {
 			return false; // 반영 중 충돌 — 다른 워커가 처리
 		} catch (RuntimeException e) {

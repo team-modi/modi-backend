@@ -14,7 +14,7 @@ import org.mockito.InOrder;
 
 import modi.backend.domain.exhibition.catalog.ExhibitionErrorCode;
 import modi.backend.support.error.CoreException;
-import modi.backend.ingestion.application.enricher.CatalogEnricher;
+import modi.backend.ingestion.application.enricher.GenreEnricher;
 import modi.backend.ingestion.application.CatalogSynchronizer;
 import modi.backend.ingestion.application.enricher.PlaceHoursEnricher;
 
@@ -27,16 +27,16 @@ import modi.backend.ingestion.application.enricher.PlaceHoursEnricher;
 class ExhibitionSyncSchedulerTest {
 
 	private CatalogSynchronizer catalogSynchronizer;
-	private CatalogEnricher catalogEnricher;
+	private GenreEnricher genreEnricher;
 	private PlaceHoursEnricher placeHoursEnricher;
 	private ExhibitionSyncScheduler scheduler;
 
 	@BeforeEach
 	void setUp() {
 		catalogSynchronizer = mock(CatalogSynchronizer.class);
-		catalogEnricher = mock(CatalogEnricher.class);
+		genreEnricher = mock(GenreEnricher.class);
 		placeHoursEnricher = mock(PlaceHoursEnricher.class);
-		scheduler = new ExhibitionSyncScheduler(catalogSynchronizer, catalogEnricher, placeHoursEnricher);
+		scheduler = new ExhibitionSyncScheduler(catalogSynchronizer, genreEnricher, placeHoursEnricher);
 	}
 
 	@Test
@@ -46,9 +46,9 @@ class ExhibitionSyncSchedulerTest {
 
 		scheduler.syncDaily();
 
-		InOrder order = inOrder(catalogSynchronizer, catalogEnricher);
+		InOrder order = inOrder(catalogSynchronizer, genreEnricher);
 		order.verify(catalogSynchronizer, times(1)).syncCatalog();
-		order.verify(catalogEnricher, times(1)).enrichGenres();
+		order.verify(genreEnricher, times(1)).enrichGenres();
 	}
 
 	@Test

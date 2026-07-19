@@ -76,13 +76,15 @@ public class ExhibitionDraftFacade {
 		existing.refreshFromList(data);
 		exhibitionDraftRepository.save(existing);
 		// 미해소 스텝의 메시지가 (수동 삭제 등으로) 사라졌어도 멱등 enqueue가 안전망으로 복원한다.
-		if (existing.needsDetail()) {
-			exhibitionOutboxFacade.enqueue(OutboxMessageType.FETCH_DETAIL, existing.getExternalId(), now);
-		} else if (existing.needsGenre()) {
-			exhibitionOutboxFacade.enqueue(OutboxMessageType.CLASSIFY_GENRE, existing.getExternalId(), now);
-		} else if (existing.isReadyForPromotion()) {
-			// 게이트는 다 찼는데 종료 전인 draft — 잃어버린 승격 신호(EXHIBITION_READY)를 복원한다(ADR-12).
-			exhibitionOutboxFacade.enqueue(OutboxMessageType.EXHIBITION_READY, existing.getExternalId(), now);
+		switch (existing.nextStep()) {
+			case FETCH_DETAIL -> exhibitionOutboxFacade.enqueue(OutboxMessageType.FETCH_DETAIL,
+					existing.getExternalId(), now);
+			case CLASSIFY_GENRE -> exhibitionOutboxFacade.enqueue(OutboxMessageType.CLASSIFY_GENRE,
+					existing.getExternalId(), now);
+			// 게이트는 다 찼는데 종료 전인 draft — 잃어버린 승격 신호를 복원한다(ADR-12).
+			case PROMOTE -> exhibitionOutboxFacade.enqueue(OutboxMessageType.EXHIBITION_READY,
+					existing.getExternalId(), now);
+			case NONE -> { /* 목록 코어 불완전 — 다음 sync가 채운다 */ }
 		}
 		return StageOutcome.REFRESHED;
 	}

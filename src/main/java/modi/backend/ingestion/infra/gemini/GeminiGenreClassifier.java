@@ -72,39 +72,6 @@ public class GeminiGenreClassifier implements GenreClassifier {
 		// 계보의 model은 요청 모델이 아니라 응답 modelVersion이다 — 요청 모델은 별칭일 수 있고 진실은 응답에 있다.
 		return GenreResult.ai(genre, GenreProvider.GEMINI, response.modelVersion());
 	}
-
-	/**
-	 * 여러 전시를 <b>단일 Gemini 호출</b>로 분류한다(CATALOG 초기화 백필용 — 전시마다 호출하지 않아 무료 한도
-	 * 429 폭주·부팅 지연을 피한다). 응답(JSON 배열)이 입력 크기와 어긋나거나 일부가 마스터를 벗어나면 배치 전체를
-	 * 실패로 본다 — 부분 성공을 폴백값으로 메꾸던 과거와 달리, 유효하지 않으면 던지고 체인/아웃박스가 잇는다.
-	 */
-	@Override
-	public List<GenreResult> classifyAll(List<GenreClassification> inputs) {
-		if (inputs == null || inputs.isEmpty()) {
-			return List.of();
-		}
-		requireConfigured();
-		GeminiDto.Response response = call(buildBatchRequest(inputs));
-		List<String> genres = parseArray(response == null ? null : response.firstText());
-		if (genres == null || genres.size() != inputs.size()) {
-			count("invalid_batch_response");
-			throw new GenreClassificationException("Gemini 배치 응답이 입력 크기와 다름: "
-					+ (genres == null ? "파싱 실패" : genres.size() + "/" + inputs.size()));
-		}
-		String model = response.modelVersion();
-		List<GenreResult> results = new ArrayList<>(inputs.size());
-		for (int i = 0; i < inputs.size(); i++) {
-			String genre = genres.get(i);
-			if (!GenreKeyword.contains(genre)) {
-				count("invalid_batch_item");
-				throw new GenreClassificationException("Gemini 배치 응답 항목이 마스터에 없음: " + genre);
-			}
-			results.add(GenreResult.ai(genre, GenreProvider.GEMINI, model));
-		}
-		count("success_batch");
-		return results;
-	}
-
 	/** 단일 시도 호출 — 전송·HTTP 오류는 분류 실패로 감싸 던진다(재시도·전환은 체인·아웃박스의 몫). */
 	private GeminiDto.Response call(GeminiDto.Request request) {
 		try {

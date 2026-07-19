@@ -26,15 +26,4 @@ public interface GenreClassifier {
 	 * @throws GenreClassificationException 유효한 분류를 만들지 못했을 때(미설정·한도 초과·오류·마스터 이탈)
 	 */
 	GenreResult classify(GenreClassification input);
-
-	/**
-	 * 여러 전시를 한꺼번에 분류한다. 반환 리스트는 입력과 <b>같은 순서·같은 크기</b>이며 각 값은 마스터 중 하나다.
-	 * 기본 구현은 단건 분류를 반복하지만, AI 구현은 <b>단일 호출(배치)</b>로 오버라이드해 외부 호출 수를 1회로 줄인다
-	 * (무료 한도 429 폭주·부팅 지연 방지 — CATALOG 초기화 백필의 핵심 경로).
-	 *
-	 * @throws GenreClassificationException 배치 전체가 유효하게 분류되지 못했을 때
-	 */
-	default List<GenreResult> classifyAll(List<GenreClassification> inputs) {
-		return inputs.stream().map(this::classify).toList();
-	}
 }

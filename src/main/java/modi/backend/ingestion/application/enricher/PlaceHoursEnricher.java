@@ -19,7 +19,7 @@ import modi.backend.domain.exhibition.hours.PlaceHoursData;
 import modi.backend.domain.exhibition.hours.PlaceHoursProvider;
 
 /**
- * 전시 영업시간(운영시간) 보강 오케스트레이션 — 장르 보강({@link CatalogEnricher})과 동형.
+ * 전시 영업시간(운영시간) 보강 오케스트레이션 — 장르 보강({@link GenreEnricher})과 동형.
  * <p>
  * 흐름: 조회 대상(주소 있고 미조회·만료)을 장소 단위로 묶어 조회({@link PlaceHoursProvider}, 장소당 1콜) →
  * 벤더 원본 적재 + 우리 표시 규칙({@link OpeningHoursFormatter})으로 정준층 파생 저장. 루프는 트랜잭션 밖에서 돌고, 장소 단위 저장만

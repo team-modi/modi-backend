@@ -9,14 +9,14 @@ import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
 import modi.backend.ingestion.application.CatalogSynchronizer;
-import modi.backend.ingestion.application.enricher.CatalogEnricher;
+import modi.backend.ingestion.application.enricher.GenreEnricher;
 import modi.backend.ingestion.application.enricher.PlaceHoursEnricher;
 
 /**
  * 공공데이터 전시 카탈로그 정기 동기화 스케줄러.
  * <p>
  * 매일 자정: 목록+상세 동기화({@link ExhibitionFacade#syncCatalog()}, <b>목록과 상세를 한 패스로 채워 완전한 행으로 적재</b>) →
- * 장르 분류({@link CatalogEnricher#enrichGenres()}, 방금 추가된 미분류 행만).
+ * 장르 분류({@link GenreEnricher#enrichGenres()}, 방금 추가된 미분류 행만).
  * <p>
  * 상세(가격 등)는 syncCatalog가 적재 시점에 함께 채우므로 별도 상세 백필 잡이 없다.
  * 장르 키워드는 <b>동기화 직후에만</b> 생성된다 — 별도 주기 백필 없음. 대상이 "미분류 행"이라 멱등이고,
@@ -31,7 +31,7 @@ public class ExhibitionSyncScheduler {
 	private static final Logger log = LoggerFactory.getLogger(ExhibitionSyncScheduler.class);
 
 	private final CatalogSynchronizer catalogSynchronizer;
-	private final CatalogEnricher catalogEnricher;
+	private final GenreEnricher genreEnricher;
 	private final PlaceHoursEnricher placeHoursEnricher;
 
 	/** 로컬 시드 모드면 정기 동기화도 건너뛴다(로컬 실 API 호출 0 — 시드 데이터 유지). */
@@ -47,7 +47,7 @@ public class ExhibitionSyncScheduler {
 		}
 		try {
 			log.info("전시 정기 동기화 신규 {}건", catalogSynchronizer.syncCatalog());
-			catalogEnricher.enrichGenres();
+			genreEnricher.enrichGenres();
 		} catch (RuntimeException e) {
 			log.warn("전시 정기 동기화/보강 실패(다음 주기 재시도): {}", e.getMessage());
 		}

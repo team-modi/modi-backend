@@ -1,7 +1,7 @@
 package modi.backend.application.exhibition;
 
 import modi.backend.ingestion.application.CatalogSynchronizer;
-import modi.backend.ingestion.application.enricher.CatalogEnricher;
+import modi.backend.ingestion.application.enricher.GenreEnricher;
 import modi.backend.ingestion.application.enricher.DraftPromoter;
 import modi.backend.ingestion.application.enricher.DetailEnricher;
 
@@ -62,7 +62,7 @@ class CultureVendorArchiveTest {
 	DetailEnricher detailEnricher;
 
 	@Autowired
-	CatalogEnricher catalogEnricher;
+	GenreEnricher genreEnricher;
 
 	@Autowired
 	DraftPromoter draftPromoter;
@@ -257,7 +257,7 @@ class CultureVendorArchiveTest {
 	/** 아웃박스 드레인으로 파이프라인 완주 — 상세 해소(장르 체인) → 분류(테스트 기본 mock — 결정적) → 승격. */
 	private void drainPipeline() {
 		detailEnricher.enrichDetails();
-		catalogEnricher.enrichGenres();
+		genreEnricher.enrichGenres();
 		draftPromoter.promoteReady(); // 승격 소비(ADR-12)
 	}
 

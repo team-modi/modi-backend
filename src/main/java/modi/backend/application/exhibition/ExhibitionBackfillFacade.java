@@ -14,10 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import modi.backend.application.exhibition.contract.DetailTargetState;
 import modi.backend.application.exhibition.contract.ExhibitionBackfill;
-import modi.backend.application.exhibition.contract.GenreTarget;
 import modi.backend.domain.exhibition.catalog.CatalogDetailData;
 import modi.backend.domain.exhibition.catalog.Exhibition;
-import modi.backend.domain.exhibition.catalog.ExhibitionDetail;
 import modi.backend.domain.exhibition.catalog.ExhibitionGenre;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlace;
 import modi.backend.domain.exhibition.catalog.ExhibitionPlaceRepository;
@@ -118,53 +116,4 @@ public class ExhibitionBackfillFacade implements ExhibitionBackfill {
 		}
 	}
 
-	@Override
-	@Transactional(readOnly = true)
-	public List<GenreTarget> findGenreTargets(int max) {
-		List<Exhibition> rows = exhibitionRepository.findCatalogWithoutGenre(max);
-		if (rows.isEmpty()) {
-			return List.of();
-		}
-		Map<Long, ExhibitionPlace> placesById = placesByIdFor(rows);
-		Map<Long, ExhibitionDetail> detailsByExhibitionId = exhibitionRepository
-				.findDetails(rows.stream().map(Exhibition::getId).toList()).stream()
-				.collect(Collectors.toMap(ExhibitionDetail::getExhibitionId, d -> d, (a, b) -> a));
-		return rows.stream().map(e -> {
-			ExhibitionPlace place = placesById.get(e.getExhibitionPlaceId());
-			ExhibitionDetail detail = detailsByExhibitionId.get(e.getId());
-			GenreClassification input = new GenreClassification(e.getTitle(),
-					e.getCategory() == null ? null : e.getCategory().name(),
-					detail == null ? null : detail.getDescription(),
-					place == null ? null : place.getName(), null, null);
-			return new GenreTarget(e.getId(), input);
-		}).toList();
-	}
-
-	@Override
-	@Transactional
-	public int applyGenres(List<GenreTarget> targets, List<GenreResult> results, LocalDateTime now) {
-		if (targets.isEmpty()) {
-			return 0;
-		}
-		List<Long> ids = targets.stream().map(GenreTarget::exhibitionId).toList();
-		Map<Long, Exhibition> exhibitionsById = exhibitionRepository.findAllActiveByIds(ids).stream()
-				.collect(Collectors.toMap(Exhibition::getId, e -> e));
-		int applied = 0;
-		for (int i = 0; i < targets.size(); i++) {
-			GenreResult result = i < results.size() ? results.get(i) : null;
-			Exhibition exhibition = exhibitionsById.get(targets.get(i).exhibitionId());
-			if (result == null || exhibition == null) {
-				continue;
-			}
-			exhibitionRepository.applyGenre(exhibition.getId(), result, now);
-			applied++;
-		}
-		return applied;
-	}
-
-	private Map<Long, ExhibitionPlace> placesByIdFor(List<Exhibition> exhibitions) {
-		Set<Long> placeIds = exhibitions.stream().map(Exhibition::getExhibitionPlaceId).collect(Collectors.toSet());
-		return exhibitionPlaceRepository.findAllByIds(placeIds).stream()
-				.collect(Collectors.toMap(ExhibitionPlace::getId, p -> p, (a, b) -> a));
-	}
 }

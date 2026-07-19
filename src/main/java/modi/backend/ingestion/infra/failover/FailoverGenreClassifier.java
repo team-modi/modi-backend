@@ -55,15 +55,6 @@ public class FailoverGenreClassifier implements GenreClassifier {
 	public GenreResult classify(GenreClassification input) {
 		return callWithFailover(() -> primary.classify(input), () -> secondary.classify(input));
 	}
-
-	@Override
-	public List<GenreResult> classifyAll(List<GenreClassification> inputs) {
-		if (inputs == null || inputs.isEmpty()) {
-			return List.of();
-		}
-		return callWithFailover(() -> primary.classifyAll(inputs), () -> secondary.classifyAll(inputs));
-	}
-
 	/** 1차(Retry+CB) → 실패·차단 시 2차(Retry+CB) → 둘 다 실패면 분류 실패 예외(아웃박스가 durable 재시도). */
 	private <T> T callWithFailover(Supplier<T> primaryCall, Supplier<T> secondaryCall) {
 		try {

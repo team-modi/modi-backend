@@ -80,37 +80,6 @@ public class ClaudeGenreClassifier implements GenreClassifier {
 		count("success");
 		return GenreResult.ai(genre, GenreProvider.CLAUDE, properties.model());
 	}
-
-	/** 여러 전시를 단일 Claude 호출로 분류한다(배치 — Gemini 배치와 같은 형식 계약). */
-	@Override
-	public List<GenreResult> classifyAll(List<GenreClassification> inputs) {
-		if (inputs == null || inputs.isEmpty()) {
-			return List.of();
-		}
-		StringBuilder sb = new StringBuilder("다음 전시들을 각각 분류해라. 입력 순서 그대로 각 전시의 장르를 JSON 배열로 반환한다.\n");
-		for (int i = 0; i < inputs.size(); i++) {
-			sb.append('[').append(i).append("] ").append(oneLine(inputs.get(i))).append('\n');
-		}
-		String text = complete(BATCH_SYSTEM_PROMPT.formatted(String.join(", ", GenreKeyword.all())), sb.toString());
-		List<String> genres = parseArray(text);
-		if (genres == null || genres.size() != inputs.size()) {
-			count("invalid_batch_response");
-			throw new GenreClassificationException("Claude 배치 응답이 입력 크기와 다름: "
-					+ (genres == null ? "파싱 실패" : genres.size() + "/" + inputs.size()));
-		}
-		List<GenreResult> results = new ArrayList<>(inputs.size());
-		for (int i = 0; i < inputs.size(); i++) {
-			String genre = genres.get(i) == null ? null : genres.get(i).trim();
-			if (!GenreKeyword.contains(genre)) {
-				count("invalid_batch_item");
-				throw new GenreClassificationException("Claude 배치 응답 항목이 마스터에 없음: " + genre);
-			}
-			results.add(GenreResult.ai(genre, GenreProvider.CLAUDE, properties.model()));
-		}
-		count("success_batch");
-		return results;
-	}
-
 	/** 단일 시도 호출 — 미설정·전송 오류는 분류 실패로 감싸 던진다(재시도·전환은 체인·아웃박스의 몫). */
 	private String complete(String systemPrompt, String userPrompt) {
 		if (client == null) {

@@ -28,7 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import modi.backend.TestcontainersConfiguration;
 import modi.backend.ingestion.application.CatalogSynchronizer;
-import modi.backend.ingestion.application.enricher.CatalogEnricher;
+import modi.backend.ingestion.application.enricher.GenreEnricher;
 import modi.backend.ingestion.application.enricher.DraftPromoter;
 import modi.backend.ingestion.application.enricher.DetailEnricher;
 import modi.backend.application.exhibition.ExhibitionFacade;
@@ -77,7 +77,7 @@ class RecordV1ControllerTest {
 	DetailEnricher detailEnricher;
 
 	@Autowired
-	CatalogEnricher catalogEnricher;
+	GenreEnricher genreEnricher;
 
 	@Autowired
 	DraftPromoter draftPromoter;
@@ -181,7 +181,7 @@ class RecordV1ControllerTest {
 						"https://poster/snapshot.jpg", null, "기관", null, null, null, "전시", "서울", null))));
 		catalogSynchronizer.syncCatalog();
 		detailEnricher.enrichDetails(); // 스테이징 → 상세 해소(ADR-10 — 전시는 승격 후에만 나타난다)
-		catalogEnricher.enrichGenres();
+		genreEnricher.enrichGenres();
 		draftPromoter.promoteReady(); // 승격 소비(ADR-12) // 장르 분류(테스트 기본 mock) + 승격
 		Long catalogExhibitionId = exhibitionRepository.findByExternalId(externalId).orElseThrow().getId();
 
@@ -220,7 +220,7 @@ class RecordV1ControllerTest {
 						"https://poster/mutated.jpg", null, "기관", null, null, null, "전시", "서울", null))));
 		catalogSynchronizer.syncCatalog();
 		detailEnricher.enrichDetails(); // 스테이징 → 상세 해소(ADR-10 — 전시는 승격 후에만 나타난다)
-		catalogEnricher.enrichGenres();
+		genreEnricher.enrichGenres();
 		draftPromoter.promoteReady(); // 승격 소비(ADR-12) // 장르 분류(테스트 기본 mock) + 승격
 
 		// 기존 전시 행이 원천 갱신본으로 덮이지 않았음을 확인한다(신규만 추가 — 재적재 갱신 없음).

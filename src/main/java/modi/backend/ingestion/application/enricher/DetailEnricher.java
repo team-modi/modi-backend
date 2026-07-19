@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import modi.backend.application.exhibition.contract.ExhibitionBackfill;
 import modi.backend.application.exhibition.contract.DetailTargetState;
 import modi.backend.ingestion.application.ExhibitionSyncFacade;
+import modi.backend.ingestion.application.draft.DraftEnrichmentService;
 import modi.backend.ingestion.application.draft.ExhibitionDraftFacade;
 import modi.backend.ingestion.application.outbox.ExhibitionOutboxFacade;
 import modi.backend.ingestion.application.outbox.OutboxFailures;
@@ -32,7 +33,7 @@ import modi.backend.ingestion.domain.port.ExhibitionCatalogClient;
  * 트랜잭션에서 다음 필수 스텝(CLASSIFY_GENRE)이 걸린다(스텝 체인). 레거시(이미 승격됐지만 상세 미완성) 전시는
  * 기존 경로({@code applyDetailForJob})로 satellite를 채운다.
  *
- * <p>외부 호출({@code fetchDetail})은 트랜잭션 밖에서 하고 반영·상태 전이만 트랜잭션에 위임한다({@link CatalogEnricher}와
+ * <p>외부 호출({@code fetchDetail})은 트랜잭션 밖에서 하고 반영·상태 전이만 트랜잭션에 위임한다({@link GenreEnricher}와
  * 동형). timeout·5xx·429는 백오프 재시도(RETRYABLE), 4xx·파싱실패는 즉시 영구 실패, 최대 시도 초과는 RETRYABLE도
  * PERMANENT로 승격한다({@link OutboxFailures}). <b>draft의 필수 스텝이 PERMANENT로 굳으면 draft도 FAILED로 종료</b>해
  * 운영자에게 보인다(영구 미승격이 조용히 숨지 않게).
@@ -48,6 +49,8 @@ public class DetailEnricher {
 	/** 레거시 전시 뒤채움 계약(코어 소유) — 대상 판정·무상세 확인. */
 	private final ExhibitionBackfill exhibitionBackfill;
 	private final ExhibitionDraftFacade exhibitionDraftFacade;
+	/** draft 스텝 처리 단일 진입점 — 상세 스텝 3박자(판정→외부 호출→반영)를 수행한다. */
+	private final DraftEnrichmentService draftEnrichmentService;
 	private final ExhibitionCatalogClient catalogClient;
 	private final OutboxProperties properties;
 
@@ -86,17 +89,10 @@ public class DetailEnricher {
 		return processExhibition(message, externalId, now);
 	}
 
-	/** draft 경로 — 상세를 조회해 draft 상세분을 해소한다(값 도착/무상세 확인 모두 스텝 해소 + 장르 체인). */
+	/** draft 경로 — 스텝 서비스가 [판정 → 상세 조회(tx 밖) → 반영(tx)] 3박자를 수행한다(장르 체인 포함). */
 	private boolean processDraft(OutboxMessage message, String externalId, LocalDateTime now) {
-		Optional<CatalogDetailData> detail;
 		try {
-			detail = catalogClient.fetchDetail(externalId); // 트랜잭션 밖 외부 호출
-		} catch (RuntimeException e) {
-			return failDraftStep(message, externalId, e, now);
-		}
-		try {
-			detail.ifPresentOrElse(d -> exhibitionDraftFacade.applyDetail(externalId, d, now),
-					() -> exhibitionDraftFacade.markDetailAbsent(externalId, now));
+			draftEnrichmentService.resolveDetailStep(externalId, now);
 		} catch (OptimisticLockingFailureException e) {
 			return false; // 반영 중 충돌 — 다른 워커가 처리
 		} catch (RuntimeException e) {
