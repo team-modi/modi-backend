@@ -270,6 +270,11 @@
 - 현행: `RemindFacade.save()`가 `summarizer.summarize()`를 **동기 호출** → 요약을 Remind에 담아 저장 후 응답(=응답이 AI를 기다림).
 - 변경: Remind를 `RemindAiStatus.PENDING`(요약 null)로 **먼저 저장·커밋·응답** → 커밋 후 aiExecutor에서 요약 생성 → id로 Remind 로드해 요약·상태 갱신(별도 tx). `GET /reminds/{id}`가 완료 시 요약 노출.
 - 필요 변경: `RemindAiStatus.PENDING` 추가 · `Remind`에 요약 갱신 메서드 · 커밋 후 백그라운드 트리거(예: `TransactionSynchronization` afterCommit 또는 save 후 executor 제출) · best-effort 실패 시 `FAILED`.
+- **백필 스케줄러(추가)**: 백그라운드가 인메모리라 재시작 시 유실 → PENDING이 영구히 남을 수 있다.
+  `RemindSummaryBackfillScheduler`가 주기(기본 10분)로 PENDING을 훑어 복구한다.
+  유예(기본 2분) 이전 건만 대상(진행 중 작업과 중복 방지), 배치 상한(기본 20건)으로 유료 호출 제한,
+  포기 시간(기본 1일) 초과 시 AI 호출 없이 `FAILED` 확정(클라 무한 폴링 방지), 쿨다운(SKIPPED)이면 PENDING 유지 후 재시도.
+  설정 `app.remind.summary-backfill.*`(env로 전부 조정·비활성 가능), AI 미설정이면 조회조차 하지 않음(외부 호출 0).
 
 ### 10.6 곁다리 보안 노트
 `.env`는 git-ignore되어 커밋 안 됨 ✅. 단 라이브 `ANTHROPIC_API_KEY`가 평문 로컬 파일 + 이 세션 로그에 노출 → 우려되면 콘솔에서 키 **회전** 권장(판단은 사용자).
