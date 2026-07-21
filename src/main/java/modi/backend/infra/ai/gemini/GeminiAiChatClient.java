@@ -78,6 +78,12 @@ public class GeminiAiChatClient implements AiChatClient {
 	}
 
 	@Override
+	public void completeStream(String systemPrompt, String userPrompt, java.util.function.Consumer<String> onDelta) {
+		// Gemini 어댑터는 토큰 스트리밍 미구현 — 전체 응답을 한 번의 델타로 넘겨 폴백한다(점진 출력만 없고 동작은 유지).
+		onDelta.accept(complete(systemPrompt, userPrompt));
+	}
+
+	@Override
 	public <T> T completeStructured(String systemPrompt, String userPrompt, Class<T> schemaType) {
 		return callWithRetry(() -> {
 			String json = extractText(callOnce(requestBody(systemPrompt, userPrompt, GeminiSchema.of(schemaType)))).trim();
