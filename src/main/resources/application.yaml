@@ -82,9 +82,13 @@ app:
       - http://localhost:3005/login
       - http://localhost:8080/login
     kakao:
-      # 테스트앱 "여운-TEST"(앱ID 1500036)의 REST 키. 동의항목(이메일·연령대·출생연도)이 설정된 앱.
-      # 운영 비즈앱 검수 완료 시 KAKAO_CLIENT_ID env로 교체. client-secret은 시크릿 → env로만 주입.
-      client-id: ${KAKAO_CLIENT_ID:bba3e1d954ec548062bc3c13fd9f72bc}
+      # 운영 비즈앱 "여운"의 REST 키. client-id는 authorize URL에도 노출되는 공개값이라 코드 기본값을 둔다(네이버와 동일).
+      # ⚠️ 프론트 oauth.js 의 KAKAO_CLIENT_ID 와 반드시 같아야 한다 — 프론트가 A 앱으로 받은 code를
+      #    백엔드가 B 앱으로 교환하면 카카오가 거부한다(OAuthClientIdDefaultTest 가 이 쌍을 고정한다).
+      # ⚠️ 구 테스트앱 "여운-TEST"(bba3e1d9…, 앱ID 1500036)는 카카오 콘솔에서 삭제됐다. 되돌리면
+      #    토큰 교환이 KOE101(Not exist client_id)로 깨진다(2026-07-21 운영 장애).
+      # client-secret은 시크릿 → env로만 주입. client-id를 바꾸면 secret도 그 앱 것으로 함께 갱신해야 한다.
+      client-id: ${KAKAO_CLIENT_ID:bd5949f0127dd8ae068263f6ec1b5edc}
       client-secret: ${KAKAO_CLIENT_SECRET:}
       # 동의항목 요청: 이메일 + 연령대 + 출생연도.
       # ⚠️ 카카오 콘솔 [동의항목]에서 각 항목 ON 필수(테스트앱은 팀원만 검수 없이 동작).
